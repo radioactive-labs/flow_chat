@@ -14,7 +14,7 @@ module UssdEngine
           @env["ussd_engine.response"] = handle_intercepted_request
           [200, {}, [""]]
         else
-          @session["ussd_engine.pagination"] = nil
+          @session.delete "ussd_engine.pagination"
           res = @app.call(env)
 
           if @env["ussd_engine.response"].present?
