@@ -25,7 +25,7 @@ module UssdEngine
       def get_request_identifier(env)
         return unless env["ussd_engine.request"].present?
 
-        File.join env["PATH_INFO"], env["ussd_engine.request"][:provider].to_s, env["ussd_engine.request"][:msisdn]
+        env["ussd_engine.request"][:id]
       end
 
       def set_cookie(*)

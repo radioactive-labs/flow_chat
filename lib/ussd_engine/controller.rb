@@ -10,16 +10,15 @@ module UssdEngine
         return render(status: :bad_request)
       end
 
-      if request.env["ussd_engine.request"][:type] == :initial
-        Config.logger&.info "UssdEngine::Controller :: Starting new session"
+      if ussd_request_type == :initial
+        Config.logger&.debug "UssdEngine::Controller :: Starting new session"
+        reset_session
         current_screen = :index
       else
-        Config.logger&.info "UssdEngine::Controller :: Continuing existing session"
-        user_input = request.env["ussd_engine.request"][:input]
+        Config.logger&.debug "UssdEngine::Controller :: Continuing existing session"
+        user_input = ussd_user_input
         current_screen = session["ussd_engine.screen"] || :index
       end
-      # For testing purposes
-      user_input = request.env["ussd_engine.request"][:input]
 
       display current_screen, user_input
 
@@ -29,14 +28,14 @@ module UssdEngine
     protected
 
     def display(screen, input = nil)
-      Config.logger&.info "UssdEngine::Controller :: Displaying #{screen}"
+      Config.logger&.debug "UssdEngine::Controller :: Displaying #{screen}"
       session["ussd_engine.screen"] = screen
       request.env["ussd_engine.response"] = send screen.to_sym, input
     end
 
     def prompt(message, options = nil)
-      Config.logger&.info "UssdEngine::Controller :: Sending prompt -> #{message}"
       message += build_options_nav(options) unless options.blank?
+      Config.logger&.debug "UssdEngine::Controller :: Sending prompt -> \n\n#{message}\n"
       {
         body: message,
         type: :prompt,
@@ -44,8 +43,7 @@ module UssdEngine
     end
 
     def terminate(message)
-      Config.logger&.info "UssdEngine::Controller :: Terminating session -> #{message}"
-      session.delete "ussd_engine.screen"
+      Config.logger&.debug "UssdEngine::Controller :: Terminating session -> \n\n#{message}\n"
       {
         body: message,
         type: :terminate,
@@ -60,6 +58,18 @@ module UssdEngine
       return unless input.match? /^[1-9](\d)?$/
 
       options.keys[input.to_i - 1]
+    end
+
+    def msisdn
+      request.env["ussd_engine.request"][:msisdn]
+    end
+
+    def ussd_request_type
+      request.env["ussd_engine.request"][:type]
+    end
+
+    def ussd_user_input
+      request.env["ussd_engine.request"][:input]
     end
   end
 end
