@@ -60,12 +60,20 @@ module UssdEngine
       options.keys[input.to_i - 1]
     end
 
-    def msisdn
-      request.env["ussd_engine.request"][:msisdn]
+    def ussd_request_id
+      request.env["ussd_engine.request"][:id]
     end
 
     def ussd_request_type
       request.env["ussd_engine.request"][:type]
+    end
+
+    def ussd_request_msisdn
+      request.env["ussd_engine.request"][:msisdn]
+    end
+
+    def ussd_request_provider
+      request.env["ussd_engine.request"][:provider]
     end
 
     def ussd_user_input

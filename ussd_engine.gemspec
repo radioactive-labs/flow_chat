@@ -30,4 +30,5 @@ Gem::Specification.new do |spec|
   spec.add_runtime_dependency "activesupport", ">= 6"
   spec.add_runtime_dependency "actionpack", ">= 6"
   spec.add_runtime_dependency "redis-session-store"
+  spec.add_runtime_dependency "phonelib"
 end

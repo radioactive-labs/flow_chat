@@ -1,3 +1,5 @@
+require "phonelib"
+
 module UssdEngine
   module Middleware
     class NaloProcessor
@@ -12,7 +14,7 @@ module UssdEngine
           if params["USERID"].present? && params["MSISDN"].present?
             env["ussd_engine.request"] = {
               provider: :nalo,
-              msisdn: params["MSISDN"],
+              msisdn: Phonelib.parse(params["MSISDN"]).e164,
               type: params["MSGTYPE"] ? :initial : :response,
               input: params["USERDATA"].presence,
             }
@@ -26,7 +28,7 @@ module UssdEngine
           response =
             {
               USERID: params["USERID"],
-              MSISDN: env["ussd_engine.request"][:msisdn],
+              MSISDN: params["MSISDN"],
               MSG: env["ussd_engine.response"][:body],
               MSGTYPE: env["ussd_engine.response"][:type] != :terminal,
             }.to_json
