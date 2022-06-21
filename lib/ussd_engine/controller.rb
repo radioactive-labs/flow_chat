@@ -6,7 +6,7 @@ module UssdEngine
 
     def ussd_controller
       unless request.env["ussd_engine.request"].present?
-        Config.logger&.warning "UssdEngine::Controller :: Unknown request type"
+        Config.logger&.warn "UssdEngine::Controller :: Unknown request type"
         return render(status: :bad_request)
       end
 
