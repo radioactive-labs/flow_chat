@@ -1,7 +1,7 @@
 module UssdEngine
   module Controller
     def self.included(base)
-      base.send :skip_before_action, :verify_authenticity_token, only: %i[ussd_controller]
+      base.send :skip_before_action, :verify_authenticity_token, only: %i[ussd_controller], raise: false
     end
 
     def ussd_controller
