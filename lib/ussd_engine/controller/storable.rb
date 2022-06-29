@@ -10,13 +10,13 @@ module UssdEngine
       protected
 
       module StorableClassMethods
-        def stores(field)
+        def stores(field, cache_field = nil)
           instance_prop = "@#{field}"
           key_method_name = "#{field}_key"
           getter_method_name = field
           setter_method_name = "#{field}="
-          cache_method_name = "#{field}_cache"
-          cache_instance_prop = "@#{cache_method_name}"
+          cache_method_name = cache_field ? "#{cache_field}_cache" : "#{field}_cache"
+          cache_instance_prop = cache_field ? "@#{cache_field}" : "@#{cache_method_name}"
 
           define_method key_method_name do
             File.join ussd_request_id, field
