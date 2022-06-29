@@ -4,7 +4,7 @@ require "ussd_engine/session/redis_store"
 require "ussd_engine/middleware/request_id"
 require "ussd_engine/middleware/nalo_processor"
 require "ussd_engine/middleware/pagination"
-require "ussd_engine/controller"
+require "ussd_engine/controller/mixin"
 require "ussd_engine/simulator"
 
 module UssdEngine
