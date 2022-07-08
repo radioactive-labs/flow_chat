@@ -10,35 +10,43 @@ module UssdEngine
       protected
 
       module StorableClassMethods
-        def stores(field, cache_field = nil)
+        def stores(field, accessor = nil, &block)
           instance_prop = "@#{field}"
           key_method_name = "#{field}_key"
           getter_method_name = field
           setter_method_name = "#{field}="
-          cache_method_name = cache_field ? "#{cache_field}_cache" : "#{field}_cache"
-          cache_instance_prop = cache_field ? "@#{cache_field}" : "@#{cache_method_name}"
 
           define_method key_method_name do
-            File.join ussd_request_id, field
+            File.join ussd_request_id, field.to_s
           end
 
           define_method getter_method_name do
-            session[key_method_name]
+            session[send(key_method_name)]
           end
 
           define_method setter_method_name do |value|
-            session[key_method_name] = value
+            session[send(key_method_name)] = value
           end
 
-          define_method setter_method_name do |value|
-            session[key_method_name] = value
-          end
+          if accessor.present?
+            raise "A block is required if you pass an accessor" unless block_given?
 
-          define_method cache_method_name do
-            unless instance_variable_defined? cache_instance_prop
-              instance_variable_set cache_instance_prop, {}
+            cache_method_name = "#{accessor}_cache"
+            cache_instance_prop = "@#{cache_method_name}"
+
+            define_method cache_method_name do
+              unless instance_variable_defined? cache_instance_prop
+                instance_variable_set cache_instance_prop, {}
+              end
+              instance_variable_get cache_instance_prop
             end
-            instance_variable_get cache_instance_prop
+
+            define_method accessor do
+              field_value = send(getter_method_name)
+              return if field_value.blank?
+
+              send(cache_method_name)[field_value] ||= instance_exec(field_value, &block)
+            end
           end
         end
       end
