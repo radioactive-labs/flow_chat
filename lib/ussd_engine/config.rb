@@ -3,6 +3,7 @@ require "active_support" unless defined?(Rails)
 module UssdEngine
   module Config
     mattr_accessor :logger, default: Logger.new($stdout)
+    mattr_accessor :cache, default: nil
 
     mattr_accessor :pagination_page_size, default: 140
     mattr_accessor :pagination_back_option, default: "0"

@@ -9,11 +9,13 @@ module UssdEngine
 
       def call(env)
         input = env["rack.input"].read
+        env["rack.input"].rewind
         if input.present?
           params = JSON.parse input
           if params["USERID"].present? && params["MSISDN"].present?
             env["ussd_engine.request"] = {
               provider: :nalo,
+              network: nil,
               msisdn: Phonelib.parse(params["MSISDN"]).e164,
               type: params["MSGTYPE"] ? :initial : :response,
               input: params["USERDATA"].presence,

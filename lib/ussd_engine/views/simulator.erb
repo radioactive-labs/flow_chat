@@ -45,6 +45,7 @@
       <div class="value">
         <select id="provider">
           <option <%=  default_provider == :nalo ? 'selected' : '' %> value="nalo">Nalo</option>
+          <option <%=  default_provider == :nsano ? 'selected' : '' %> value="nsano">Nsano</option>
         </select>
       </div>
     </div>
@@ -175,11 +176,29 @@
     // API
 
     function makeRequest() {
-      const data = {
-        USERID: '12345678',
-        MSISDN: state.msisdn,
-        USERDATA: $data.value,
-        MSGTYPE: !state.isRunning,
+      var data = {}
+      
+      switch (state.provider) {
+        case "nalo":
+          data = {
+            USERID: '12345678',
+            MSISDN: state.msisdn,
+            USERDATA: $data.value,
+            MSGTYPE: !state.isRunning,
+          }
+          break;
+        case "nsano":
+          data = {
+            network: 'MTN',
+            msisdn: state.msisdn,
+            msg: $data.value,
+            UserSessionID: "12345",
+          }
+          break;
+      
+        default:
+          alert(`Unhandled provider request: ${state.provider}`)
+          return
       }
 
       disableInputs()
@@ -198,8 +217,20 @@
           return response.json()
         })
         .then(data => {
-          display(data.MSG)
-          state.isRunning = data.MSGTYPE
+          switch (state.provider) {
+            case "nalo":
+              display(data.MSG)
+              state.isRunning = data.MSGTYPE
+              break;
+            case "nsano":
+              display(data.USSDResp.title)
+              state.isRunning = data.USSDResp.action == "input"
+              break;
+        
+            default:
+              alert(`Unhandled provider response: ${state.provider}`)
+              return
+          }
           $data.value = null
         })
         .catch(error => alert(error.message))
