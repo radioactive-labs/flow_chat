@@ -13,7 +13,11 @@ module UssdEngine
       private
 
       def get_request_identifier(env)
-        File.join env["PATH_INFO"], env["ussd_engine.request"][:provider].to_s, env["ussd_engine.request"][:msisdn]
+        File.join(
+          env["PATH_INFO"],
+          Config.resumable_sessions_enabled && Config.resumable_sessions_global ? "global" : env["ussd_engine.request"][:provider].to_s,
+          env["ussd_engine.request"][:msisdn]
+        )
       end
     end
   end

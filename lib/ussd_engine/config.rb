@@ -9,5 +9,9 @@ module UssdEngine
     mattr_accessor :pagination_back_text, default: "Back"
     mattr_accessor :pagination_next_option, default: "#"
     mattr_accessor :pagination_next_text, default: "More"
+
+    mattr_accessor :resumable_sessions_enabled, default: false
+    mattr_accessor :resumable_sessions_global, default: true
+    mattr_accessor :resumable_sessions_timeout_seconds, default: 300
   end
 end
