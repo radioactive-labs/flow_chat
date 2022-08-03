@@ -162,6 +162,7 @@
 
     function reset(shouldRender) {
       state.isRunning = false
+      state.request_id = btoa(Math.random().toString()).substr(10, 10)
       state.provider = $provider.value
       state.endpoint = $endpoint.value
       state.msisdn = $msisdn.value
@@ -181,7 +182,7 @@
       switch (state.provider) {
         case "nalo":
           data = {
-            USERID: '12345678',
+            USERID: state.request_id,
             MSISDN: state.msisdn,
             USERDATA: $data.value,
             MSGTYPE: !state.isRunning,
@@ -192,7 +193,7 @@
             network: 'MTN',
             msisdn: state.msisdn,
             msg: $data.value,
-            UserSessionID: "12345",
+            UserSessionID: state.request_id,
           }
           break;
       
