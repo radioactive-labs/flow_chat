@@ -17,9 +17,17 @@ module UssdEngine
       end
 
       def resolve_option(input, options)
-        return unless input.match? /^[1-9](\d)?$/
+        return unless input.to_s.match? /^[1-9](\d)?$/
 
         options.keys[input.to_i - 1]
+      end
+
+      def back_option
+        { back: "Back" }
+      end
+
+      def cancel_option
+        { cancel: "Cancel" }
       end
     end
   end
