@@ -2,6 +2,7 @@ require "ussd_engine/controller/io"
 require "ussd_engine/controller/options"
 require "ussd_engine/controller/params"
 require "ussd_engine/controller/storable"
+require "ussd_engine/controller/forkable"
 
 module UssdEngine
   module Controller
@@ -12,6 +13,7 @@ module UssdEngine
 
       def self.included(base)
         base.send :include, UssdEngine::Controller::Storable
+        base.send :include, UssdEngine::Controller::Forkable
         base.send :skip_before_action, :verify_authenticity_token, only: :ussd_controller, raise: false
       end
 
