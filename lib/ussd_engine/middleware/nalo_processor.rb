@@ -19,6 +19,7 @@ module UssdEngine
               msisdn: Phonelib.parse(params["MSISDN"]).e164,
               type: params["MSGTYPE"] ? :initial : :response,
               input: params["USERDATA"].presence,
+              network: nil,
             }
           end
         end

@@ -20,6 +20,7 @@ module UssdEngine
               msisdn: Phonelib.parse(params["msisdn"]).e164,
               type: Config.cache&.read(request_id).present? ? :response : :initial,
               input: params["msg"].presence,
+              network: params["network"],
             }
           end
         end

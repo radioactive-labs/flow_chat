@@ -35,6 +35,12 @@ module UssdEngine
 
         request.env["ussd_engine.request"][:input]
       end
+
+      def ussd_request_network
+        return unless request.env["ussd_engine.request"].present?
+
+        request.env["ussd_engine.request"][:network]
+      end
     end
   end
 end
