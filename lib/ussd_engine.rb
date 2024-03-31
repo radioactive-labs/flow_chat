@@ -1,16 +1,14 @@
-require "ussd_engine/version"
-require "ussd_engine/config"
-require "ussd_engine/session/redis_store"
-require "ussd_engine/middleware/request_id"
-require "ussd_engine/middleware/nalo_processor"
-require "ussd_engine/middleware/nsano_processor"
-require "ussd_engine/middleware/resumable_sessions"
-require "ussd_engine/middleware/pagination"
-require "ussd_engine/controller/mixin"
-require "ussd_engine/simulator"
+require "active_support"
 
 module UssdEngine
   def self.root
-    __dir__
+    Pathname.new __dir__
   end
 end
+
+# Setup Zeitwerk
+require "zeitwerk"
+
+loader = Zeitwerk::Loader.for_gem
+loader.enable_reloading if defined?(Rails.env) && Rails.env.development?
+loader.setup

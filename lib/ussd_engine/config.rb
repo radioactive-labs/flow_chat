@@ -1,5 +1,3 @@
-require "active_support" unless defined?(Rails)
-
 module UssdEngine
   module Config
     mattr_accessor :logger, default: Logger.new($stdout)

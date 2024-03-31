@@ -5,18 +5,18 @@ module UssdEngine
         @app = app
       end
 
-      def call(env)
-        env["ussd_engine.request"][:id] = get_request_identifier(env) if env["ussd_engine.request"].present?
-        @app.call(env)
+      def call(context)
+        context["ussd_engine.request"][:id] = get_request_identifier(context) if context["ussd_engine.request"].present?
+        @app.call(context)
       end
 
       private
 
-      def get_request_identifier(env)
+      def get_request_identifier(context)
         File.join(
-          env["PATH_INFO"],
-          Config.resumable_sessions_enabled && Config.resumable_sessions_global ? "global" : env["ussd_engine.request"][:provider].to_s,
-          env["ussd_engine.request"][:msisdn]
+          context["PATH_INFO"],
+          (Config.resumable_sessions_enabled && Config.resumable_sessions_global) ? "global" : context["ussd_engine.request"][:provider].to_s,
+          context["ussd_engine.request"][:msisdn]
         )
       end
     end

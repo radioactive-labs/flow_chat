@@ -5,20 +5,19 @@ module UssdEngine
         @app = app
       end
 
-      def call(env)
-        @env = env
-        request = Rack::Request.new(env)
-        @session = request.session
+      def call(context)
+        @context = context
+        @session = context.session
 
         if intercept?
-          @env["ussd_engine.response"] = handle_intercepted_request
+          @context["ussd_engine.response"] = handle_intercepted_request
           [200, {}, [""]]
         else
           @session.delete "ussd_engine.pagination"
-          res = @app.call(env)
+          res = @app.call(context)
 
-          if @env["ussd_engine.response"].present?
-            @env["ussd_engine.response"] = maybe_paginate @env["ussd_engine.response"]
+          if @context["ussd_engine.response"].present?
+            @context["ussd_engine.response"] = maybe_paginate @context["ussd_engine.response"]
           end
 
           res
@@ -30,17 +29,17 @@ module UssdEngine
       def intercept?
         pagination_state.present? &&
           (pagination_state[:type].to_sym == :terminal ||
-           ([Config.pagination_next_option, Config.pagination_back_option].include? @env["ussd_engine.request"][:input]))
+           ([Config.pagination_next_option, Config.pagination_back_option].include? @context["ussd_engine.request"][:input]))
       end
 
       def handle_intercepted_request
         Config.logger&.info "UssdEngine::Middleware::Pagination :: Intercepted to handle pagination"
         start, finish, has_more = calculate_offsets
-        type = pagination_state[:type].to_sym == :terminal && !has_more ? :terminal : :prompt
+        type = (pagination_state[:type].to_sym == :terminal && !has_more) ? :terminal : :prompt
         body = pagination_state[:body][start..finish].strip + build_pagination_options(type, has_more)
         set_pagination_state(current_page, start, finish)
 
-        { body: body, type: type }
+        {body: body, type: type}
       end
 
       def maybe_paginate(response)
@@ -69,7 +68,7 @@ module UssdEngine
           # We are guaranteed a previous offset because it was set in maybe_paginate
           previous_offset = pagination_state[:offsets][page - 1]
           start = previous_offset[:finish] + 1
-          has_more, len = pagination_state[:body].length > start + single_option_slice_size ? [true, dual_options_slice_size] : [false, single_option_slice_size]
+          has_more, len = (pagination_state[:body].length > start + single_option_slice_size) ? [true, dual_options_slice_size] : [false, single_option_slice_size]
           finish = start + len
           if start > pagination_state[:body].length
             Config.logger&.debug "UssdEngine::Middleware::Pagination :: No content exists for page: #{page}. Reverting to page: #{page - 1}"
@@ -127,26 +126,26 @@ module UssdEngine
 
       def current_page
         current_page = pagination_state[:page]
-        if @env["ussd_engine.request"][:input] == Config.pagination_back_option
+        if @context["ussd_engine.request"][:input] == Config.pagination_back_option
           current_page -= 1
-        elsif @env["ussd_engine.request"][:input] == Config.pagination_next_option
+        elsif @context["ussd_engine.request"][:input] == Config.pagination_next_option
           current_page += 1
         end
         [current_page, 1].max
       end
 
       def pagination_state
-        @session["ussd_engine.pagination"] || {}
+        @context.session.get("pagination", {})
       end
 
       def set_pagination_state(page, offset_start, offset_finish, body = nil, type = nil)
         offsets = pagination_state[:offsets] || {}
-        offsets[page] = { start: offset_start, finish: offset_finish }
+        offsets[page] = {start: offset_start, finish: offset_finish}
         @session["ussd_engine.pagination"] = {
           page: page,
           offsets: offsets,
           body: body || pagination_state[:body],
-          type: type || pagination_state[:type],
+          type: type || pagination_state[:type]
         }
       end
     end
