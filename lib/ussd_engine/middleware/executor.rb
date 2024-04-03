@@ -6,17 +6,19 @@ module UssdEngine
       end
 
       def call(context)
-        context.controller.instance_variable_set :@ussd_app, ussd_app(context)
-        context.controller.send context["request.action"]
+        ussd_app = build_ussd_app context
+        flow = context.flow.new ussd_app
+        flow.send context["flow.action"]
       rescue UssdEngine::Processor::Prompt => e
         [:prompt, e.prompt, e.choices]
       rescue UssdEngine::Processor::Terminate => e
+        context.session.destroy
         [:terminate, e.prompt, nil]
       end
 
       private
 
-      def ussd_app(context)
+      def build_ussd_app(context)
         UssdEngine::App.new(context)
       end
     end

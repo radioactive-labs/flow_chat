@@ -56,8 +56,9 @@ module UssdEngine
       middleware.use UssdEngine::Middleware::Pagination
     end
 
-    def run(action)
-      @context["request.action"] = action
+    def run(flow, action)
+      @context["flow.class"] = flow
+      @context["flow.action"] = action
 
       ::Middleware::Builder.new name: "ussd_engine" do |b|
         b.use gateway

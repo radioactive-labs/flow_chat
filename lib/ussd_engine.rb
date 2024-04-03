@@ -1,4 +1,9 @@
+require "zeitwerk"
 require "active_support"
+
+loader = Zeitwerk::Loader.for_gem
+loader.enable_reloading if defined?(Rails.env) && Rails.env.development?
+loader.setup
 
 module UssdEngine
   def self.root
@@ -6,9 +11,4 @@ module UssdEngine
   end
 end
 
-# Setup Zeitwerk
-require "zeitwerk"
-
-loader = Zeitwerk::Loader.for_gem
-loader.enable_reloading if defined?(Rails.env) && Rails.env.development?
-loader.setup
+loader.eager_load

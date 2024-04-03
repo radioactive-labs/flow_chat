@@ -16,6 +16,8 @@ module UssdEngine
 
     def controller = @data["controller"]
 
-    def request = controller.request
+    # def request = controller.request
+
+    def flow = @data["flow.class"]
   end
 end

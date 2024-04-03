@@ -12,7 +12,7 @@ module UssdEngine
         input = convert.call(input) if convert.present?
         validation_error = validate.call(input) if validate.present?
 
-        prompt! [validation_error, msg].join("\n\n") if validation_error.present?
+        prompt!([validation_error, msg].join("\n\n"), choices:) if validation_error.present?
 
         input = transform.call(input) if transform.present?
         return input
@@ -34,6 +34,10 @@ module UssdEngine
         validate: lambda { |choice| "Invalid selection:" unless (1..choices.size).include?(choice) },
         transform: lambda { |choice| choices[choice - 1] }
       )
+    end
+
+    def yes?(msg)
+      select(msg, ["Yes", "No"]) == "Yes"
     end
 
     private

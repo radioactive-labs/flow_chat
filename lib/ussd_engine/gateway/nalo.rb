@@ -8,13 +8,13 @@ module UssdEngine
       end
 
       def call(context)
-        params = context.request.params
+        params = context.controller.request.params
 
         context["request.id"] = params["USERID"]
         context["request.gateway"] = :nalo
-        context["request.user.provider"] = nil
-        context["request.user.id"] = Phonelib.parse(params["MSISDN"]).e164
-        context["request.type"] = params["MSGTYPE"] ? :initial : :response
+        context["request.network"] = nil
+        context["request.msisdn"] = Phonelib.parse(params["MSISDN"]).e164
+        # context["request.type"] = params["MSGTYPE"] ? :initial : :response
         context["request.input"] = params["USERDATA"].presence
 
         type, msg, choices = @app.call(context)
