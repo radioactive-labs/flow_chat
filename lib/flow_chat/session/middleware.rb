@@ -1,6 +1,6 @@
-module UssdEngine
-  module Middleware
-    class Session
+module FlowChat
+  module Session
+    class Middleware
       def initialize(app)
         @app = app
       end
@@ -17,8 +17,8 @@ module UssdEngine
         context["request.id"]
         # File.join(
         #   context["PATH_INFO"],
-        #   (Config.resumable_sessions_enabled && Config.resumable_sessions_global) ? "global" : context["ussd_engine.request"][:provider].to_s,
-        #   context["ussd_engine.request"][:msisdn]
+        #   (Config.resumable_sessions_enabled && Config.resumable_sessions_global) ? "global" : context["ussd.request"][:provider].to_s,
+        #   context["ussd.request"][:msisdn]
         # )
       end
     end

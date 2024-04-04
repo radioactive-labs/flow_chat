@@ -1,4 +1,4 @@
-module UssdEngine
+module FlowChat
   module Config
     mattr_accessor :logger, default: Logger.new($stdout)
     mattr_accessor :cache, default: nil

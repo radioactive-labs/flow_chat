@@ -1,8 +1,8 @@
-require_relative "lib/ussd_engine/version"
+require_relative "lib/flow_chat/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "ussd_engine"
-  spec.version = UssdEngine::VERSION
+  spec.name = "flow_chat"
+  spec.version = FlowChat::VERSION
   spec.authors = ["Stefan Froelich"]
   spec.email = ["sfroelich01@gmail.com"]
 

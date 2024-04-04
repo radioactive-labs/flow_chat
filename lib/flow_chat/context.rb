@@ -1,4 +1,4 @@
-module UssdEngine
+module FlowChat
   class Context
     def initialize
       @data = {}.with_indifferent_access

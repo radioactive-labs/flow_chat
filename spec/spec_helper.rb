@@ -1,5 +1,5 @@
 require "bundler/setup"
-require "ussd_engine"
+require "flow_chat"
 
 RSpec.configure do |config|
   # Enable flags like --only-failures and --next-failure

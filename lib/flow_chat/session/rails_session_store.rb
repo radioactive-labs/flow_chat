@@ -1,6 +1,6 @@
-module UssdEngine
+module FlowChat
   module Session
-    class RailsSession
+    class RailsSessionStore
       def initialize(context)
         @session_id = context["session.id"]
         @session_store = context.controller.session
