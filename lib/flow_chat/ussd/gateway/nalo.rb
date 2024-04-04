@@ -31,13 +31,7 @@ module FlowChat
         private
 
         def build_message(msg, choices)
-          [msg, build_choices(choices)].compact.join "\n\n"
-        end
-
-        def build_choices(choices)
-          return unless choices.present?
-
-          choices.map { |i, c| "#{i}. #{c}" }.join "\n"
+          FlowChat::Ussd::Renderer.new(msg, choices).render
         end
       end
     end
