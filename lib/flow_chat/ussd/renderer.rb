@@ -8,12 +8,12 @@ module FlowChat
         @choices = choices
       end
 
-      def render = build_message
+      def render = build_prompt
 
       private
 
-      def build_message
-        [prompt, build_choices(choices)].compact.join "\n\n"
+      def build_prompt
+        [prompt, build_choices].compact.join "\n\n"
       end
 
       def build_choices

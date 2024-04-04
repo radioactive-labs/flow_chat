@@ -12,6 +12,8 @@ module FlowChat
       @data[key] = value
     end
 
+    def input = @data["request.input"]
+
     def session = @data["session"]
 
     def controller = @data["controller"]

@@ -5,8 +5,8 @@ module FlowChat
 
       def initialize(context)
         @context = context
-        @session = context["session"]
-        @input = context["request.input"]
+        @session = context.session
+        @input = context.input
         @navigation_stack = []
       end
 

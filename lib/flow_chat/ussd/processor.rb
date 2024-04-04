@@ -33,21 +33,22 @@ module FlowChat
         self
       end
 
-      def use_pagination
-        middleware.use FlowChat::Ussd::Middleware::Pagination
-      end
-
-      def run(flow, action)
-        @context["flow.class"] = flow
+      def run(flow_class, action)
+        @context["flow.name"] = flow_class.name.underscore
+        @context["flow.class"] = flow_class
         @context["flow.action"] = action
 
-        ::Middleware::Builder.new name: "ussd" do |b|
+        stack = ::Middleware::Builder.new name: "ussd" do |b|
           b.use gateway
           b.use FlowChat::Session::Middleware
-          # b.use FlowChat::Middleware::Pagination
+          b.use FlowChat::Ussd::Middleware::Pagination
           b.use middleware
           b.use FlowChat::Ussd::Middleware::Executor
-        end.inject_logger(Rails.logger).call(@context)
+        end.inject_logger(Rails.logger)
+
+        yield stack if block_given?
+
+        stack.call(@context)
       end
     end
   end

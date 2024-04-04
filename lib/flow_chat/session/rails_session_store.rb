@@ -7,8 +7,8 @@ module FlowChat
         @session_data = (session_store[session_id] || {}).with_indifferent_access
       end
 
-      def get(key, default = nil)
-        session_data[key] || default
+      def get(key)
+        session_data[key]
       end
 
       def set(key, value)
