@@ -6,9 +6,9 @@ Gem::Specification.new do |spec|
   spec.authors = ["Stefan Froelich"]
   spec.email = ["sfroelich01@gmail.com"]
 
-  spec.summary = "Enable USSD processing support in Rails."
-  spec.description = "Enable USSD processing support in Rails."
-  spec.homepage = "https://github.com/ussd-engine/api-base"
+  spec.summary = "Framework for processing Menu based conversations e.g. USSD in Rails."
+  spec.description = "Framework for processing Menu based conversations e.g. USSD in Rails."
+  spec.homepage = "https://github.com/radioactive-labs/flow_chat"
   spec.license = "MIT"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
 
