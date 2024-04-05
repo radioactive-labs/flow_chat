@@ -6,8 +6,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Stefan Froelich"]
   spec.email = ["sfroelich01@gmail.com"]
 
-  spec.summary = "Framework for processing Menu based conversations (e.g. USSD) in Rails."
-  spec.description = "Framework for processing Menu based conversations (e.g. USSD) in Rails."
+  spec.summary = "Framework for building Menu based conversations (e.g. USSD) in Rails."
+  spec.description = "Framework for building Menu based conversations (e.g. USSD) in Rails."
   spec.homepage = "https://github.com/radioactive-labs/flow_chat"
   spec.license = "MIT"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
