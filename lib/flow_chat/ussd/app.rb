@@ -25,7 +25,7 @@ module FlowChat
         value
       end
 
-      def terminate!(msg)
+      def say(msg)
         raise FlowChat::Interrupt::Terminate.new(msg)
       end
     end

@@ -40,22 +40,22 @@
   </head>
   <body>
     <div class="content">
-      <div class="field hidden<%=  show_options ? '' : 'hidden' %>">
+      <div class="field <%= show_options ? '' : 'hidden' %>">
         <div class="label">Provider </div>
         <div class="value">
           <select id="provider">
-            <option <%=  default_provider == :nalo ? 'selected' : '' %> value="nalo">Nalo</option>
-            <option <%=  default_provider == :nsano ? 'selected' : '' %> value="nsano">Nsano</option>
+            <option <%= default_provider == :nalo ? 'selected' : '' %> value="nalo">Nalo</option>
+            <option <%= default_provider == :nsano ? 'selected' : '' %> value="nsano">Nsano</option>
           </select>
         </div>
       </div>
-      <div class="field <%=  show_options ? '' : 'hidden' %>">
+      <div class="field <%= show_options ? '' : 'hidden' %>">
         <div class="label">Endpoint </div>
         <div class="value">
           <input id="endpoint" value="<%= default_endpoint %>" />
         </div>
       </div>
-      <div class="field <%=  show_options ? '' : 'hidden' %>">
+      <div class="field <%= show_options ? '' : 'hidden' %>">
         <div class="label">MSISDN </div>
         <div class="value">
           <input id="msisdn" value="<%= default_msisdn %>" />
