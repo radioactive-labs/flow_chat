@@ -1,27 +1,21 @@
 module FlowChat
-  module Ussd
+  module Whatsapp
     class Processor < FlowChat::BaseProcessor
-      def use_resumable_sessions
-        middleware.insert_before 0, FlowChat::Ussd::Middleware::ResumableSession
-        self
-      end
-
       protected
 
       def middleware_name
-        "ussd.middleware"
+        "whatsapp.middleware"
       end
 
       def build_middleware_stack
-        create_middleware_stack("ussd")
+        create_middleware_stack("whatsapp")
       end
 
       def configure_middleware_stack(builder)
         builder.use gateway
         builder.use FlowChat::Session::Middleware
-        builder.use FlowChat::Ussd::Middleware::Pagination
         builder.use middleware
-        builder.use FlowChat::Ussd::Middleware::Executor
+        builder.use FlowChat::Whatsapp::Middleware::Executor
       end
     end
   end

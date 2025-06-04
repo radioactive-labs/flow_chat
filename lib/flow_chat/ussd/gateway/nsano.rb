@@ -12,6 +12,12 @@ module FlowChat
           controller = context["controller"]
           controller.request
 
+          # Add timestamp for all requests
+          context["request.timestamp"] = Time.current.iso8601
+          
+          # Set a basic message_id (can be enhanced based on actual Nsano implementation)
+          context["request.message_id"] = SecureRandom.uuid
+
           # input = context["rack.input"].read
           # context["rack.input"].rewind
           # if input.present?

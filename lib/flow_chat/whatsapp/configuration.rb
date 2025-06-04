@@ -1,0 +1,75 @@
+module FlowChat
+  module Whatsapp
+    class Configuration
+      attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
+                    :webhook_url, :webhook_verify_token, :business_account_id
+
+      def initialize
+        @access_token = nil
+        @phone_number_id = nil
+        @verify_token = nil
+        @app_id = nil
+        @app_secret = nil
+        @webhook_url = nil
+        @webhook_verify_token = nil
+        @business_account_id = nil
+      end
+
+      # Load configuration from Rails credentials or environment variables
+      def self.from_credentials
+        config = new
+        
+        if defined?(Rails) && Rails.application.credentials.whatsapp
+          credentials = Rails.application.credentials.whatsapp
+          config.access_token = credentials[:access_token]
+          config.phone_number_id = credentials[:phone_number_id]
+          config.verify_token = credentials[:verify_token]
+          config.app_id = credentials[:app_id]
+          config.app_secret = credentials[:app_secret]
+          config.webhook_url = credentials[:webhook_url]
+          config.business_account_id = credentials[:business_account_id]
+        else
+          # Fallback to environment variables
+          config.access_token = ENV['WHATSAPP_ACCESS_TOKEN']
+          config.phone_number_id = ENV['WHATSAPP_PHONE_NUMBER_ID']
+          config.verify_token = ENV['WHATSAPP_VERIFY_TOKEN']
+          config.app_id = ENV['WHATSAPP_APP_ID']
+          config.app_secret = ENV['WHATSAPP_APP_SECRET']
+          config.webhook_url = ENV['WHATSAPP_WEBHOOK_URL']
+          config.business_account_id = ENV['WHATSAPP_BUSINESS_ACCOUNT_ID']
+        end
+
+        config
+      end
+
+      def valid?
+        access_token.present? && phone_number_id.present? && verify_token.present?
+      end
+
+      def webhook_configured?
+        webhook_url.present? && verify_token.present?
+      end
+
+      # API endpoints
+      def messages_url
+        "https://graph.facebook.com/v18.0/#{phone_number_id}/messages"
+      end
+
+      def media_url(media_id)
+        "https://graph.facebook.com/v18.0/#{media_id}"
+      end
+
+      def phone_numbers_url
+        "https://graph.facebook.com/v18.0/#{business_account_id}/phone_numbers"
+      end
+
+      # Headers for API requests
+      def api_headers
+        {
+          "Authorization" => "Bearer #{access_token}",
+          "Content-Type" => "application/json"
+        }
+      end
+    end
+  end
+end 

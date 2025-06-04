@@ -1,13 +1,14 @@
 # FlowChat
 
-FlowChat is a Rails framework designed for building sophisticated conversational workflows, particularly for USSD (Unstructured Supplementary Service Data) systems. It provides an intuitive Ruby DSL for creating multi-step, menu-driven conversations with automatic session management, input validation, and flow control.
+FlowChat is a Rails framework designed for building sophisticated conversational workflows for both USSD (Unstructured Supplementary Service Data) systems and WhatsApp messaging. It provides an intuitive Ruby DSL for creating multi-step, menu-driven conversations with automatic session management, input validation, and flow control.
 
 **Key Features:**
 - 🎯 **Declarative Flow Definition** - Define conversation flows as Ruby classes
 - 🔄 **Automatic Session Management** - Persistent state across requests  
 - ✅ **Input Validation & Transformation** - Built-in validation and data conversion
 - 🌊 **Middleware Architecture** - Flexible request processing pipeline
-- 📱 **USSD Gateway Support** - Currently supports Nalo and Nsano gateways
+- 📱 **USSD Gateway Support** - Currently supports Nalo gateways
+- 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with interactive messages
 - 🧪 **Built-in Testing Tools** - USSD simulator for local development
 
 ## Architecture Overview
@@ -21,9 +22,9 @@ User Input → Gateway → Session → Pagination → Custom → Executor → Fl
 ```
 
 **Middleware Pipeline:**
-- **Gateway**: USSD provider communication (Nalo/Nsano)
+- **Gateway**: Communication with providers (USSD: Nalo, WhatsApp: Cloud API)
 - **Session**: Load/save conversation state  
-- **Pagination**: Split long responses into pages
+- **Pagination**: Split long responses into pages (USSD only)
 - **Custom**: Your application middleware (logging, auth, etc.)
 - **Executor**: Execute flow methods and handle interrupts
 
@@ -43,6 +44,10 @@ bundle install
 
 ## Quick Start
 
+FlowChat supports both USSD and WhatsApp. Choose the platform that fits your needs:
+
+### USSD Setup
+
 ### 1. Create Your First Flow
 
 Create a flow class in `app/flow_chat/welcome_flow.rb`:
@@ -60,7 +65,7 @@ class WelcomeFlow < FlowChat::Flow
 end
 ```
 
-### 2. Set Up the Controller
+### 2. Set Up the USSD Controller
 
 Create a controller to handle USSD requests:
 
@@ -88,6 +93,209 @@ Rails.application.routes.draw do
   post 'ussd' => 'ussd#process_request'
 end
 ```
+
+💡 **Tip**: See [examples/ussd_controller.rb](examples/ussd_controller.rb) for a complete USSD controller example with payment flows, customer support, and custom middleware.
+
+### WhatsApp Setup
+
+### 1. Configure WhatsApp Credentials
+
+FlowChat supports two ways to configure WhatsApp credentials:
+
+**Option A: Using Rails Credentials**
+
+Add your WhatsApp credentials to Rails credentials:
+
+```bash
+rails credentials:edit
+```
+
+```yaml
+whatsapp:
+  access_token: "your_access_token"
+  phone_number_id: "your_phone_number_id"
+  verify_token: "your_verify_token"
+  app_id: "your_app_id"
+  app_secret: "your_app_secret"
+  webhook_url: "your_webhook_url"
+  business_account_id: "your_business_account_id"
+```
+
+**Option B: Using Environment Variables**
+
+Alternatively, you can use environment variables:
+
+```bash
+# Add to your .env file or environment
+export WHATSAPP_ACCESS_TOKEN="your_access_token"
+export WHATSAPP_PHONE_NUMBER_ID="your_phone_number_id" 
+export WHATSAPP_VERIFY_TOKEN="your_verify_token"
+export WHATSAPP_APP_ID="your_app_id"
+export WHATSAPP_APP_SECRET="your_app_secret"
+export WHATSAPP_WEBHOOK_URL="your_webhook_url"
+export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
+```
+
+FlowChat will automatically use Rails credentials first, falling back to environment variables if credentials are not available.
+
+### 2. Create WhatsApp Controller
+
+```ruby
+class WhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+```
+
+### 3. Add WhatsApp Route
+
+```ruby
+Rails.application.routes.draw do
+  match '/whatsapp/webhook', to: 'whatsapp#webhook', via: [:get, :post]
+end
+```
+
+### 4. Enhanced Features for WhatsApp
+
+The same flow works for both USSD and WhatsApp, but WhatsApp provides additional data and better interactive features:
+
+```ruby
+class WelcomeFlow < FlowChat::Flow
+  def main_page
+    # Access WhatsApp-specific data
+    Rails.logger.info "Contact: #{app.contact_name}, Phone: #{app.phone_number}"
+    Rails.logger.info "Message ID: #{app.message_id}, Timestamp: #{app.timestamp}"
+    
+    # Handle location sharing
+    if app.location
+      app.say "Thanks for sharing your location! We see you're at #{app.location['latitude']}, #{app.location['longitude']}"
+      return
+    end
+    
+    # Handle media messages  
+    if app.media
+      app.say "Thanks for the #{app.media['type']} file! We received: #{app.media['id']}"
+      return
+    end
+
+    name = app.screen(:name) do |prompt|
+      prompt.ask "Hello! Welcome to our WhatsApp service. What's your name?",
+        transform: ->(input) { input.strip.titleize }
+    end
+
+    # WhatsApp supports interactive buttons and lists via prompt.select
+    choice = app.screen(:main_menu) do |prompt|
+      prompt.select "Hi #{name}! How can I help you?", {
+        "info" => "📋 Get Information",
+        "support" => "🆘 Contact Support",
+        "feedback" => "💬 Give Feedback"
+      }
+    end
+
+    case choice
+    when "info"
+      show_information_menu
+    when "support"
+      contact_support  
+    when "feedback"
+      collect_feedback
+    end
+  end
+
+  private
+
+  def show_information_menu
+    info_choice = app.screen(:info_menu) do |prompt|
+      prompt.select "What information do you need?", {
+        "hours" => "🕒 Business Hours",
+        "location" => "📍 Our Location", 
+        "services" => "💼 Our Services"
+      }
+    end
+
+    case info_choice
+    when "hours"
+      app.say "We're open Monday-Friday 9AM-6PM, Saturday 10AM-4PM. Closed Sundays."
+    when "location"
+      app.say "📍 Visit us at 123 Main Street, Downtown. We're next to the coffee shop!"
+    when "services"
+      app.say "💼 We offer: Web Development, Mobile Apps, Cloud Services, and IT Consulting."
+    end
+  end
+
+  def contact_support
+    support_choice = app.screen(:support_menu) do |prompt|
+      prompt.select "How would you like to contact support?", {
+        "call" => "📞 Call Us",
+        "email" => "📧 Email Us",
+        "chat" => "💬 Continue Here"
+      }
+    end
+
+    case support_choice
+    when "call"
+      app.say "📞 Call us at: +1-555-HELP (4357)\nAvailable Mon-Fri 9AM-5PM"
+    when "email"  
+      app.say "📧 Email us at: support@company.com\nWe typically respond within 24 hours"
+    when "chat"
+      app.say "💬 Great! Please describe your issue and we'll help you right away."
+    end
+  end
+
+  def collect_feedback
+    rating = app.screen(:rating) do |prompt|
+      prompt.select "How would you rate our service?", {
+        "5" => "⭐⭐⭐⭐⭐ Excellent",
+        "4" => "⭐⭐⭐⭐ Good",
+        "3" => "⭐⭐⭐ Average",
+        "2" => "⭐⭐ Poor",
+        "1" => "⭐ Very Poor"
+      }
+    end
+
+    feedback = app.screen(:feedback_text) do |prompt|
+      prompt.ask "Thank you for the #{rating}-star rating! Please share any additional feedback:"
+    end
+
+    # Use WhatsApp-specific data for logging
+    Rails.logger.info "Feedback from #{app.contact_name} (#{app.phone_number}): #{rating} stars - #{feedback}"
+
+    app.say "Thank you for your feedback! We really appreciate it. 🙏"
+  end
+end
+```
+
+For detailed WhatsApp setup instructions, see [WhatsApp Integration Guide](docs/whatsapp_setup.md).
+
+## Cross-Platform Compatibility
+
+FlowChat provides a unified API that works across both USSD and WhatsApp platforms, with graceful degradation for platform-specific features:
+
+### Shared Features (Both USSD & WhatsApp)
+- ✅ `app.screen()` - Interactive screens with prompts
+- ✅ `app.say()` - Send messages to users  
+- ✅ `prompt.ask()` - Text input collection
+- ✅ `prompt.select()` - Menu selection (renders as numbered list in USSD, interactive buttons/lists in WhatsApp)
+- ✅ `prompt.yes?()` - Yes/no questions
+- ✅ `app.phone_number` - User's phone number
+- ✅ `app.message_id` - Unique message identifier  
+- ✅ `app.timestamp` - Message timestamp
+
+### WhatsApp-Only Features
+- ✅ `app.contact_name` - WhatsApp contact name (returns `nil` in USSD)
+- ✅ `app.location` - Location sharing data (returns `nil` in USSD)  
+- ✅ `app.media` - Media file attachments (returns `nil` in USSD)
+- ✅ Rich interactive elements (buttons, lists) automatically generated from `prompt.select()`
+
+This design allows you to write flows once and deploy them on both platforms, with WhatsApp users getting enhanced interactive features automatically.
 
 ## Core Concepts
 
@@ -240,7 +448,7 @@ When you run a flow, FlowChat automatically builds this middleware stack:
 User Input → Gateway → Session → Pagination → Custom Middleware → Executor → Flow
 ```
 
-1. **Gateway Middleware** - Handles USSD provider communication (Nalo/Nsano)
+1. **Gateway Middleware** - Handles USSD provider communication (Nalo)
 2. **Session Middleware** - Manages session storage and retrieval
 3. **Pagination Middleware** - Automatically splits long responses across pages
 4. **Custom Middleware** - Your application-specific middleware (optional)
@@ -338,9 +546,6 @@ FlowChat supports multiple USSD gateways:
 ```ruby
 # Nalo Solutions Gateway
 config.use_gateway FlowChat::Ussd::Gateway::Nalo
-
-# Nsano Gateway  
-config.use_gateway FlowChat::Ussd::Gateway::Nsano
 ```
 
 ## Testing
@@ -556,12 +761,32 @@ end
 
 ## Configuration
 
+### Cache Configuration
+
+The `CacheSessionStore` requires a cache to be configured. Set it up in your Rails application:
+
+```ruby
+# config/application.rb or config/environments/*.rb
+FlowChat::Config.cache = Rails.cache
+
+# Or use a specific cache store
+FlowChat::Config.cache = ActiveSupport::Cache::MemoryStore.new
+
+# For Redis (requires redis gem)
+FlowChat::Config.cache = ActiveSupport::Cache::RedisCacheStore.new(url: "redis://localhost:6379/1")
+```
+
+💡 **Tip**: See [examples/initializer.rb](examples/initializer.rb) for a complete configuration example.
+
 ### Session Storage Options
 
 Configure different session storage backends:
 
 ```ruby
-# Rails session (default)
+# Cache session store (default) - uses FlowChat::Config.cache
+config.use_session_store FlowChat::Session::CacheSessionStore
+
+# Rails session (for USSD)
 config.use_session_store FlowChat::Session::RailsSessionStore
 
 # Custom session store
@@ -611,12 +836,13 @@ bundle exec rake test TESTOPTS="--name=test_flow_initialization"
 
 ## Roadmap
 
-- 📱 **WhatsApp Integration** - Support for WhatsApp Business API
 - 💬 **Telegram Bot Support** - Native Telegram bot integration  
-- 🔄 **Sub-flows** - Reusable conversation components
-- 📊 **Analytics Integration** - Built-in conversation analytics
-- 🌐 **Multi-language Support** - Internationalization features
-- ⚡ **Performance Optimizations** - Improved middleware performance
+- 🔄 **Sub-flows** - Reusable conversation components and flow composition
+- 📊 **Analytics Integration** - Built-in conversation analytics and user journey tracking
+- 🌐 **Multi-language Support** - Internationalization and localization features
+- ⚡ **Performance Optimizations** - Improved middleware performance and caching
+- 🎯 **Advanced Validation** - More validation helpers and custom validators
+- 🔐 **Enhanced Security** - Rate limiting, input sanitization, and fraud detection
 
 ## License
 

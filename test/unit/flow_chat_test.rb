@@ -1,4 +1,5 @@
 require "test_helper"
+require "pathname"
 
 class FlowChatTest < Minitest::Test
   def test_has_version_number

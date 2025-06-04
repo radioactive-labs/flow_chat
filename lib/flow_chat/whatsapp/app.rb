@@ -1,5 +1,5 @@
 module FlowChat
-  module Ussd
+  module Whatsapp
     class App
       attr_reader :session, :input, :context, :navigation_stack
 
@@ -17,7 +17,7 @@ module FlowChat
         navigation_stack << key
         return session.get(key) if session.get(key).present?
 
-        prompt = FlowChat::Ussd::Prompt.new input
+        prompt = FlowChat::Whatsapp::Prompt.new input
         @input = nil # input is being submitted to prompt so we clear it
 
         value = yield prompt
@@ -26,12 +26,12 @@ module FlowChat
       end
 
       def say(msg)
-        raise FlowChat::Interrupt::Terminate.new(msg)
+        raise FlowChat::Interrupt::Terminate.new([:text, msg, {}])
       end
 
-      # WhatsApp-specific data accessors (not supported in USSD)
+      # WhatsApp-specific data accessors (read-only)
       def contact_name
-        nil
+        context["request.contact_name"]
       end
 
       def message_id
@@ -43,11 +43,11 @@ module FlowChat
       end
 
       def location
-        nil
+        context["request.location"]
       end
 
       def media
-        nil
+        context["request.media"]
       end
 
       def phone_number
@@ -55,4 +55,4 @@ module FlowChat
       end
     end
   end
-end
+end 

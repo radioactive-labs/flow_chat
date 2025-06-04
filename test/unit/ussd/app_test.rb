@@ -142,6 +142,48 @@ class UssdAppTest < Minitest::Test
     assert_equal 25, @context.session.get(:age)
   end
 
+  def test_message_id_returns_context_value
+    @context["request.message_id"] = "uuid-test-123"
+    assert_equal "uuid-test-123", @app.message_id
+  end
+
+  def test_message_id_returns_nil_when_not_set
+    assert_nil @app.message_id
+  end
+
+  def test_timestamp_returns_context_value
+    @context["request.timestamp"] = "2023-12-01T10:30:00Z"
+    assert_equal "2023-12-01T10:30:00Z", @app.timestamp
+  end
+
+  def test_timestamp_returns_nil_when_not_set
+    assert_nil @app.timestamp
+  end
+
+  def test_phone_number_returns_msisdn
+    @context["request.msisdn"] = "+256700123456"
+    assert_equal "+256700123456", @app.phone_number
+  end
+
+  def test_phone_number_returns_nil_when_not_set
+    assert_nil @app.phone_number
+  end
+
+  def test_contact_name_returns_nil_for_ussd
+    # USSD doesn't support contact names
+    assert_nil @app.contact_name
+  end
+
+  def test_location_returns_nil_for_ussd
+    # USSD doesn't support location sharing
+    assert_nil @app.location
+  end
+
+  def test_media_returns_nil_for_ussd
+    # USSD doesn't support media sharing
+    assert_nil @app.media
+  end
+
   def test_screen_with_select_prompt
     # Create app with selection input
     @context.input = "2"

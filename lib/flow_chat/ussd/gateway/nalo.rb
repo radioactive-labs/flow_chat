@@ -12,6 +12,8 @@ module FlowChat
           params = context.controller.request.params
 
           context["request.id"] = params["USERID"]
+          context["request.message_id"] = SecureRandom.uuid
+          context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :nalo
           context["request.network"] = nil
           context["request.msisdn"] = Phonelib.parse(params["MSISDN"]).e164

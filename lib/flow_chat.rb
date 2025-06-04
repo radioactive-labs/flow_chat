@@ -1,5 +1,6 @@
 require "zeitwerk"
 require "active_support"
+require "active_support/core_ext/time"
 
 loader = Zeitwerk::Loader.for_gem
 loader.enable_reloading if defined?(Rails.env) && Rails.env.development?
