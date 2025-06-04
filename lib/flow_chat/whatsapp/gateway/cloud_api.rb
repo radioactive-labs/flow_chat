@@ -6,8 +6,6 @@ module FlowChat
   module Whatsapp
     module Gateway
       class CloudApi
-        WHATSAPP_API_URL = "https://graph.facebook.com/v18.0"
-
         def initialize(app, config = nil)
           @app = app
           @config = config || FlowChat::Whatsapp::Configuration.from_credentials

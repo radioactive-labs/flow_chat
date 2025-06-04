@@ -346,7 +346,7 @@ class WhatsappClientTest < Minitest::Test
       "id" => "media_123"
     }
 
-    stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
+    stub_request(:get, "#{FlowChat::Config.whatsapp.api_base_url}/media_123")
       .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: media_response.to_json)
 
@@ -356,7 +356,7 @@ class WhatsappClientTest < Minitest::Test
   end
 
   def test_get_media_url_error
-    stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
+    stub_request(:get, "#{FlowChat::Config.whatsapp.api_base_url}/media_123")
       .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 404, body: {"error" => "Media not found"}.to_json)
 
@@ -371,7 +371,7 @@ class WhatsappClientTest < Minitest::Test
       "url" => "https://media.example.com/file.jpg"
     }
 
-    stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
+    stub_request(:get, "#{FlowChat::Config.whatsapp.api_base_url}/media_123")
       .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: media_response.to_json)
 
@@ -386,7 +386,7 @@ class WhatsappClientTest < Minitest::Test
   end
 
   def test_download_media_url_fetch_fails
-    stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
+    stub_request(:get, "#{FlowChat::Config.whatsapp.api_base_url}/media_123")
       .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 404, body: {"error" => "Media not found"}.to_json)
 
@@ -552,11 +552,11 @@ class WhatsappClientTest < Minitest::Test
   # ============================================================================
 
   def whatsapp_messages_url
-    "https://graph.facebook.com/v18.0/#{@config.phone_number_id}/messages"
+    @config.messages_url
   end
 
   def whatsapp_media_url
-    "https://graph.facebook.com/v18.0/#{@config.phone_number_id}/media"
+    "#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/media"
   end
 
   def success_response

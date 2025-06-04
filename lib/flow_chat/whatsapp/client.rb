@@ -7,8 +7,6 @@ require "securerandom"
 module FlowChat
   module Whatsapp
     class Client
-      WHATSAPP_API_URL = "https://graph.facebook.com/v18.0"
-
       def initialize(config)
         @config = config
       end
@@ -134,7 +132,7 @@ module FlowChat
         end
 
         # Upload directly via HTTP
-        uri = URI("#{WHATSAPP_API_URL}/#{@config.phone_number_id}/media")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/media")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
 
@@ -289,7 +287,7 @@ module FlowChat
       # @param media_id [String] Media ID from WhatsApp
       # @return [String] Media URL or nil on error
       def get_media_url(media_id)
-        uri = URI("#{WHATSAPP_API_URL}/#{media_id}")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{media_id}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
 
@@ -389,7 +387,7 @@ module FlowChat
       # @param message_data [Hash] Message payload
       # @return [Hash] API response or nil on error
       def send_message_payload(message_data)
-        uri = URI("#{WHATSAPP_API_URL}/#{@config.phone_number_id}/messages")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
 

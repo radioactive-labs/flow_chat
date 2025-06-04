@@ -16,7 +16,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     WebMock.reset!
 
     # Stub the WhatsApp messages API
-    stub_request(:post, "https://graph.facebook.com/v18.0/test_phone_id/messages")
+    stub_request(:post, @mock_config.messages_url)
       .to_return(status: 200, body: {"messages" => [{"id" => "sent_123"}]}.to_json)
   end
 

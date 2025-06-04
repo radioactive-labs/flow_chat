@@ -86,7 +86,7 @@ module FlowChat
       # Create a new template (requires approval from Meta)
       def create_template(name:, category:, language: "en_US", components: [])
         business_account_id = @config.business_account_id
-        uri = URI("https://graph.facebook.com/v18.0/#{business_account_id}/message_templates")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{business_account_id}/message_templates")
 
         template_data = {
           name: name,
@@ -110,7 +110,7 @@ module FlowChat
       # List all templates
       def list_templates
         business_account_id = @config.business_account_id
-        uri = URI("https://graph.facebook.com/v18.0/#{business_account_id}/message_templates")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{business_account_id}/message_templates")
 
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
@@ -124,7 +124,7 @@ module FlowChat
 
       # Get template status
       def template_status(template_id)
-        uri = URI("https://graph.facebook.com/v18.0/#{template_id}")
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{template_id}")
 
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true

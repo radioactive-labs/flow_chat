@@ -33,11 +33,12 @@ module FlowChat
 
     class WhatsappConfig
       attr_accessor :background_job_class
-      attr_reader :message_handling_mode
+      attr_reader :message_handling_mode, :api_base_url
 
       def initialize
         @message_handling_mode = :inline
         @background_job_class = "WhatsappMessageJob"
+        @api_base_url = "https://graph.facebook.com/v22.0"
       end
 
       # Validate message handling mode

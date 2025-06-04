@@ -78,20 +78,25 @@ module FlowChat
       end
 
       def valid?
-        access_token.present? && phone_number_id.present? && verify_token.present?
+        access_token && !access_token.to_s.empty? && phone_number_id && !phone_number_id.to_s.empty? && verify_token && !verify_token.to_s.empty?
       end
 
       # API endpoints
       def messages_url
-        "https://graph.facebook.com/v18.0/#{phone_number_id}/messages"
+        "#{FlowChat::Config.whatsapp.api_base_url}/#{phone_number_id}/messages"
       end
 
       def media_url(media_id)
-        "https://graph.facebook.com/v18.0/#{media_id}"
+        "#{FlowChat::Config.whatsapp.api_base_url}/#{media_id}"
       end
 
       def phone_numbers_url
-        "https://graph.facebook.com/v18.0/#{business_account_id}/phone_numbers"
+        "#{FlowChat::Config.whatsapp.api_base_url}/#{business_account_id}/phone_numbers"
+      end
+
+      # Get API base URL from global config
+      def api_base_url
+        FlowChat::Config.whatsapp.api_base_url
       end
 
       # Headers for API requests
