@@ -7,44 +7,31 @@ module FlowChat
         end
 
         def call(context)
-          if Config.resumable_sessions_enabled && context["ussd.request"].present?
-            request = Rack::Request.new(context)
-            session = request.session
+          if FlowChat::Config.ussd.resumable_sessions_enabled && context["ussd.request"].present?
+            # First, try to find any interruption session.
+            # The session key can be:
+            #  - a global session (key: "global")
+            #  - a provider-specific session (key: <provider>)
+            session_key = self.class.session_key(context)
+            resumable_session = context["session.store"].get(session_key)
 
-            context["ussd.resumable_sessions"] = {}
-
-            # If this is a new session but we have the flag set, this means the call terminated before
-            # the session closed. Force it to resume.
-            # This is safe since a new session is started if the old session does not indeed exist.
-            if context["ussd.request"][:type] == :initial && can_resume_session?(session)
-              context["ussd.request"][:type] = :response
-              context["ussd.resumable_sessions"][:resumed] = true
+            if resumable_session.present? && valid?(resumable_session)
+              context.merge! resumable_session
             end
-
-            res = @app.call(context)
-
-            if context["ussd.response"].present?
-              if context["ussd.response"][:type] == :terminal || context["ussd.resumable_sessions"][:disable]
-                session.delete "ussd.resumable_sessions"
-              else
-                session["ussd.resumable_sessions"] = Time.now.to_i
-              end
-            end
-
-            res
-          else
-            @app.call(context)
           end
+
+          @app.call(context)
         end
 
         private
 
-        def can_resume_session?(session)
-          return unless session["ussd.resumable_sessions"].present?
-          return true unless Config.resumable_sessions_timeout_seconds
+        def valid?(session)
+          return true unless FlowChat::Config.ussd.resumable_sessions_timeout_seconds
 
-          last_active_at = Time.at(session["ussd.resumable_sessions"])
-          (Time.now - Config.resumable_sessions_timeout_seconds) < last_active_at
+          last_active_at = Time.parse session.dig("context", "last_active_at")
+          (Time.now - FlowChat::Config.ussd.resumable_sessions_timeout_seconds) < last_active_at
+        rescue StandardError
+          false
         end
       end
     end

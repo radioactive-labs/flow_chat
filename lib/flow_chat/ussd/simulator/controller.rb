@@ -38,7 +38,7 @@ module FlowChat
 
         def simulator_locals
           {
-            pagesize: Config.pagination_page_size,
+            pagesize: FlowChat::Config.ussd.pagination_page_size,
             show_options: show_options,
             default_msisdn: default_msisdn,
             default_endpoint: default_endpoint,

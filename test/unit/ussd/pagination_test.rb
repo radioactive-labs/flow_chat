@@ -14,27 +14,27 @@ class UssdPaginationTest < Minitest::Test
     @pagination = FlowChat::Ussd::Middleware::Pagination.new(@mock_app)
     
     # Store original config values
-    @original_page_size = FlowChat::Config.pagination_page_size
-    @original_next_option = FlowChat::Config.pagination_next_option
-    @original_back_option = FlowChat::Config.pagination_back_option
-    @original_next_text = FlowChat::Config.pagination_next_text
-    @original_back_text = FlowChat::Config.pagination_back_text
+    @original_page_size = FlowChat::Config.ussd.pagination_page_size
+    @original_next_option = FlowChat::Config.ussd.pagination_next_option
+    @original_back_option = FlowChat::Config.ussd.pagination_back_option
+    @original_next_text = FlowChat::Config.ussd.pagination_next_text
+    @original_back_text = FlowChat::Config.ussd.pagination_back_text
     
     # Set test configuration
-    FlowChat::Config.pagination_page_size = 100
-    FlowChat::Config.pagination_next_option = "#"
-    FlowChat::Config.pagination_back_option = "0"
-    FlowChat::Config.pagination_next_text = "More"
-    FlowChat::Config.pagination_back_text = "Back"
+    FlowChat::Config.ussd.pagination_page_size = 100
+    FlowChat::Config.ussd.pagination_next_option = "#"
+    FlowChat::Config.ussd.pagination_back_option = "0"
+    FlowChat::Config.ussd.pagination_next_text = "More"
+    FlowChat::Config.ussd.pagination_back_text = "Back"
   end
 
   def teardown
     # Restore original config values
-    FlowChat::Config.pagination_page_size = @original_page_size
-    FlowChat::Config.pagination_next_option = @original_next_option
-    FlowChat::Config.pagination_back_option = @original_back_option
-    FlowChat::Config.pagination_next_text = @original_next_text
-    FlowChat::Config.pagination_back_text = @original_back_text
+    FlowChat::Config.ussd.pagination_page_size = @original_page_size
+    FlowChat::Config.ussd.pagination_next_option = @original_next_option
+    FlowChat::Config.ussd.pagination_back_option = @original_back_option
+    FlowChat::Config.ussd.pagination_next_text = @original_next_text
+    FlowChat::Config.ussd.pagination_back_text = @original_back_text
   end
 
   def test_short_response_passes_through_unchanged
@@ -54,7 +54,7 @@ class UssdPaginationTest < Minitest::Test
     type, prompt, choices = pagination.call(@context)
     
     assert_equal :prompt, type
-    assert prompt.length <= FlowChat::Config.pagination_page_size
+    assert prompt.length <= FlowChat::Config.ussd.pagination_page_size
     assert_includes prompt, "# More"
     assert_empty choices
     
@@ -117,7 +117,7 @@ class UssdPaginationTest < Minitest::Test
     type, prompt, choices = pagination.call(@context)
     
     assert_equal :prompt, type  # Should be prompt for pagination
-    assert prompt.length <= FlowChat::Config.pagination_page_size
+    assert prompt.length <= FlowChat::Config.ussd.pagination_page_size
     assert_includes prompt, "# More"
   end
 
@@ -149,13 +149,13 @@ class UssdPaginationTest < Minitest::Test
     pagination = FlowChat::Ussd::Middleware::Pagination.new(long_app)
     
     # Set a small page size to force word boundary breaking
-    FlowChat::Config.pagination_page_size = 50
+    FlowChat::Config.ussd.pagination_page_size = 50
     
     type, prompt, choices = pagination.call(@context)
     
     # Simply verify that pagination occurred and the prompt contains the pagination option
     if prompt.include?("# More")
-      assert prompt.length <= FlowChat::Config.pagination_page_size
+      assert prompt.length <= FlowChat::Config.ussd.pagination_page_size
     end
   end
 
@@ -180,8 +180,8 @@ class UssdPaginationTest < Minitest::Test
     pagination = FlowChat::Ussd::Middleware::Pagination.new(long_app)
     
     # Test with custom pagination options
-    FlowChat::Config.pagination_next_option = "99"
-    FlowChat::Config.pagination_next_text = "Continue"
+    FlowChat::Config.ussd.pagination_next_option = "99"
+    FlowChat::Config.ussd.pagination_next_text = "Continue"
     
     type, prompt, choices = pagination.call(@context)
     
@@ -270,9 +270,9 @@ class UssdPaginationTest < Minitest::Test
 
   def test_pagination_configuration_affects_behavior
     # Test that changing configuration affects pagination behavior
-    FlowChat::Config.pagination_page_size = 50
-    FlowChat::Config.pagination_next_option = "N"
-    FlowChat::Config.pagination_next_text = "Next"
+    FlowChat::Config.ussd.pagination_page_size = 50
+    FlowChat::Config.ussd.pagination_next_option = "N"
+    FlowChat::Config.ussd.pagination_next_text = "Next"
     
     long_response = "A" * 80
     long_app = lambda { |context| [:prompt, long_response, []] }

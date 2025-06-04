@@ -29,11 +29,11 @@ module FlowChat
         def intercept?
           pagination_state.present? &&
             (pagination_state["type"].to_sym == :terminal ||
-             ([Config.pagination_next_option, Config.pagination_back_option].include? @context.input))
+             ([FlowChat::Config.ussd.pagination_next_option, FlowChat::Config.ussd.pagination_back_option].include? @context.input))
         end
 
         def handle_intercepted_request
-          Config.logger&.info "FlowChat::Middleware::Pagination :: Intercepted to handle pagination"
+          FlowChat::Config.logger&.info "FlowChat::Middleware::Pagination :: Intercepted to handle pagination"
           start, finish, has_more = calculate_offsets
           type = (pagination_state["type"].to_sym == :terminal && !has_more) ? :terminal : :prompt
           prompt = pagination_state["prompt"][start..finish].strip + build_pagination_options(type, has_more)
@@ -43,9 +43,9 @@ module FlowChat
         end
 
         def maybe_paginate(type, prompt)
-          if prompt.length > Config.pagination_page_size
+          if prompt.length > FlowChat::Config.ussd.pagination_page_size
             original_prompt = prompt
-            Config.logger&.info "FlowChat::Middleware::Pagination :: Response length (#{prompt.length}) exceeds page size (#{Config.pagination_page_size}). Paginating."
+            FlowChat::Config.logger&.info "FlowChat::Middleware::Pagination :: Response length (#{prompt.length}) exceeds page size (#{FlowChat::Config.ussd.pagination_page_size}). Paginating."
             prompt = prompt[0..single_option_slice_size]
             # Ensure we do not cut words and options off in the middle.
             current_pagebreak = prompt[single_option_slice_size + 1].blank? ? single_option_slice_size : prompt.rindex("\n") || prompt.rindex(" ") || single_option_slice_size
@@ -60,12 +60,12 @@ module FlowChat
           page = current_page
           offset = pagination_state["offsets"][page.to_s]
           if offset.present?
-            Config.logger&.debug "FlowChat::Middleware::Pagination :: Reusing cached offset for page: #{page}"
+            FlowChat::Config.logger&.debug "FlowChat::Middleware::Pagination :: Reusing cached offset for page: #{page}"
             start = offset["start"]
             finish = offset["finish"]
             has_more = pagination_state["prompt"].length > finish
           else
-            Config.logger&.debug "FlowChat::Middleware::Pagination :: Calculating offset for page: #{page}"
+            FlowChat::Config.logger&.debug "FlowChat::Middleware::Pagination :: Calculating offset for page: #{page}"
             # We are guaranteed a previous offset because it was set in maybe_paginate
             previous_page = page - 1
             previous_offset = pagination_state["offsets"][previous_page.to_s]
@@ -73,7 +73,7 @@ module FlowChat
             has_more, len = (pagination_state["prompt"].length > start + single_option_slice_size) ? [true, dual_options_slice_size] : [false, single_option_slice_size]
             finish = start + len
             if start > pagination_state["prompt"].length
-              Config.logger&.debug "FlowChat::Middleware::Pagination :: No content exists for page: #{page}. Reverting to page: #{page - 1}"
+              FlowChat::Config.logger&.debug "FlowChat::Middleware::Pagination :: No content exists for page: #{page}. Reverting to page: #{page - 1}"
               page -= 1
               has_more = false
               start = previous_offset["start"]
@@ -100,11 +100,11 @@ module FlowChat
         end
 
         def next_option
-          "#{Config.pagination_next_option} #{Config.pagination_next_text}"
+          "#{FlowChat::Config.ussd.pagination_next_option} #{FlowChat::Config.ussd.pagination_next_text}"
         end
 
         def back_option
-          "#{Config.pagination_back_option} #{Config.pagination_back_text}"
+          "#{FlowChat::Config.ussd.pagination_back_option} #{FlowChat::Config.ussd.pagination_back_text}"
         end
 
         def single_option_slice_size
@@ -112,7 +112,7 @@ module FlowChat
             # To display a single back or next option
             # We accomodate the 2 newlines and the longest of the options
             # We subtract an additional 1 to normalize it for slicing
-            @single_option_slice_size = Config.pagination_page_size - 2 - [next_option.length, back_option.length].max - 1
+            @single_option_slice_size = FlowChat::Config.ussd.pagination_page_size - 2 - [next_option.length, back_option.length].max - 1
           end
           @single_option_slice_size
         end
@@ -121,16 +121,16 @@ module FlowChat
           unless @dual_options_slice_size.present?
             # To display both back and next options
             # We accomodate the 3 newlines and both of the options
-            @dual_options_slice_size = Config.pagination_page_size - 3 - [next_option.length, back_option.length].sum - 1
+            @dual_options_slice_size = FlowChat::Config.ussd.pagination_page_size - 3 - [next_option.length, back_option.length].sum - 1
           end
           @dual_options_slice_size
         end
 
         def current_page
           page = pagination_state["page"]
-          if @context.input == Config.pagination_back_option
+          if @context.input == FlowChat::Config.ussd.pagination_back_option
             page -= 1
-          elsif @context.input == Config.pagination_next_option
+          elsif @context.input == FlowChat::Config.ussd.pagination_next_option
             page += 1
           end
           [page, 1].max
