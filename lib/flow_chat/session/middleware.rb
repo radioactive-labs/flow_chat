@@ -7,7 +7,7 @@ module FlowChat
 
       def call(context)
         context["session.id"] = session_id context
-        context["session"] = context["session.store"].new context
+        context.session = context["session.store"].new(context)
         @app.call(context)
       end
 

@@ -16,7 +16,7 @@ module FlowChat
           context["request.network"] = nil
           context["request.msisdn"] = Phonelib.parse(params["MSISDN"]).e164
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response
-          context["request.input"] = params["USERDATA"].presence
+          context.input = params["USERDATA"].presence
 
           type, prompt, choices = @app.call(context)
 
