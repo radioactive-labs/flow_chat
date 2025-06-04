@@ -104,7 +104,7 @@ class SimpleFlowTest < Minitest::Test
 
     # Step 2: Provide name, ask for age
     context.input = "  john doe  "
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app = FlowChat::Ussd::App.new(context)
       flow = MultiStepFlow.new(app)
@@ -116,7 +116,7 @@ class SimpleFlowTest < Minitest::Test
 
     # Step 3: Provide invalid age
     context.input = "12"
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app = FlowChat::Ussd::App.new(context)
       flow = MultiStepFlow.new(app)
@@ -127,7 +127,7 @@ class SimpleFlowTest < Minitest::Test
 
     # Step 4: Provide valid age, ask for gender
     context.input = "25"
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app = FlowChat::Ussd::App.new(context)
       flow = MultiStepFlow.new(app)
@@ -139,7 +139,7 @@ class SimpleFlowTest < Minitest::Test
 
     # Step 5: Choose gender, ask for confirmation
     context.input = "1"  # Male
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app = FlowChat::Ussd::App.new(context)
       flow = MultiStepFlow.new(app)
@@ -154,7 +154,7 @@ class SimpleFlowTest < Minitest::Test
 
     # Step 6: Confirm and complete
     context.input = "1"  # Yes
-    
+
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       app = FlowChat::Ussd::App.new(context)
       flow = MultiStepFlow.new(app)
@@ -185,4 +185,4 @@ class SimpleFlowTest < Minitest::Test
     assert_equal "Please try again", error.prompt
     assert_equal false, @session_store.get(:confirm)
   end
-end 
+end

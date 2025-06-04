@@ -4,7 +4,7 @@ class InterruptTest < Minitest::Test
   def test_base_interrupt_stores_prompt
     prompt = "Test prompt"
     interrupt = FlowChat::Interrupt::Base.new(prompt)
-    
+
     assert_equal prompt, interrupt.prompt
     assert_kind_of Exception, interrupt
   end
@@ -13,7 +13,7 @@ class InterruptTest < Minitest::Test
     prompt = "Choose an option"
     choices = {1 => "Option 1", 2 => "Option 2"}
     interrupt = FlowChat::Interrupt::Prompt.new(prompt, choices: choices)
-    
+
     assert_equal prompt, interrupt.prompt
     assert_equal choices, interrupt.choices
     assert_kind_of FlowChat::Interrupt::Base, interrupt
@@ -22,7 +22,7 @@ class InterruptTest < Minitest::Test
   def test_prompt_interrupt_without_choices
     prompt = "Enter your name"
     interrupt = FlowChat::Interrupt::Prompt.new(prompt)
-    
+
     assert_equal prompt, interrupt.prompt
     assert_nil interrupt.choices
   end
@@ -30,7 +30,7 @@ class InterruptTest < Minitest::Test
   def test_terminate_interrupt
     message = "Thank you!"
     interrupt = FlowChat::Interrupt::Terminate.new(message)
-    
+
     assert_equal message, interrupt.prompt
     assert_kind_of FlowChat::Interrupt::Base, interrupt
   end
@@ -48,4 +48,4 @@ class InterruptTest < Minitest::Test
       raise FlowChat::Interrupt::Terminate.new("test")
     end
   end
-end 
+end

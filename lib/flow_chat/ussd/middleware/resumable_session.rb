@@ -30,7 +30,7 @@ module FlowChat
 
           last_active_at = Time.parse session.dig("context", "last_active_at")
           (Time.now - FlowChat::Config.ussd.resumable_sessions_timeout_seconds) < last_active_at
-        rescue StandardError
+        rescue
           false
         end
       end

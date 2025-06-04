@@ -32,7 +32,7 @@ module FlowChat
           msg,
           choices: choices_prompt,
           convert: lambda { |choice| choice.to_i },
-          validate: lambda { |choice| "Invalid selection:" unless (1..choices.size).include?(choice) },
+          validate: lambda { |choice| "Invalid selection:" unless (1..choices.size).cover?(choice) },
           transform: lambda { |choice| choices[choice - 1] }
         )
       end

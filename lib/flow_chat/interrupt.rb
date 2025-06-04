@@ -1,5 +1,6 @@
 module FlowChat
   module Interrupt
+    # standard:disable Lint/InheritException
     class Base < Exception
       attr_reader :prompt
 
@@ -8,6 +9,7 @@ module FlowChat
         super
       end
     end
+    # standard:enable Lint/InheritException
 
     class Prompt < Base
       attr_reader :choices

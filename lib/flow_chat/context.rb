@@ -13,13 +13,13 @@ module FlowChat
     end
 
     def input = @data["request.input"]
-    
+
     def input=(value)
       @data["request.input"] = value
     end
 
     def session = @data["session"]
-    
+
     def session=(value)
       @data["session"] = value
     end

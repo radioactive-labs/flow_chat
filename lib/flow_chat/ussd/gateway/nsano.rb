@@ -10,7 +10,7 @@ module FlowChat
 
         def call(context)
           controller = context["controller"]
-          request = controller.request
+          controller.request
 
           # input = context["rack.input"].read
           # context["rack.input"].rewind

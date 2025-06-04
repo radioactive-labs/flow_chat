@@ -4,12 +4,12 @@ class RailsSessionStoreTest < Minitest::Test
   def setup
     @controller = mock_controller
     @controller.session[:flow_chat] = {}
-    
+
     # Create a proper context like the middleware would
     @context = FlowChat::Context.new
     @context["controller"] = @controller
     @context["session.id"] = :flow_chat
-    
+
     @store = FlowChat::Session::RailsSessionStore.new(@context)
   end
 
@@ -36,15 +36,15 @@ class RailsSessionStoreTest < Minitest::Test
   def test_set_and_get_mixed_keys
     @store.set("string_key", "string_value")
     @store.set(:symbol_key, "symbol_value")
-    
+
     assert_equal "string_value", @store.get("string_key")
     assert_equal "symbol_value", @store.get(:symbol_key)
   end
 
   def test_stores_complex_objects
-    complex_object = { name: "John", age: 25, hobbies: ["reading", "coding"] }
+    complex_object = {name: "John", age: 25, hobbies: ["reading", "coding"]}
     @store.set(:user_data, complex_object)
-    
+
     retrieved = @store.get(:user_data)
     # Since the store uses with_indifferent_access, keys become strings
     assert_equal "John", retrieved["name"]
@@ -56,9 +56,9 @@ class RailsSessionStoreTest < Minitest::Test
     @store.set(:key1, "value1")
     @store.set(:key2, "value2")
     @store.set(:key3, "value3")
-    
+
     @store.destroy
-    
+
     # After destroy, create a new store to verify data is gone
     new_store = FlowChat::Session::RailsSessionStore.new(@context)
     assert_nil new_store.get(:key1)
@@ -69,11 +69,11 @@ class RailsSessionStoreTest < Minitest::Test
   def test_destroy_doesnt_affect_other_session_data
     @controller.session[:other_data] = "should_remain"
     @store.set(:flow_data, "will_be_cleared")
-    
+
     @store.destroy
-    
+
     assert_equal "should_remain", @controller.session[:other_data]
-    
+
     # Verify flow_chat data is cleared
     new_store = FlowChat::Session::RailsSessionStore.new(@context)
     assert_nil new_store.get(:flow_data)
@@ -83,11 +83,11 @@ class RailsSessionStoreTest < Minitest::Test
     # Test that string and symbol keys are handled consistently
     @store.set("test", "value1")
     @store.set(:test, "value2")
-    
+
     # The last one should win, but both should access the same storage
     result1 = @store.get("test")
     result2 = @store.get(:test)
-    
+
     assert_equal result1, result2
   end
 
@@ -95,10 +95,10 @@ class RailsSessionStoreTest < Minitest::Test
     # Ensure FlowChat data is properly namespaced
     @controller.session[:something_else] = "external_data"
     @store.set(:internal_key, "internal_data")
-    
+
     assert_equal "external_data", @controller.session[:something_else]
     assert_equal "internal_data", @store.get(:internal_key)
-    
+
     # FlowChat data should be under the :flow_chat key
     assert @controller.session[:flow_chat].is_a?(Hash)
   end
@@ -107,9 +107,9 @@ class RailsSessionStoreTest < Minitest::Test
     # First instance sets data
     store1 = FlowChat::Session::RailsSessionStore.new(@context)
     store1.set(:persistent_key, "persistent_value")
-    
+
     # Second instance should see the same data
     store2 = FlowChat::Session::RailsSessionStore.new(@context)
     assert_equal "persistent_value", store2.get(:persistent_key)
   end
-end 
+end

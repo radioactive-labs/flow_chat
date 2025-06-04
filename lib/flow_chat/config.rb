@@ -11,8 +11,8 @@ module FlowChat
 
     class UssdConfig
       attr_accessor :pagination_page_size, :pagination_back_option, :pagination_back_text,
-                    :pagination_next_option, :pagination_next_text,
-                    :resumable_sessions_enabled, :resumable_sessions_global, :resumable_sessions_timeout_seconds
+        :pagination_next_option, :pagination_next_text,
+        :resumable_sessions_enabled, :resumable_sessions_global, :resumable_sessions_timeout_seconds
 
       def initialize
         @pagination_page_size = 140

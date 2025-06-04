@@ -12,16 +12,14 @@ module FlowChat
 
           if intercept?
             type, prompt = handle_intercepted_request
-            [type, prompt, []]
           else
             @session.delete "ussd.pagination"
             type, prompt, choices = @app.call(context)
 
             prompt = FlowChat::Ussd::Renderer.new(prompt, choices).render
             type, prompt = maybe_paginate(type, prompt) if prompt.present?
-
-            [type, prompt, []]
           end
+          [type, prompt, []]
         end
 
         private
@@ -74,7 +72,6 @@ module FlowChat
             finish = start + len
             if start > pagination_state["prompt"].length
               FlowChat::Config.logger&.debug "FlowChat::Middleware::Pagination :: No content exists for page: #{page}. Reverting to page: #{page - 1}"
-              page -= 1
               has_more = false
               start = previous_offset["start"]
               finish = previous_offset["finish"]

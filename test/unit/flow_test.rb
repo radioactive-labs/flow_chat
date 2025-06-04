@@ -26,4 +26,4 @@ class FlowTest < Minitest::Test
     assert_equal "test", custom_flow.custom_method
     assert_equal @mock_app, custom_flow.app
   end
-end 
+end

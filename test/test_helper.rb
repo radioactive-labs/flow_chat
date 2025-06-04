@@ -15,8 +15,8 @@ Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: true)]
 module Rails
   def self.logger
     @logger ||= begin
-      require 'logger'
-      Logger.new(STDOUT, level: Logger::WARN)
+      require "logger"
+      Logger.new($stdout, level: Logger::WARN)
     end
   end
 
@@ -44,7 +44,7 @@ module TestHelpers
   def mock_ussd_request(input: "", msisdn: "256700000000", session_id: "test123")
     {
       "input" => input,
-      "msisdn" => msisdn, 
+      "msisdn" => msisdn,
       "sessionId" => session_id,
       "serviceCode" => "*123#"
     }
@@ -77,4 +77,4 @@ end
 
 class Minitest::Test
   include TestHelpers
-end 
+end

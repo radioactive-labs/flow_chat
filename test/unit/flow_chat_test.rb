@@ -11,4 +11,4 @@ class FlowChatTest < Minitest::Test
     assert_kind_of Pathname, FlowChat.root
     assert FlowChat.root.to_s.end_with?("lib")
   end
-end 
+end

@@ -26,7 +26,7 @@ class UssdAppTest < Minitest::Test
 
   def test_screen_prevents_duplicate_screens
     @app.screen(:duplicate_screen) { |prompt| "first" }
-    
+
     assert_raises(ArgumentError, "screen has been presented") do
       @app.screen(:duplicate_screen) { |prompt| "second" }
     end
@@ -34,15 +34,15 @@ class UssdAppTest < Minitest::Test
 
   def test_screen_adds_to_navigation_stack
     @app.screen(:nav_test) { |prompt| "result" }
-    
+
     assert_includes @app.navigation_stack, :nav_test
   end
 
   def test_screen_returns_cached_value_if_present
     @app.session.set(:cached_screen, "cached_value")
-    
+
     result = @app.screen(:cached_screen) { |prompt| "should_not_execute" }
-    
+
     assert_equal "cached_value", result
     assert_includes @app.navigation_stack, :cached_screen
   end
@@ -54,7 +54,7 @@ class UssdAppTest < Minitest::Test
       assert_kind_of FlowChat::Ussd::Prompt, prompt
       "block_result"
     end
-    
+
     assert executed
     assert_equal "block_result", result
     assert_equal "block_result", @app.session.get(:new_screen)
@@ -65,7 +65,7 @@ class UssdAppTest < Minitest::Test
       assert_equal "test_input", prompt.user_input
       "result"
     end
-    
+
     assert_nil @app.input
   end
 
@@ -73,30 +73,29 @@ class UssdAppTest < Minitest::Test
     # Create a new app with no input
     @context.input = nil
     app_no_input = FlowChat::Ussd::App.new(@context)
-    
+
     # Since there's no input, the prompt should raise an interrupt
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app_no_input.screen(:prompt_screen) do |prompt|
         prompt.ask("What is your name?")
       end
     end
-    
+
     assert_equal "What is your name?", error.prompt
     assert_includes app_no_input.navigation_stack, :prompt_screen
   end
 
   def test_screen_with_prompt_validation_failure
     @context.input = "12"
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       @app.screen(:validation_screen) do |prompt|
-        prompt.ask("Enter age:", 
+        prompt.ask("Enter age:",
           convert: ->(input) { input.to_i },
-          validate: ->(input) { "Must be 18+" unless input >= 18 }
-        )
+          validate: ->(input) { "Must be 18+" unless input >= 18 })
       end
     end
-    
+
     assert_includes error.prompt, "Must be 18+"
   end
 
@@ -104,25 +103,24 @@ class UssdAppTest < Minitest::Test
     # Create app with valid input
     @context.input = "25"
     app_with_input = FlowChat::Ussd::App.new(@context)
-    
+
     result = app_with_input.screen(:success_screen) do |prompt|
       prompt.ask("Enter age:",
         convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be 18+" unless input >= 18 }
-      )
+        validate: ->(input) { "Must be 18+" unless input >= 18 })
     end
-    
+
     assert_equal 25, result
     assert_equal 25, app_with_input.session.get(:success_screen)
   end
 
   def test_say_raises_terminate_interrupt
     message = "Thank you for using our service!"
-    
+
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       @app.say(message)
     end
-    
+
     assert_equal message, error.prompt
   end
 
@@ -131,12 +129,12 @@ class UssdAppTest < Minitest::Test
     @context.input = "John"
     app1 = FlowChat::Ussd::App.new(@context)
     name = app1.screen(:name) { |prompt| prompt.ask("Name?") }
-    
+
     # Second request - user provides age (new app instance)
     @context.input = "25"
     app2 = FlowChat::Ussd::App.new(@context)
     age = app2.screen(:age) { |prompt| prompt.ask("Age?", convert: ->(i) { i.to_i }) }
-    
+
     assert_equal "John", name
     assert_equal 25, age
     # Both apps share the same session, so both values should be stored
@@ -148,11 +146,11 @@ class UssdAppTest < Minitest::Test
     # Create app with selection input
     @context.input = "2"
     app_with_input = FlowChat::Ussd::App.new(@context)
-    
+
     result = app_with_input.screen(:gender) do |prompt|
       prompt.select("Choose gender:", ["Male", "Female"])
     end
-    
+
     assert_equal "Female", result
     assert_equal "Female", app_with_input.session.get(:gender)
   end
@@ -161,12 +159,12 @@ class UssdAppTest < Minitest::Test
     # Create app with yes input
     @context.input = "1"  # Yes
     app_with_input = FlowChat::Ussd::App.new(@context)
-    
+
     result = app_with_input.screen(:confirmation) do |prompt|
       prompt.yes?("Are you sure?")
     end
-    
+
     assert_equal true, result
     assert_equal true, app_with_input.session.get(:confirmation)
   end
-end 
+end

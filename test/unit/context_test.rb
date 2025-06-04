@@ -13,7 +13,7 @@ class ContextTest < Minitest::Test
   def test_symbol_and_string_keys
     @context[:symbol_key] = "symbol_value"
     @context["string_key"] = "string_value"
-    
+
     assert_equal "symbol_value", @context[:symbol_key]
     assert_equal "string_value", @context["string_key"]
   end
@@ -21,7 +21,7 @@ class ContextTest < Minitest::Test
   def test_stores_complex_objects
     controller = mock_controller
     @context["controller"] = controller
-    
+
     assert_equal controller, @context["controller"]
     assert_respond_to @context["controller"], :params
   end
@@ -30,4 +30,4 @@ class ContextTest < Minitest::Test
     assert_respond_to @context, :[]
     assert_respond_to @context, :[]=
   end
-end 
+end
