@@ -17,7 +17,13 @@ module FlowChat
         navigation_stack << key
         return session.get(key) if session.get(key).present?
 
-        prompt = FlowChat::Whatsapp::Prompt.new input
+        user_input = input
+        if session.get("$started_at$").nil?
+          session.set("$started_at$", Time.current.iso8601)
+          user_input = nil
+        end
+
+        prompt = FlowChat::Whatsapp::Prompt.new user_input
         @input = nil # input is being submitted to prompt so we clear it
 
         value = yield prompt

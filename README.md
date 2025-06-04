@@ -8,8 +8,9 @@ FlowChat is a Rails framework designed for building sophisticated conversational
 - ✅ **Input Validation & Transformation** - Built-in validation and data conversion
 - 🌊 **Middleware Architecture** - Flexible request processing pipeline
 - 📱 **USSD Gateway Support** - Currently supports Nalo gateways
-- 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with interactive messages
-- 🧪 **Built-in Testing Tools** - USSD simulator for local development
+- 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with multiple processing modes
+- 🔧 **Reusable WhatsApp Client** - Standalone client for out-of-band messaging
+- 🧪 **Built-in Testing Tools** - Unified simulator for both USSD and WhatsApp testing
 
 ## Architecture Overview
 
@@ -154,17 +155,33 @@ custom_config.business_account_id = "your_specific_business_account_id"
 
 # Use in processor
 processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-  config.use_whatsapp_config(custom_config)  # Pass custom config
-  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
   config.use_session_store FlowChat::Session::CacheSessionStore
 end
 ```
 
 💡 **Tip**: See [examples/multi_tenant_whatsapp_controller.rb](examples/multi_tenant_whatsapp_controller.rb) for comprehensive multi-tenant and per-setup configuration examples.
 
-### 2. Create WhatsApp Controller
+### 2. Choose Message Handling Mode
+
+FlowChat offers three WhatsApp message handling modes. Configure them in an initializer:
+
+**Create an initializer** `config/initializers/flowchat.rb`:
 
 ```ruby
+# config/initializers/flowchat.rb
+
+# Configure WhatsApp message handling mode
+FlowChat::Config.whatsapp.message_handling_mode = :inline  # or :background, :simulator
+FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+```
+
+**Inline Mode (Default)** - Process messages synchronously:
+```ruby
+# config/initializers/flowchat.rb
+FlowChat::Config.whatsapp.message_handling_mode = :inline
+
+# app/controllers/whatsapp_controller.rb
 class WhatsappController < ApplicationController
   skip_forgery_protection
 
@@ -178,6 +195,49 @@ class WhatsappController < ApplicationController
   end
 end
 ```
+
+**Background Mode** - Process flows synchronously, send responses asynchronously:
+```ruby
+# config/initializers/flowchat.rb
+FlowChat::Config.whatsapp.message_handling_mode = :background
+FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+
+# app/controllers/whatsapp_controller.rb
+class WhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+```
+
+**Simulator Mode** - Return response data instead of sending via WhatsApp API:
+```ruby
+# config/initializers/flowchat.rb
+FlowChat::Config.whatsapp.message_handling_mode = :simulator
+
+# app/controllers/whatsapp_controller.rb
+class WhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+```
+
+💡 **See [examples/README_whatsapp_modes.md](examples/README_whatsapp_modes.md) for detailed mode explanations and use cases.**
 
 ### 3. Add WhatsApp Route
 
@@ -298,6 +358,86 @@ end
 ```
 
 For detailed WhatsApp setup instructions, see [WhatsApp Integration Guide](docs/whatsapp_setup.md).
+
+## 🔧 Reusable WhatsApp Client
+
+FlowChat provides a standalone WhatsApp client for out-of-band messaging:
+
+```ruby
+# Initialize client
+config = FlowChat::Whatsapp::Configuration.from_credentials
+client = FlowChat::Whatsapp::Client.new(config)
+
+# Send text message
+client.send_text("+1234567890", "Hello, World!")
+
+# Send interactive buttons
+client.send_buttons(
+  "+1234567890",
+  "Choose an option:",
+  [
+    { id: 'option1', title: 'Option 1' },
+    { id: 'option2', title: 'Option 2' }
+  ]
+)
+
+# Send interactive list
+client.send_list(
+  "+1234567890",
+  "Select from menu:",
+  [
+    {
+      title: "Services",
+      rows: [
+        { id: 'service1', title: 'Service 1', description: 'Description 1' },
+        { id: 'service2', title: 'Service 2', description: 'Description 2' }
+      ]
+    }
+  ]
+)
+
+# Handle media
+media_url = client.get_media_url("media_id_123")
+media_content = client.download_media("media_id_123")
+```
+
+### Out-of-Band Messaging Service Example
+
+```ruby
+class NotificationService
+  def initialize
+    @config = FlowChat::Whatsapp::Configuration.from_credentials
+    @client = FlowChat::Whatsapp::Client.new(@config)
+  end
+
+  def send_order_confirmation(phone_number, order_id, items, total)
+    item_list = items.map { |item| "• #{item[:name]} x#{item[:quantity]}" }.join("\n")
+    
+    @client.send_buttons(
+      phone_number,
+      "✅ Order Confirmed!\n\nOrder ##{order_id}\n\n#{item_list}\n\nTotal: $#{total}",
+      [
+        { id: 'track_order', title: '📦 Track Order' },
+        { id: 'contact_support', title: '💬 Contact Support' }
+      ]
+    )
+  end
+
+  def send_appointment_reminder(phone_number, appointment)
+    @client.send_buttons(
+      phone_number,
+      "🏥 Appointment Reminder\n\n#{appointment[:service]} with #{appointment[:provider]}\n📅 #{appointment[:date]}\n🕐 #{appointment[:time]}",
+      [
+        { id: 'confirm', title: '✅ Confirm' },
+        { id: 'reschedule', title: '📅 Reschedule' },
+        { id: 'cancel', title: '❌ Cancel' }
+      ]
+    )
+  end
+end
+```
+
+💡 **See [examples/whatsapp_controller_modes.rb](examples/whatsapp_controller_modes.rb) for comprehensive usage examples.**
 
 ## Cross-Platform Compatibility
 
@@ -459,6 +599,68 @@ app.screen(:credit_card) do |prompt|
     }
 end
 ```
+
+### Background Job Support
+
+For high-volume WhatsApp applications, use background response delivery:
+
+```ruby
+# app/jobs/whatsapp_message_job.rb
+class WhatsappMessageJob < ApplicationJob
+  include FlowChat::Whatsapp::SendJobSupport
+
+  def perform(send_data)
+    perform_whatsapp_send(send_data)
+  end
+end
+
+# config/initializers/flowchat.rb
+FlowChat::Config.whatsapp.message_handling_mode = :background
+FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+
+# config/application.rb
+config.active_job.queue_adapter = :sidekiq
+```
+
+**The `SendJobSupport` module provides:**
+- ✅ **Automatic config resolution** - Resolves named configurations automatically
+- ✅ **Response delivery** - Handles sending responses to WhatsApp
+- ✅ **Error handling** - Comprehensive error handling with user notifications
+- ✅ **Retry logic** - Built-in exponential backoff retry
+- ✅ **Extensible** - Override methods for custom behavior
+
+**How it works:**
+1. **Controller receives webhook** - WhatsApp message arrives
+2. **Flow processes synchronously** - Maintains controller context and session state
+3. **Response queued for delivery** - Only the sending is moved to background
+4. **Job sends response** - Background job handles API call to WhatsApp
+
+**Advanced job with custom callbacks:**
+
+```ruby
+class AdvancedWhatsappMessageJob < ApplicationJob
+  include FlowChat::Whatsapp::SendJobSupport
+
+  def perform(send_data)
+    perform_whatsapp_send(send_data)
+  end
+
+  private
+
+  # Override for custom success handling
+  def on_whatsapp_send_success(send_data, result)
+    Rails.logger.info "Successfully sent WhatsApp message to #{send_data[:msisdn]}"
+    UserEngagementTracker.track_message_sent(phone: send_data[:msisdn])
+  end
+
+  # Override for custom error handling
+  def on_whatsapp_send_error(error, send_data)
+    ErrorTracker.notify(error, user_phone: send_data[:msisdn])
+  end
+end
+```
+
+💡 **See [examples/whatsapp_message_job.rb](examples/whatsapp_message_job.rb) for complete job implementation examples.**
 
 ### Middleware Configuration
 
@@ -694,27 +896,79 @@ class ProcessorMiddlewareTest < Minitest::Test
 end
 ```
 
-### USSD Simulator
+### FlowChat Unified Simulator
 
-Use the built-in simulator for interactive testing:
+Use the built-in unified simulator for interactive testing of both USSD and WhatsApp flows:
 
 ```ruby
-class UssdSimulatorController < ApplicationController
-  include FlowChat::Ussd::Simulator::Controller
+class SimulatorController < ApplicationController
+  include FlowChat::Simulator::Controller
+
+  def index
+    flowchat_simulator
+  end
 
   protected
 
-  def default_endpoint
-    '/ussd'
+  def configurations
+    {
+      production_ussd: {
+        name: "Production USSD",
+        icon: "🏭",
+        processor_type: "ussd",
+        provider: "nalo", 
+        endpoint: "/ussd",
+        color: "#28a745"
+      },
+      staging_whatsapp: {
+        name: "Staging WhatsApp", 
+        icon: "🧪",
+        processor_type: "whatsapp",
+        provider: "cloud_api",
+        endpoint: "/whatsapp/webhook",
+        color: "#17a2b8"
+      },
+      local_ussd: {
+        name: "Local USSD",
+        icon: "💻", 
+        processor_type: "ussd",
+        provider: "nalo",
+        endpoint: "http://localhost:3000/ussd",
+        color: "#6f42c1"
+      }
+    }
   end
 
-  def default_provider
-    :nalo
+  def default_config_key
+    :local_ussd
+  end
+
+  def default_phone_number
+    "+254712345678"
+  end
+
+  def default_contact_name
+    "John Doe"
   end
 end
 ```
 
-Add to routes and visit `http://localhost:3000/ussd_simulator`.
+Add to routes and visit `http://localhost:3000/simulator`.
+
+**Key Features:**
+- 🔄 **Platform Toggle** - Switch between USSD and WhatsApp modes with configuration selection
+- 📱 **USSD Mode** - Classic green-screen terminal simulation with provider support (Nalo, Nsano)
+- 💬 **WhatsApp Mode** - Full WhatsApp interface with interactive buttons, lists, and rich messaging
+- ⚙️ **Multi-Environment** - Support for different configurations (local, staging, production)
+- 🎨 **Modern UI** - Beautiful, responsive interface with real-time status indicators
+- 📊 **Request Logging** - View all HTTP requests and responses in real-time
+- 🔧 **Developer Tools** - Character counts, connection status, and comprehensive error handling
+
+The simulator automatically adapts its interface based on the selected configuration:
+- **USSD**: Shows traditional terminal-style interface with character limits and pagination
+- **WhatsApp**: Displays realistic WhatsApp chat interface with support for interactive elements
+
+💡 **Tip**: See [examples/simulator_controller.rb](examples/simulator_controller.rb) for advanced configurations including multi-tenant support and environment-specific endpoints.
 
 ## Best Practices
 
@@ -783,97 +1037,20 @@ def main_page
 end
 ```
 
-## Configuration
+### 5. Choose the Right WhatsApp Mode
 
-### Cache Configuration
-
-The `CacheSessionStore` requires a cache to be configured. Set it up in your Rails application:
+Configure the appropriate mode in your initializer:
 
 ```ruby
-# config/application.rb or config/environments/*.rb
-FlowChat::Config.cache = Rails.cache
+# config/initializers/flowchat.rb
 
-# Or use a specific cache store
-FlowChat::Config.cache = ActiveSupport::Cache::MemoryStore.new
+# Development/Testing - use simulator mode
+FlowChat::Config.whatsapp.message_handling_mode = :simulator
 
-# For Redis (requires redis gem)
-FlowChat::Config.cache = ActiveSupport::Cache::RedisCacheStore.new(url: "redis://localhost:6379/1")
+# Low-volume Applications - use inline mode  
+FlowChat::Config.whatsapp.message_handling_mode = :inline
+
+# High-volume Production - use background mode (sync processing + async sending)
+FlowChat::Config.whatsapp.message_handling_mode = :background
+FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
 ```
-
-💡 **Tip**: See [examples/initializer.rb](examples/initializer.rb) for a complete configuration example.
-
-### Session Storage Options
-
-Configure different session storage backends:
-
-```ruby
-# Cache session store (default) - uses FlowChat::Config.cache
-config.use_session_store FlowChat::Session::CacheSessionStore
-
-# Rails session (for USSD)
-config.use_session_store FlowChat::Session::RailsSessionStore
-
-# Custom session store
-class MySessionStore
-  def initialize(context)
-    @context = context
-  end
-
-  def get(key)
-    # Your storage logic
-  end
-
-  def set(key, value)
-    # Your storage logic
-  end
-end
-
-config.use_session_store MySessionStore
-```
-
-## Development
-
-### Running Tests
-
-FlowChat uses Minitest for testing:
-
-```bash
-# Run all tests
-bundle exec rake test
-
-# Run specific test file
-bundle exec rake test TEST=test/unit/flow_test.rb
-
-# Run specific test
-bundle exec rake test TESTOPTS="--name=test_flow_initialization"
-```
-
-### Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Add tests for your changes
-4. Ensure all tests pass (`bundle exec rake test`)
-5. Commit your changes (`git commit -am 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## Roadmap
-
-- 💬 **Telegram Bot Support** - Native Telegram bot integration  
-- 🔄 **Sub-flows** - Reusable conversation components and flow composition
-- 📊 **Analytics Integration** - Built-in conversation analytics and user journey tracking
-- 🌐 **Multi-language Support** - Internationalization and localization features
-- ⚡ **Performance Optimizations** - Improved middleware performance and caching
-- 🎯 **Advanced Validation** - More validation helpers and custom validators
-- 🔐 **Enhanced Security** - Rate limiting, input sanitization, and fraud detection
-
-## License
-
-FlowChat is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Support
-
-- 📖 **Documentation**: [GitHub Repository](https://github.com/radioactive-labs/flow_chat)
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/radioactive-labs/flow_chat/issues)
-- 💬 **Community**: Join our discussions for help and feature requests

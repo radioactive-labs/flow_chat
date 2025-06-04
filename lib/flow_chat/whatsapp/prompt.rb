@@ -9,8 +9,15 @@ module FlowChat
 
       def ask(message, transform: nil, validate: nil, convert: nil)
         if input.present?
-          processed_input = process_input(input, transform, validate, convert)
-          return processed_input unless processed_input.nil?
+          begin
+            processed_input = process_input(input, transform, validate, convert)
+            return processed_input unless processed_input.nil?
+          rescue FlowChat::Interrupt::Prompt => validation_error
+            # If validation failed, include the error message with the original prompt
+            error_message = validation_error.prompt[1]
+            combined_message = "#{message}\n\n#{error_message}"
+            raise FlowChat::Interrupt::Prompt.new([:text, combined_message, {}])
+          end
         end
 
         # Send message and wait for response

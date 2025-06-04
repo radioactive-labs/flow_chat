@@ -17,7 +17,6 @@ module FlowChat
       end
 
       def configure_middleware_stack(builder)
-        builder.use gateway
         builder.use FlowChat::Session::Middleware
         builder.use FlowChat::Ussd::Middleware::Pagination
         builder.use middleware

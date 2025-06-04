@@ -30,8 +30,7 @@ class CustomWhatsappController < ApplicationController
     custom_config.business_account_id = ENV['MY_WHATSAPP_BUSINESS_ACCOUNT_ID']
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-      config.use_whatsapp_config(custom_config)  # Use custom config
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 

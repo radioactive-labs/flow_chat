@@ -270,6 +270,7 @@ class CacheSessionStoreTest < Minitest::Test
     context = create_whatsapp_context("+256700123456")
     
     # Should raise error when no cache is provided and Config.cache is nil
+    original_cache = FlowChat::Config.cache
     FlowChat::Config.cache = nil
     
     error = assert_raises(ArgumentError) do
@@ -277,6 +278,9 @@ class CacheSessionStoreTest < Minitest::Test
     end
     
     assert_equal "Cache is required. Set FlowChat::Config.cache or pass a cache instance.", error.message
+  ensure
+    # Restore original cache configuration
+    FlowChat::Config.cache = original_cache
   end
 
   def test_uses_config_cache_as_default

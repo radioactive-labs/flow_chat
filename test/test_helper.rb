@@ -9,8 +9,29 @@ require "active_support/core_ext/string/inflections"
 require "active_support/core_ext/numeric/time"
 require "ostruct"
 
+# Load test support files
+require_relative "support/base_test_job"
+require_relative "support/test_whatsapp_job"
+
 # Use a more readable test reporter
 Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: true)]
+
+# Configure cache for testing if not already set
+unless FlowChat::Config.cache
+  FlowChat::Config.cache = begin
+    # Simple in-memory cache for testing
+    cache = Object.new
+    data = {}
+    
+    cache.define_singleton_method(:read) { |key| data[key] }
+    cache.define_singleton_method(:write) { |key, value, options = {}| data[key] = value }
+    cache.define_singleton_method(:delete) { |key| data.delete(key) }
+    cache.define_singleton_method(:exist?) { |key| data.key?(key) }
+    cache.define_singleton_method(:clear) { data.clear }
+    
+    cache
+  end
+end
 
 # Mock Rails environment for testing
 module Rails
@@ -53,8 +74,9 @@ module TestHelpers
 
   def create_test_session_store
     Class.new do
-      def initialize
+      def initialize(context = nil)
         @data = {}
+        @context = context
       end
 
       def get(key)
@@ -73,6 +95,47 @@ module TestHelpers
         @data.clear
       end
     end.new
+  end
+  
+  # Helper to stub constantize method properly
+  def stub_constantize(class_name, mock_class)
+    original_constantize = String.instance_method(:constantize)
+    String.class_eval do
+      define_method(:constantize) do
+        if self == class_name
+          mock_class
+        else
+          # For any other class, use the original behavior which may raise NameError
+          original_constantize.bind(self).call
+        end
+      end
+    end
+    
+    yield
+  ensure
+    String.class_eval do
+      define_method(:constantize, original_constantize)
+    end
+  end
+  
+  # Helper to stub constantize to raise NameError for specific class
+  def stub_constantize_to_fail(class_name)
+    original_constantize = String.instance_method(:constantize)
+    String.class_eval do
+      define_method(:constantize) do
+        if self == class_name
+          raise NameError, "uninitialized constant #{class_name}"
+        else
+          original_constantize.bind(self).call
+        end
+      end
+    end
+    
+    yield
+  ensure
+    String.class_eval do
+      define_method(:constantize, original_constantize)
+    end
   end
 end
 

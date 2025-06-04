@@ -11,6 +11,10 @@ class WhatsappAppTest < Minitest::Test
     @context["request.msisdn"] = "+256700000000"
     @context["request.location"] = { "latitude" => 0.3476, "longitude" => 32.5825 }
     @context["request.media"] = { "type" => "image", "url" => "https://example.com/image.jpg" }
+    
+    # Set started_at to simulate ongoing conversation (not first message)
+    @context.session.set("$started_at$", "2023-12-01T10:00:00Z")
+    
     @app = FlowChat::Whatsapp::App.new(@context)
   end
 
@@ -199,21 +203,32 @@ class WhatsappAppTest < Minitest::Test
   end
 
   def test_multiple_screens_workflow
+    # Create session store that can be shared between app instances
+    session_store = create_test_session_store
+    # Set started_at to simulate ongoing conversation
+    session_store.set("$started_at$", Time.current.iso8601)
+    
     # First request - user provides name
-    @context.input = "John"
-    app1 = FlowChat::Whatsapp::App.new(@context)
+    context1 = FlowChat::Context.new
+    context1.input = "John"
+    context1.session = session_store
+    
+    app1 = FlowChat::Whatsapp::App.new(context1)
     name = app1.screen(:name) { |prompt| prompt.ask("Name?") }
 
-    # Second request - user provides age (new app instance)
-    @context.input = "25"
-    app2 = FlowChat::Whatsapp::App.new(@context)
+    # Second request - user provides age (new app instance, same session)
+    context2 = FlowChat::Context.new
+    context2.input = "25"
+    context2.session = session_store  # Same session
+    
+    app2 = FlowChat::Whatsapp::App.new(context2)
     age = app2.screen(:age) { |prompt| prompt.ask("Age?", convert: ->(i) { i.to_i }) }
 
     assert_equal "John", name
     assert_equal 25, age
-    # Both apps share the same session, so both values should be stored
-    assert_equal "John", @context.session.get(:name)
-    assert_equal 25, @context.session.get(:age)
+    # Both values should be stored in the shared session
+    assert_equal "John", session_store.get(:name)
+    assert_equal 25, session_store.get(:age)
   end
 
   def test_screen_with_validation_failure
@@ -268,5 +283,108 @@ class WhatsappAppTest < Minitest::Test
 
     expected_media = { "type" => "image", "url" => "https://example.com/image.jpg" }
     assert_equal expected_media, result
+  end
+
+  def test_initial_message_gets_nil_input_for_first_screen
+    # Simulate someone sending "Hello" to start a conversation
+    @context.input = "Hello"
+    @context.session = create_test_session_store  # New session
+    app = FlowChat::Whatsapp::App.new(@context)
+
+    # First screen should get nil input (initial message is ignored)
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      app.screen(:welcome) do |prompt|
+        prompt.ask("Welcome! What's your name?")
+      end
+    end
+
+    expected_payload = [:text, "Welcome! What's your name?", {}]
+    assert_equal expected_payload, error.prompt
+    
+    # Session should now have started_at timestamp
+    refute_nil app.session.get("$started_at$")
+  end
+
+  def test_subsequent_messages_get_normal_input
+    # Simulate ongoing conversation
+    @context.input = "John"
+    @context.session = create_test_session_store
+    @context.session.set("$started_at$", "2023-12-01T10:00:00Z")  # Conversation already started
+    app = FlowChat::Whatsapp::App.new(@context)
+
+    # Subsequent screens should get the actual input
+    result = app.screen(:name) do |prompt|
+      prompt.ask("What's your name?")
+    end
+
+    assert_equal "John", result
+    assert_equal "John", app.session.get(:name)
+  end
+
+  def test_started_at_timestamp_not_overwritten
+    # Test that $started_at$ doesn't get overwritten if already set
+    original_timestamp = "2023-12-01T10:00:00Z"
+    @context.session.set("$started_at$", original_timestamp)
+    
+    app = FlowChat::Whatsapp::App.new(@context)
+    app.screen(:second_screen) do |prompt|
+      "result"
+    end
+
+    # Timestamp should remain unchanged
+    assert_equal original_timestamp, app.session.get("$started_at$")
+  end
+
+  def test_complete_conversation_flow
+    # Test the complete flow: initial message -> first prompt -> user response -> second prompt
+    
+    # Step 1: User sends initial message "Hi" to start conversation
+    session_store = create_test_session_store
+    context1 = FlowChat::Context.new
+    context1.input = "Hi"
+    context1.session = session_store
+    
+    app1 = FlowChat::Whatsapp::App.new(context1)
+    
+    # First screen should ignore the "Hi" and show welcome prompt
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      app1.screen(:welcome) do |prompt|
+        prompt.ask("Welcome! What's your name?")
+      end
+    end
+    
+    assert_equal [:text, "Welcome! What's your name?", {}], error.prompt
+    refute_nil session_store.get("$started_at$")
+    
+    # Step 2: User responds with their name "Alice"
+    context2 = FlowChat::Context.new
+    context2.input = "Alice"
+    context2.session = session_store  # Same session
+    
+    app2 = FlowChat::Whatsapp::App.new(context2)
+    
+    # Second screen should receive "Alice" as input normally
+    name = app2.screen(:name) do |prompt|
+      prompt.ask("What's your name?")
+    end
+    
+    assert_equal "Alice", name
+    assert_equal "Alice", session_store.get(:name)
+    
+    # Step 3: Continue to age screen - need new input for this
+    context3 = FlowChat::Context.new
+    context3.input = nil  # No input provided yet for age question
+    context3.session = session_store  # Same session
+    
+    app3 = FlowChat::Whatsapp::App.new(context3)
+    
+    # Should trigger prompt since we have no input for age
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      app3.screen(:age) do |prompt|
+        prompt.ask("How old are you?", convert: ->(input) { input.to_i })
+      end
+    end
+    
+    assert_equal [:text, "How old are you?", {}], error.prompt
   end
 end 

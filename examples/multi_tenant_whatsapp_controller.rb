@@ -12,8 +12,7 @@ class MultiTenantWhatsappController < ApplicationController
     whatsapp_config = get_whatsapp_config_for_tenant(tenant)
     
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-      config.use_whatsapp_config(whatsapp_config)
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
@@ -116,8 +115,7 @@ class DatabaseWhatsappController < ApplicationController
     end
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-      config.use_whatsapp_config(whatsapp_config)
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
@@ -162,8 +160,7 @@ class EnvironmentWhatsappController < ApplicationController
     end
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-      config.use_whatsapp_config(whatsapp_config)
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
@@ -221,8 +218,7 @@ class CustomWhatsappController < ApplicationController
     my_config.business_account_id = "your_business_account_id"
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-      config.use_whatsapp_config(my_config)
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, my_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 

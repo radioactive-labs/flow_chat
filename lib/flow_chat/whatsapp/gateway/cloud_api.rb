@@ -11,6 +11,7 @@ module FlowChat
         def initialize(app, config = nil)
           @app = app
           @config = config || FlowChat::Whatsapp::Configuration.from_credentials
+          @client = FlowChat::Whatsapp::Client.new(@config)
         end
 
         def call(context)
@@ -30,7 +31,22 @@ module FlowChat
           controller.head :bad_request
         end
 
+        # Expose client for out-of-band messaging
+        def client
+          @client
+        end
+
         private
+
+        def determine_message_handler(context)
+          # Check for simulator parameter in request (highest priority)
+          if context["simulator_mode"] || context.controller.request.params["simulator_mode"]
+            return :simulator
+          end
+
+          # Use global WhatsApp configuration
+          FlowChat::Config.whatsapp.message_handling_mode
+        end
 
         def handle_verification(context)
           controller = context.controller
@@ -48,6 +64,11 @@ module FlowChat
         def handle_webhook(context)
           controller = context.controller
           body = JSON.parse(controller.request.body.read)
+
+          # Check for simulator mode parameter in request
+          if body.dig("simulator_mode") || controller.request.params["simulator_mode"]
+            context["simulator_mode"] = true
+          end
 
           # Extract message data from WhatsApp webhook
           entry = body.dig("entry", 0)
@@ -72,139 +93,118 @@ module FlowChat
             context["request.timestamp"] = message["timestamp"]
 
             # Extract message content based on type
-            case message["type"]
-            when "text"
-              context.input = message.dig("text", "body")
-            when "interactive"
-              # Handle button/list replies
-              if message.dig("interactive", "type") == "button_reply"
-                context.input = message.dig("interactive", "button_reply", "id")
-              elsif message.dig("interactive", "type") == "list_reply"
-                context.input = message.dig("interactive", "list_reply", "id")
-              end
-            when "location"
-              context["request.location"] = {
-                latitude: message.dig("location", "latitude"),
-                longitude: message.dig("location", "longitude"),
-                name: message.dig("location", "name"),
-                address: message.dig("location", "address")
-              }
-              # Set input so screen can proceed
-              context.input = "$location$"
-            when "image", "document", "audio", "video"
-              context["request.media"] = {
-                type: message["type"],
-                id: message.dig(message["type"], "id"),
-                mime_type: message.dig(message["type"], "mime_type"),
-                caption: message.dig(message["type"], "caption")
-              }
-              # Set input so screen can proceed
-              context.input = "$media$"
-            end
+            extract_message_content(message, context)
 
-            response = @app.call(context)
-            send_whatsapp_message(context, response)
+            # Determine message handling mode
+            handler_mode = determine_message_handler(context)
+
+            # Process the message based on handling mode
+            case handler_mode
+            when :inline
+              handle_message_inline(context, controller)
+            when :background
+              handle_message_background(context, controller)
+            when :simulator
+              # Return early from simulator mode to preserve the JSON response
+              return handle_message_simulator(context, controller)
+            end
           end
 
           # Handle message status updates
           if value["statuses"]&.any?
-            # Log status updates but don't process them
             Rails.logger.info "WhatsApp status update: #{value["statuses"]}"
           end
 
           controller.head :ok
         end
 
-        def send_whatsapp_message(context, response)
-          return unless response
-
-          phone_number_id = @config.phone_number_id
-          access_token = @config.access_token
-          to = context["request.msisdn"]
-
-          message_data = build_message_payload(response, to)
-
-          uri = URI("#{WHATSAPP_API_URL}/#{phone_number_id}/messages")
-          http = Net::HTTP.new(uri.host, uri.port)
-          http.use_ssl = true
-
-          request = Net::HTTP::Post.new(uri)
-          request["Authorization"] = "Bearer #{access_token}"
-          request["Content-Type"] = "application/json"
-          request.body = message_data.to_json
-
-          response = http.request(request)
-          
-          unless response.is_a?(Net::HTTPSuccess)
-            Rails.logger.error "WhatsApp API error: #{response.body}"
+        def extract_message_content(message, context)
+          case message["type"]
+          when "text"
+            context.input = message.dig("text", "body")
+          when "interactive"
+            # Handle button/list replies
+            if message.dig("interactive", "type") == "button_reply"
+              context.input = message.dig("interactive", "button_reply", "id")
+            elsif message.dig("interactive", "type") == "list_reply"
+              context.input = message.dig("interactive", "list_reply", "id")
+            end
+          when "location"
+            context["request.location"] = {
+              latitude: message.dig("location", "latitude"),
+              longitude: message.dig("location", "longitude"),
+              name: message.dig("location", "name"),
+              address: message.dig("location", "address")
+            }
+            context.input = "$location$"
+          when "image", "document", "audio", "video"
+            context["request.media"] = {
+              type: message["type"],
+              id: message.dig(message["type"], "id"),
+              mime_type: message.dig(message["type"], "mime_type"),
+              caption: message.dig(message["type"], "caption")
+            }
+            context.input = "$media$"
           end
         end
 
-        def build_message_payload(response, to)
-          type, content, options = response
+        def handle_message_inline(context, controller)
+          response = @app.call(context)
+          if response
+            result = @client.send_message(context["request.msisdn"], response)
+            context["whatsapp.message_result"] = result
+          end
+        end
 
-          case type
-          when :text
-            {
-              messaging_product: "whatsapp",
-              to: to,
-              type: "text",
-              text: { body: content }
+        def handle_message_background(context, controller)
+          # Process the flow synchronously (maintaining controller context)
+          response = @app.call(context)
+          
+          if response
+            # Queue only the response delivery asynchronously
+            send_data = {
+              msisdn: context["request.msisdn"],
+              response: response,
+              config_name: @config.name
             }
-          when :interactive_buttons
-            {
-              messaging_product: "whatsapp",
-              to: to,
-              type: "interactive",
-              interactive: {
-                type: "button",
-                body: { text: content },
-                action: {
-                  buttons: options[:buttons].map.with_index do |button, index|
-                    {
-                      type: "reply",
-                      reply: {
-                        id: button[:id] || index.to_s,
-                        title: button[:title]
-                      }
-                    }
-                  end
-                }
+
+            # Get job class from configuration
+            job_class_name = FlowChat::Config.whatsapp.background_job_class
+            
+            # Enqueue background job for sending only
+            begin
+              job_class = job_class_name.constantize
+              job_class.perform_later(send_data)
+            rescue NameError
+              # Fallback to inline sending if no job system
+              Rails.logger.warn "Background mode requested but no #{job_class_name} found. Falling back to inline sending."
+              result = @client.send_message(context["request.msisdn"], response)
+              context["whatsapp.message_result"] = result
+            end
+          end
+        end
+
+        def handle_message_simulator(context, controller)
+          response = @app.call(context)
+          
+          if response
+            # For simulator mode, return the response data in the HTTP response
+            # instead of actually sending via WhatsApp API
+            message_payload = @client.build_message_payload(response, context["request.msisdn"])
+            
+            simulator_response = {
+              mode: "simulator",
+              webhook_processed: true,
+              would_send: message_payload,
+              message_info: {
+                to: context["request.msisdn"],
+                contact_name: context["request.contact_name"],
+                timestamp: Time.now.iso8601
               }
             }
-          when :interactive_list
-            {
-              messaging_product: "whatsapp",
-              to: to,
-              type: "interactive",
-              interactive: {
-                type: "list",
-                body: { text: content },
-                action: {
-                  button: options[:button_text] || "Choose",
-                  sections: options[:sections]
-                }
-              }
-            }
-          when :template
-            {
-              messaging_product: "whatsapp",
-              to: to,
-              type: "template",
-              template: {
-                name: options[:template_name],
-                language: { code: options[:language] || "en_US" },
-                components: options[:components] || []
-              }
-            }
-          else
-            # Default to text message
-            {
-              messaging_product: "whatsapp",
-              to: to,
-              type: "text",
-              text: { body: content.to_s }
-            }
+
+            controller.render json: simulator_response
+            return
           end
         end
       end

@@ -2,7 +2,7 @@ require "middleware"
 
 module FlowChat
   class BaseProcessor
-    attr_reader :middleware, :gateway
+    attr_reader :middleware
 
     def initialize(controller)
       @context = FlowChat::Context.new
@@ -12,8 +12,9 @@ module FlowChat
       yield self if block_given?
     end
 
-    def use_gateway(gateway)
-      @gateway = gateway
+    def use_gateway(gateway_class, *args)
+      @gateway_class = gateway_class
+      @gateway_args = args
       self
     end
 
@@ -51,7 +52,10 @@ module FlowChat
 
     # Helper method for building stacks
     def create_middleware_stack(name)
+      raise ArgumentError, "Gateway is required. Call use_gateway(gateway_class, *args) before running." unless @gateway_class
+
       ::Middleware::Builder.new(name: name) do |b|
+        b.use @gateway_class, *@gateway_args
         configure_middleware_stack(b)
       end.inject_logger(Rails.logger)
     end

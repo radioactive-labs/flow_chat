@@ -3,7 +3,7 @@ require "test_helper"
 class WhatsappCloudApiGatewayTest < Minitest::Test
   def setup
     # Create a mock configuration for testing
-    @mock_config = FlowChat::Whatsapp::Configuration.new
+    @mock_config = FlowChat::Whatsapp::Configuration.new("test_config")
     @mock_config.verify_token = "test_verify_token"
     @mock_config.phone_number_id = "test_phone_id"
     @mock_config.access_token = "test_access_token"
@@ -170,6 +170,220 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @gateway.call(context)
     
     assert_equal :bad_request, context.controller.last_head_status
+  end
+
+  # Tests for different message handling modes
+  def test_inline_mode_message_handling
+    # Mock inline mode
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
+      # Track app execution
+      app_called = false
+      test_app = proc do |context|
+        app_called = true
+        [:text, "Response", {}]
+      end
+      
+      # Mock the client send_message call
+      mock_client = Minitest::Mock.new
+      mock_client.expect(:send_message, { "messages" => [{ "id" => "sent_123" }] }, ["+256700000000", [:text, "Response", {}]])
+      
+      # Stub the WhatsApp Client class to return our mock
+      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
+        # Create gateway which will use our mocked client
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
+        context = create_context_with_request(
+          method: :post,
+          body: create_text_message_payload("Hello", "wamid.test123")
+        )
+        
+        gateway.call(context)
+        
+        # Verify app was called and processed correctly
+        assert app_called, "App should have been called"
+        
+        # In inline mode, message should be sent immediately
+        mock_client.verify
+        assert_equal({ "messages" => [{ "id" => "sent_123" }] }, context["whatsapp.message_result"])
+      end
+    end
+  end
+
+  def test_background_mode_message_handling
+    # Mock background mode
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
+      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+        # Mock job class
+        job_class = Minitest::Mock.new
+        job_class.expect(:perform_later, true, [Hash])
+        
+        # Stub constantize to return our mock
+        stub_constantize('TestBackgroundJob', job_class) do
+          context = create_context_with_request(
+            method: :post,
+            body: create_text_message_payload("Hello", "wamid.test123")
+          )
+          
+          @gateway.call(context)
+          
+          job_class.verify
+        end
+      end
+    end
+  end
+
+  def test_background_mode_fallback_to_inline_when_job_missing
+    # Mock background mode with missing job class
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
+      FlowChat::Config.whatsapp.stub(:background_job_class, 'NonExistentJob') do
+        # Create a simple mock client that tracks if send_message was called
+        send_message_called = false
+        mock_client = Object.new
+        mock_client.define_singleton_method(:send_message) do |phone, response|
+          send_message_called = true
+          { "messages" => [{ "id" => "fallback_123" }] }
+        end
+        
+        # Capture logged warning
+        logged_warning = nil
+        logger_mock = Minitest::Mock.new
+        logger_mock.expect(:warn, nil) { |msg| logged_warning = msg; true }
+        
+        # Use the helper to make constantize fail for NonExistentJob
+        stub_constantize_to_fail('NonExistentJob') do
+          # Mock the WhatsApp Client class to return our mock
+          FlowChat::Whatsapp::Client.stub(:new, mock_client) do
+            Rails.stub(:logger, logger_mock) do
+              gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+              context = create_context_with_request(
+                method: :post,
+                body: create_text_message_payload("Hello", "wamid.test123")
+              )
+              
+              gateway.call(context)
+              
+              # Verify fallback behavior
+              assert send_message_called, "Should have called send_message for fallback inline sending"
+              assert_includes logged_warning, "Background mode requested but no NonExistentJob found. Falling back to inline sending."
+              assert_equal({ "messages" => [{ "id" => "fallback_123" }] }, context["whatsapp.message_result"])
+            end
+          end
+        end
+        
+        logger_mock.verify
+      end
+    end
+  end
+
+  def test_simulator_mode_message_handling
+    # Mock simulator mode
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :simulator) do
+      # Mock client build_message_payload method
+      mock_client = Minitest::Mock.new
+      mock_client.expect(:build_message_payload, { "to" => "+256700000000", "type" => "text", "text" => { "body" => "Response" } }, [[:text, "Response", {}], "+256700000000"])
+      
+      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+        context = create_context_with_request(
+          method: :post,
+          body: create_text_message_payload("Hello", "wamid.test123")
+        )
+        
+        gateway.call(context)
+        
+        mock_client.verify
+        # Should render simulator response
+        assert_equal "simulator", context.controller.last_render[:json][:mode]
+        assert_equal true, context.controller.last_render[:json][:webhook_processed]
+        assert_includes context.controller.last_render[:json], :would_send
+        assert_includes context.controller.last_render[:json], :message_info
+      end
+    end
+  end
+
+  def test_simulator_mode_via_request_parameter
+    # Even if global mode is inline, simulator parameter should override
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
+      mock_client = Minitest::Mock.new
+      mock_client.expect(:build_message_payload, { "to" => "+256700000000", "type" => "text", "text" => { "body" => "Response" } }, [[:text, "Response", {}], "+256700000000"])
+      
+      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+        context = create_context_with_request(
+          method: :post,
+          body: create_text_message_payload("Hello", "wamid.test123").merge("simulator_mode" => true)
+        )
+        
+        gateway.call(context)
+        
+        mock_client.verify
+        # Should render simulator response despite global inline mode
+        assert_equal "simulator", context.controller.last_render[:json][:mode]
+      end
+    end
+  end
+
+  def test_flow_processing_happens_synchronously_in_background_mode
+    # Verify that flow processing happens sync, even in background mode
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
+      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+        # Track if flow was called
+        flow_called = false
+        test_app = proc do |context|
+          flow_called = true
+          # Verify we have full context during flow execution
+          assert_equal "Hello", context.input
+          assert_equal "+256700000000", context["request.msisdn"]
+          [:text, "Flow executed with context", {}]
+        end
+        
+        job_class = Minitest::Mock.new
+        job_class.expect(:perform_later, true, [Hash])
+        
+        stub_constantize('TestBackgroundJob', job_class) do
+          gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
+          context = create_context_with_request(
+            method: :post,
+            body: create_text_message_payload("Hello", "wamid.test123")
+          )
+          
+          gateway.call(context)
+          
+          # Flow should have been executed synchronously
+          assert flow_called, "Flow should be executed synchronously even in background mode"
+          job_class.verify
+        end
+      end
+    end
+  end
+
+  def test_background_mode_preserves_controller_context
+    # Verify that controller context is preserved during flow execution
+    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
+      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+        controller_preserved = false
+        test_app = proc do |context|
+          # Verify controller is available during flow execution
+          controller_preserved = !context.controller.nil?
+          [:text, "Controller context preserved", {}]
+        end
+        
+        job_class = Minitest::Mock.new
+        job_class.expect(:perform_later, true, [Hash])
+        
+        stub_constantize('TestBackgroundJob', job_class) do
+          gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
+          context = create_context_with_request(
+            method: :post,
+            body: create_text_message_payload("Hello", "wamid.test123")
+          )
+          
+          gateway.call(context)
+          
+          assert controller_preserved, "Controller context should be preserved during flow execution"
+          job_class.verify
+        end
+      end
+    end
   end
 
   private

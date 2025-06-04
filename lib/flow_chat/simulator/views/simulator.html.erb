@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>FlowChat Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        height: 100vh;
+        overflow: hidden;
+        color: #333;
+      }
+
+      .container {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: white;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 15px 25px;
+        position: relative;
+        flex-shrink: 0;
+      }
+
+      .header h1 {
+        font-size: 20px;
+        font-weight: 700;
+        margin-bottom: 2px;
+      }
+
+      .header p {
+        opacity: 0.8;
+        font-size: 12px;
+        font-weight: 300;
+      }
+
+      .main-content {
+        flex: 1;
+        display: flex;
+        background: #f8f9fa;
+        min-height: 0;
+      }
+
+      .control-panel {
+        width: 280px;
+        background: white;
+        border-right: 1px solid #e9ecef;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+
+      .config-section {
+        padding: 15px;
+        border-bottom: 1px solid #f0f0f0;
+      }
+
+      .config-section h3 {
+        color: #2c3e50;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .config-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: white;
+        font-weight: bold;
+      }
+
+      .form-group {
+        margin-bottom: 12px;
+      }
+
+      .form-group:last-child {
+        margin-bottom: 0;
+      }
+
+      .form-group label {
+        display: block;
+        font-size: 11px;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .form-group select,
+      .form-group input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        font-size: 13px;
+        transition: all 0.2s ease;
+        background: white;
+      }
+
+      .form-group select:focus,
+      .form-group input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+      }
+
+      .config-details {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 8px;
+        margin-top: 8px;
+        border: 1px solid #e9ecef;
+        font-size: 11px;
+      }
+
+      .config-detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+      }
+
+      .config-detail-item:last-child {
+        margin-bottom: 0;
+      }
+
+      .config-detail-label {
+        color: #6c757d;
+        font-weight: 500;
+      }
+
+      .config-detail-value {
+        color: #495057;
+        font-weight: 600;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 10px;
+      }
+
+      .actions-section {
+        padding: 15px;
+        background: #fafbfc;
+        border-top: 1px solid #e9ecef;
+        flex-shrink: 0;
+      }
+
+      .btn {
+        width: 100%;
+        padding: 10px 16px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 12px;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+      }
+
+      .btn:last-child {
+        margin-bottom: 0;
+      }
+
+      .btn-success {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+      }
+
+      .btn-success:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+      }
+
+      .btn-danger {
+        background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+      }
+
+      .btn-danger:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+      }
+
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+      }
+
+      .simulator-area {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+
+      .phone-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        gap: 20px;
+      }
+
+      .phone-simulator {
+        width: 320px;
+        height: 600px;
+        background: #000;
+        border-radius: 25px;
+        padding: 20px;
+        position: relative;
+        box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+        flex-shrink: 0;
+      }
+
+      .phone-simulator::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 60px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+      }
+
+      .bottom-input-panel {
+        width: 320px;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        border: 1px solid #e9ecef;
+        flex-shrink: 0;
+      }
+
+      .input-section {
+        padding: 15px;
+      }
+
+      .controls-container {
+        width: 300px;
+        background: white;
+        border-left: 1px solid #e9ecef;
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+      }
+
+      .request-log-section {
+        flex: 1;
+        padding: 15px;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+      }
+
+      .screen {
+        width: 100%;
+        height: 100%;
+        background: white;
+        border-radius: 18px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        min-height: 0;
+      }
+
+      .ussd-screen {
+        background: #000;
+        color: #00ff41;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        padding: 20px;
+        white-space: pre-wrap;
+        overflow-y: auto;
+        flex: 1;
+        line-height: 1.4;
+      }
+
+      .whatsapp-screen {
+        background: linear-gradient(180deg, #e5ddd5 0%, #d1c7b8 100%);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+
+      .whatsapp-header {
+        background: #075e54;
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .contact-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #128c7e, #25d366);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 14px;
+        color: white;
+      }
+
+      .contact-info h4 {
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 2px;
+      }
+
+      .contact-info p {
+        font-size: 12px;
+        opacity: 0.8;
+      }
+
+      .messages-area {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        min-height: 0;
+        max-height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .message {
+        margin-bottom: 15px;
+        max-width: 80%;
+        animation: messageSlide 0.3s ease;
+        flex-shrink: 0;
+      }
+
+      @keyframes messageSlide {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .message.incoming {
+        align-self: flex-start;
+      }
+
+      .message.outgoing {
+        align-self: flex-end;
+        margin-left: auto;
+      }
+
+      .message-bubble {
+        padding: 12px 16px;
+        border-radius: 15px;
+        word-wrap: break-word;
+        word-break: break-word;
+        white-space: pre-wrap;
+        position: relative;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        font-size: 14px;
+        line-height: 1.4;
+        max-height: 300px;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+
+      .message.incoming .message-bubble {
+        background: white;
+        border-bottom-left-radius: 6px;
+      }
+
+      .message.outgoing .message-bubble {
+        background: #dcf8c6;
+        border-bottom-right-radius: 6px;
+      }
+
+      .interactive-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .interactive-button {
+        background: #f0f0f0;
+        border: 1px solid #e0e0e0;
+        padding: 10px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: left;
+        font-size: 13px;
+        font-weight: 500;
+      }
+
+      .interactive-button:hover {
+        background: #e8f5e8;
+        border-color: #075e54;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+
+      .request-log-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .request-log-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #495057;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .clear-log-btn {
+        padding: 4px 8px;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        background: white;
+        color: #6c757d;
+        font-size: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .clear-log-btn:hover {
+        background: #f8f9fa;
+        border-color: #dc3545;
+        color: #dc3545;
+      }
+
+      .request-log {
+        flex: 1;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        overflow-y: auto;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 10px;
+        line-height: 1.4;
+        min-height: 0;
+      }
+
+      .request-log-empty {
+        padding: 20px;
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+
+      .log-entry {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e9ecef;
+        animation: logEntrySlide 0.3s ease;
+        background: white;
+        border-radius: 4px;
+        margin-bottom: 4px;
+      }
+
+      .log-entry:last-child {
+        border-bottom: none;
+      }
+
+      .log-entry-header {
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding: 4px 0;
+        user-select: none;
+      }
+
+      .log-entry-header:hover {
+        background: #f8f9fa;
+        border-radius: 3px;
+        margin: -2px;
+        padding: 6px 2px;
+      }
+
+      .log-entry-left {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .log-entry-toggle {
+        margin-left: 8px;
+        font-size: 10px;
+        color: #6c757d;
+        transition: transform 0.2s ease;
+        flex-shrink: 0;
+      }
+
+      .log-entry.expanded .log-entry-toggle {
+        transform: rotate(90deg);
+      }
+
+      .log-entry-body {
+        display: none;
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #f0f0f0;
+      }
+
+      .log-entry.expanded .log-entry-body {
+        display: block;
+      }
+
+      .log-textarea {
+        width: 100%;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 3px;
+        padding: 6px 8px;
+        font-family: 'Monaco', 'Menlo', monospace;
+        font-size: 9px;
+        line-height: 1.3;
+        resize: vertical;
+        min-height: 60px;
+        max-height: 200px;
+        margin-bottom: 6px;
+        color: #495057;
+      }
+
+      .log-textarea:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 1px rgba(102, 126, 234, 0.1);
+      }
+
+      .log-section-title {
+        font-size: 9px;
+        font-weight: 600;
+        color: #6c757d;
+        margin-bottom: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .input-group {
+        display: flex;
+        gap: 8px;
+        align-items: stretch;
+        margin-bottom: 10px;
+      }
+
+      .message-input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #e9ecef;
+        border-radius: 20px;
+        font-size: 12px;
+        outline: none;
+        transition: all 0.2s ease;
+        resize: none;
+        max-height: 80px;
+      }
+
+      .message-input:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+      }
+
+      .send-btn {
+        padding: 10px 16px;
+        border: none;
+        border-radius: 20px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 11px;
+        transition: all 0.2s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        flex-shrink: 0;
+      }
+
+      .send-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+      }
+
+      .send-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
+        box-shadow: none !important;
+      }
+
+      .status-section {
+        padding: 15px;
+        background: #f8f9fa;
+        border-top: 1px solid #e9ecef;
+        flex-shrink: 0;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        font-size: 10px;
+      }
+
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 8px;
+        background: white;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        animation: pulse 2s ease-in-out infinite;
+        flex-shrink: 0;
+      }
+
+      .status-dot.connected {
+        background: #28a745;
+      }
+
+      .status-dot.disconnected {
+        background: #dc3545;
+      }
+
+      .status-dot.connecting {
+        background: #ffc107;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+      }
+
+      .char-count {
+        color: #6c757d;
+        text-align: right;
+        margin-top: 4px;
+        font-size: 10px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 1200px) {
+        .control-panel {
+          width: 250px;
+        }
+        
+        .controls-container {
+          width: 280px;
+        }
+        
+        .phone-simulator, .bottom-input-panel {
+          width: 300px;
+        }
+        
+        .phone-simulator {
+          height: 560px;
+        }
+      }
+
+      @media (max-width: 1024px) {
+        .main-content {
+          flex-direction: column;
+        }
+        
+        .control-panel {
+          width: 100%;
+          height: 200px;
+          display: grid;
+          grid-template-columns: 1fr 1fr 200px;
+          border-right: none;
+          border-bottom: 1px solid #e9ecef;
+        }
+        
+        .actions-section {
+          border-top: none;
+          border-left: 1px solid #e9ecef;
+        }
+        
+        .simulator-area {
+          flex-direction: row;
+        }
+        
+        .controls-container {
+          width: 280px;
+        }
+        
+        .phone-simulator, .bottom-input-panel {
+          width: 280px;
+        }
+        
+        .phone-simulator {
+          height: 520px;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .control-panel {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+        
+        .simulator-area {
+          flex-direction: column;
+        }
+        
+        .phone-container {
+          order: 1;
+          padding: 10px;
+        }
+        
+        .controls-container {
+          order: 2;
+          width: 100%;
+          height: 250px;
+          border-left: none;
+          border-top: 1px solid #e9ecef;
+        }
+        
+        .phone-simulator, .bottom-input-panel {
+          width: 280px;
+        }
+        
+        .phone-simulator {
+          height: 480px;
+        }
+        
+        .bottom-input-panel {
+          width: 100%;
+          max-width: 280px;
+        }
+      }
+
+      @keyframes logEntrySlide {
+        from {
+          opacity: 0;
+          transform: translateX(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateX(0);
+        }
+      }
+
+      .log-timestamp {
+        color: #6c757d;
+        font-size: 9px;
+        margin-bottom: 2px;
+      }
+
+      .log-request {
+        margin-bottom: 4px;
+      }
+
+      .log-method {
+        display: inline-block;
+        padding: 1px 4px;
+        border-radius: 2px;
+        font-weight: bold;
+        font-size: 9px;
+        margin-right: 4px;
+      }
+
+      .log-method.post {
+        background: #28a745;
+        color: white;
+      }
+
+      .log-method.get {
+        background: #007bff;
+        color: white;
+      }
+
+      .log-url {
+        color: #495057;
+        word-break: break-all;
+      }
+
+      .log-response {
+        color: #6c757d;
+        font-size: 9px;
+      }
+
+      .log-status {
+        display: inline-block;
+        padding: 1px 4px;
+        border-radius: 2px;
+        font-weight: bold;
+        margin-right: 4px;
+      }
+
+      .log-status.success {
+        background: #d4edda;
+        color: #155724;
+      }
+
+      .log-status.error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🚀 FlowChat Simulator</h1>
+        <p>Test your conversation flows</p>
+      </div>
+
+      <div class="main-content">
+        <div class="control-panel">
+          <!-- Configuration Selection -->
+          <div class="config-section">
+            <h3>
+              <div class="config-icon" style="background: #667eea;">⚙️</div>
+              Configuration
+            </h3>
+            
+            <div class="form-group">
+              <label for="config-select">Environment</label>
+              <select id="config-select">
+                <% configurations.each do |key, config| %>
+                  <option value="<%= key %>" <%= key == default_config_key ? 'selected' : '' %> 
+                          data-config='<%= config.to_json %>'>
+                    <%= config[:icon] %> <%= config[:name] %>
+                  </option>
+                <% end %>
+              </select>
+            </div>
+
+            <div id="config-details" class="config-details">
+              <!-- Dynamic config details will be populated here -->
+            </div>
+          </div>
+
+          <!-- User Settings -->
+          <div class="config-section">
+            <h3>
+              <div class="config-icon" style="background: #17a2b8;">👤</div>
+              User Settings
+            </h3>
+            
+            <div class="form-group">
+              <label for="phone-number">Phone Number</label>
+              <input type="tel" id="phone-number" value="<%= default_phone_number %>" placeholder="+1234567890">
+            </div>
+
+            <div class="form-group" id="contact-name-group">
+              <label for="contact-name">Contact Name</label>
+              <input type="text" id="contact-name" value="<%= default_contact_name %>" placeholder="John Doe">
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="actions-section">
+            <button id="start-btn" class="btn btn-success" disabled>
+              🚀 Start Session
+            </button>
+            <button id="reset-btn" class="btn btn-danger" disabled>
+              🔄 Reset
+            </button>
+          </div>
+        </div>
+
+        <div class="simulator-area">
+          <div class="phone-container">
+            <div class="phone-simulator">
+              <div class="screen">
+                <!-- USSD Screen -->
+                <div id="ussd-screen" class="ussd-screen hidden">
+                  <!-- USSD content will be displayed here -->
+                </div>
+                
+                <!-- WhatsApp Screen -->
+                <div id="whatsapp-screen" class="whatsapp-screen hidden">
+                  <div class="whatsapp-header">
+                    <div class="contact-avatar" id="contact-avatar">JD</div>
+                    <div class="contact-info">
+                      <h4 id="header-contact-name">Business</h4>
+                      <p>Active now</p>
+                    </div>
+                  </div>
+                  <div class="messages-area" id="messages-area">
+                    <!-- Messages will be displayed here -->
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Bottom Input Panel -->
+            <div class="bottom-input-panel">
+              <div class="input-section">
+                <div class="input-group">
+                  <textarea id="message-input" class="message-input" placeholder="Type your message..." disabled rows="2"></textarea>
+                  <button id="send-btn" class="send-btn" disabled>Send</button>
+                </div>
+                <div class="char-count" id="char-count"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="controls-container">
+            <div class="request-log-section">
+              <div class="request-log-header">
+                <span class="request-log-title">Request Log</span>
+                <button id="clear-log-btn" class="clear-log-btn">Clear</button>
+              </div>
+              <div id="request-log" class="request-log">
+                <div class="request-log-empty">No requests yet. Start a session to see HTTP traffic.</div>
+              </div>
+            </div>
+
+            <div class="status-section">
+              <div class="status-grid">
+                <div class="status-item">
+                  <div class="status-dot disconnected" id="status-dot"></div>
+                  <span id="status-text">Ready</span>
+                </div>
+                
+                <div class="status-item">
+                  <span id="config-indicator">Select Config</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Application State
+      const state = {
+        currentConfig: null,
+        isRunning: false,
+        sessionId: null,
+        platform: null
+      }
+
+      // Configuration Data
+      const configurations = <%= configurations.to_json.html_safe %>;
+
+      // DOM Elements
+      const elements = {
+        configSelect: document.getElementById('config-select'),
+        phoneNumber: document.getElementById('phone-number'),
+        contactName: document.getElementById('contact-name'),
+        contactNameGroup: document.getElementById('contact-name-group'),
+        configDetails: document.getElementById('config-details'),
+        
+        startBtn: document.getElementById('start-btn'),
+        resetBtn: document.getElementById('reset-btn'),
+        sendBtn: document.getElementById('send-btn'),
+        
+        ussdScreen: document.getElementById('ussd-screen'),
+        whatsappScreen: document.getElementById('whatsapp-screen'),
+        messagesArea: document.getElementById('messages-area'),
+        contactAvatar: document.getElementById('contact-avatar'),
+        headerContactName: document.getElementById('header-contact-name'),
+        
+        messageInput: document.getElementById('message-input'),
+        charCount: document.getElementById('char-count'),
+        statusText: document.getElementById('status-text'),
+        statusDot: document.getElementById('status-dot'),
+        configIndicator: document.getElementById('config-indicator'),
+        
+        requestLog: document.getElementById('request-log'),
+        clearLogBtn: document.getElementById('clear-log-btn')
+      }
+
+      // Event Listeners
+      elements.configSelect.addEventListener('change', handleConfigChange)
+      elements.phoneNumber.addEventListener('input', updateUserSettings)
+      elements.contactName.addEventListener('input', updateContactInfo)
+      
+      elements.startBtn.addEventListener('click', startSession)
+      elements.resetBtn.addEventListener('click', resetSession)
+      elements.sendBtn.addEventListener('click', sendMessage)
+      elements.clearLogBtn.addEventListener('click', clearRequestLog)
+      
+      elements.messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault()
+          sendMessage()
+        }
+      })
+      
+      elements.messageInput.addEventListener('input', updateCharCount)
+
+      // Configuration Management
+      function handleConfigChange() {
+        const selectedOption = elements.configSelect.selectedOptions[0]
+        const configKey = selectedOption.value
+        const configData = JSON.parse(selectedOption.dataset.config)
+        
+        state.currentConfig = { key: configKey, ...configData }
+        state.platform = configData.processor_type
+        
+        updateConfigDetails()
+        updateUI()
+        resetSession()
+      }
+
+      function updateConfigDetails() {
+        if (!state.currentConfig) return
+        
+        const config = state.currentConfig
+        const details = `
+          <div class="config-detail-item">
+            <span class="config-detail-label">Endpoint:</span>
+            <span class="config-detail-value">${config.endpoint}</span>
+          </div>
+          <div class="config-detail-item">
+            <span class="config-detail-label">Provider:</span>
+            <span class="config-detail-value">${config.provider}</span>
+          </div>
+          <div class="config-detail-item">
+            <span class="config-detail-label">Type:</span>
+            <span class="config-detail-value">${config.processor_type.toUpperCase()}</span>
+          </div>
+        `
+        
+        elements.configDetails.innerHTML = details
+        elements.configIndicator.textContent = `${config.icon} ${config.name}`
+      }
+
+      function updateUserSettings() {
+        if (state.currentConfig && state.currentConfig.processor_type === 'whatsapp') {
+          updateContactInfo()
+        }
+      }
+
+      function updateContactInfo() {
+        const name = elements.contactName.value || 'Business'
+        elements.headerContactName.textContent = name
+        
+        const initials = name.split(' ')
+          .map(n => n[0])
+          .join('')
+          .substr(0, 2)
+          .toUpperCase()
+        elements.contactAvatar.textContent = initials
+      }
+
+      function updateUI() {
+        if (!state.currentConfig) return
+        
+        const isWhatsApp = state.currentConfig.processor_type === 'whatsapp'
+        
+        // Show/hide platform-specific elements
+        elements.contactNameGroup.style.display = isWhatsApp ? 'block' : 'none'
+        elements.ussdScreen.classList.toggle('hidden', isWhatsApp)
+        elements.whatsappScreen.classList.toggle('hidden', !isWhatsApp)
+        
+        // Update input placeholder
+        elements.messageInput.placeholder = isWhatsApp ? 
+          'Type your WhatsApp message...' : 
+          'Enter USSD input...'
+        
+        // Update button states
+        const canStart = state.currentConfig && !state.isRunning
+        elements.startBtn.disabled = !canStart
+        elements.resetBtn.disabled = !state.isRunning
+        elements.sendBtn.disabled = !state.isRunning
+        elements.messageInput.disabled = !state.isRunning
+      }
+
+      function updateCharCount() {
+        const length = elements.messageInput.value.length
+        const maxLength = state.platform === 'ussd' ? <%= pagesize %> : 4096
+        
+        elements.charCount.textContent = `${length}/${maxLength} chars`
+        
+        if (length > maxLength) {
+          elements.charCount.style.color = '#dc3545'
+        } else if (length > maxLength * 0.8) {
+          elements.charCount.style.color = '#ffc107'
+        } else {
+          elements.charCount.style.color = '#6c757d'
+        }
+      }
+
+      function updateStatus(text, status = 'disconnected') {
+        elements.statusText.textContent = text
+        elements.statusDot.className = `status-dot ${status}`
+      }
+
+      // Session Control
+      async function startSession() {
+        if (!state.currentConfig) return
+        
+        try {
+          elements.startBtn.disabled = true
+          updateStatus('Starting...', 'connecting')
+          
+          state.sessionId = generateSessionId()
+          state.isRunning = true
+          
+          if (state.currentConfig.processor_type === 'ussd') {
+            await makeUSSDRequest()
+          } else {
+            await makeWhatsAppRequest()
+          }
+          
+          updateStatus('Connected', 'connected')
+          
+        } catch (error) {
+          handleError(error)
+        } finally {
+          updateUI()
+        }
+      }
+
+      async function sendMessage() {
+        const message = elements.messageInput.value.trim()
+        if (!message || !state.isRunning) return
+        
+        try {
+          updateStatus('Sending...', 'connecting')
+          
+          // Add outgoing message to WhatsApp chat
+          if (state.currentConfig.processor_type === 'whatsapp') {
+            addMessage(message, true)
+          }
+          
+          elements.messageInput.value = ''
+          updateCharCount()
+          
+          if (state.currentConfig.processor_type === 'ussd') {
+            await makeUSSDRequest(message)
+          } else {
+            await makeWhatsAppRequest(message)
+          }
+          
+          updateStatus('Connected', 'connected')
+          
+        } catch (error) {
+          handleError(error)
+        }
+      }
+
+      function resetSession() {
+        state.isRunning = false
+        state.sessionId = null
+        
+        elements.messageInput.value = ''
+        elements.ussdScreen.textContent = ''
+        elements.messagesArea.innerHTML = ''
+        
+        updateCharCount()
+        updateStatus('Ready', 'disconnected')
+        updateUI()
+      }
+
+      // Request Logging
+      function addRequestLog(method, url, requestData, responseData, status, error = null) {
+        // Remove empty state if present
+        const emptyState = elements.requestLog.querySelector('.request-log-empty')
+        if (emptyState) {
+          emptyState.remove()
+        }
+
+        const timestamp = new Date().toLocaleTimeString()
+        const logEntry = document.createElement('div')
+        logEntry.className = 'log-entry'
+        
+        const statusClass = error ? 'error' : 'success'
+        const statusText = error ? `${status} Error` : `${status} OK`
+        
+        // Create collapsible header
+        const headerDiv = document.createElement('div')
+        headerDiv.className = 'log-entry-header'
+        
+        const leftDiv = document.createElement('div')
+        leftDiv.className = 'log-entry-left'
+        
+        leftDiv.innerHTML = `
+          <div class="log-timestamp">${timestamp}</div>
+          <div class="log-request">
+            <span class="log-method ${method.toLowerCase()}">${method}</span>
+            <span class="log-url">${url}</span>
+          </div>
+          <div class="log-response">
+            <span class="log-status ${statusClass}">${statusText}</span>
+            ${error ? error : 'Success'}
+          </div>
+        `
+        
+        const toggleDiv = document.createElement('div')
+        toggleDiv.className = 'log-entry-toggle'
+        toggleDiv.textContent = '▶'
+        
+        headerDiv.appendChild(leftDiv)
+        headerDiv.appendChild(toggleDiv)
+        
+        // Create collapsible body
+        const bodyDiv = document.createElement('div')
+        bodyDiv.className = 'log-entry-body'
+        
+        // Add request data if present
+        if (requestData) {
+          const requestSection = document.createElement('div')
+          requestSection.innerHTML = '<div class="log-section-title">Request Body</div>'
+          
+          const requestTextarea = document.createElement('textarea')
+          requestTextarea.className = 'log-textarea'
+          requestTextarea.readOnly = true
+          requestTextarea.value = JSON.stringify(requestData, null, 2)
+          requestTextarea.rows = Math.min(10, requestTextarea.value.split('\n').length)
+          
+          requestSection.appendChild(requestTextarea)
+          bodyDiv.appendChild(requestSection)
+        }
+        
+        // Add response data if present
+        if (responseData) {
+          const responseSection = document.createElement('div')
+          responseSection.innerHTML = '<div class="log-section-title">Response Body</div>'
+          
+          const responseTextarea = document.createElement('textarea')
+          responseTextarea.className = 'log-textarea'
+          responseTextarea.readOnly = true
+          responseTextarea.value = typeof responseData === 'string' ? 
+            responseData : 
+            JSON.stringify(responseData, null, 2)
+          responseTextarea.rows = Math.min(10, responseTextarea.value.split('\n').length)
+          
+          responseSection.appendChild(responseTextarea)
+          bodyDiv.appendChild(responseSection)
+        }
+        
+        // Add click handler for expand/collapse
+        headerDiv.addEventListener('click', () => {
+          logEntry.classList.toggle('expanded')
+        })
+        
+        logEntry.appendChild(headerDiv)
+        logEntry.appendChild(bodyDiv)
+        
+        elements.requestLog.appendChild(logEntry)
+        elements.requestLog.scrollTop = elements.requestLog.scrollHeight
+        
+        // Keep only last 20 entries
+        const entries = elements.requestLog.querySelectorAll('.log-entry')
+        if (entries.length > 20) {
+          entries[0].remove()
+        }
+      }
+
+      function clearRequestLog() {
+        elements.requestLog.innerHTML = '<div class="request-log-empty">No requests yet. Start a session to see HTTP traffic.</div>'
+      }
+
+      // API Communication
+      async function makeUSSDRequest(userInput = null) {
+        const config = state.currentConfig
+        const phoneNumber = elements.phoneNumber.value
+        
+        let requestData = {}
+        
+        switch (config.provider) {
+          case 'nalo':
+            requestData = {
+              USERID: state.sessionId,
+              MSISDN: phoneNumber,
+              USERDATA: userInput || '',
+              MSGTYPE: userInput === null
+            }
+            break
+          case 'nsano':
+            requestData = {
+              network: 'MTN',
+              msisdn: phoneNumber,
+              msg: userInput || '',
+              UserSessionID: state.sessionId
+            }
+            break
+          default:
+            throw new Error(`Unsupported USSD provider: ${config.provider}`)
+        }
+        
+        try {
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData)
+          })
+          
+          const data = await response.json()
+          
+          // Log the request
+          addRequestLog('POST', config.endpoint, requestData, data, response.status)
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+          switch (config.provider) {
+            case 'nalo':
+              displayUSSDResponse(data.MSG)
+              state.isRunning = data.MSGTYPE
+              break
+            case 'nsano':
+              displayUSSDResponse(data.USSDResp.title)
+              state.isRunning = data.USSDResp.action === 'input'
+              break
+          }
+          
+          if (!state.isRunning) {
+            updateStatus('Session completed', 'disconnected')
+            
+            // Disable input immediately when session ends
+            elements.messageInput.disabled = true
+            elements.sendBtn.disabled = true
+            
+            // Clear session ID and update UI to enable reset button
+            setTimeout(() => {
+              state.sessionId = null
+              updateStatus('Session ended', 'disconnected')
+              updateUI()
+            }, 1000) // Brief delay to let user see the completion status
+          }
+        } catch (error) {
+          // Log the error
+          addRequestLog('POST', config.endpoint, requestData, null, 0, error.message)
+          throw error
+        }
+      }
+
+      async function makeWhatsAppRequest(userInput = null) {
+        const config = state.currentConfig
+        const phoneNumber = elements.phoneNumber.value
+        const contactName = elements.contactName.value
+        
+        // For initiation, send initial message
+        let isInitialMessage = false
+        if (userInput === null) {
+          userInput = 'hi'
+          isInitialMessage = true
+        }
+
+        // Add the initial message to chat history so user can see what was sent
+        if (isInitialMessage) {
+          addMessage(userInput, true)
+        }
+
+        // Create WhatsApp-compatible webhook payload with simulator mode enabled
+        const webhookData = {
+          simulator_mode: true,
+          entry: [{
+            id: "entry_123",
+            time: Math.floor(Date.now() / 1000),
+            changes: [{
+              value: {
+                messaging_product: "whatsapp",
+                metadata: {
+                  display_phone_number: phoneNumber.replace('+', ''),
+                  phone_number_id: "phone_number_id_123"
+                },
+                messages: [{
+                  id: `wamid.${Date.now()}`,
+                  from: phoneNumber.replace('+', ''),
+                  timestamp: Math.floor(Date.now() / 1000).toString(),
+                  text: { body: userInput },
+                  type: 'text'
+                }],
+                contacts: [{
+                  profile: { name: contactName },
+                  wa_id: phoneNumber.replace('+', '')
+                }]
+              },
+              field: "messages"
+            }]
+          }]
+        }
+        
+        try {
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(webhookData)
+          })
+          
+          // Read the response body once and store it
+          const responseText = await response.text()
+          let responseData = null
+          
+          // Try to parse as JSON first
+          if (response.headers.get('content-type')?.includes('application/json')) {
+            try {
+              responseData = JSON.parse(responseText)
+              
+              // Check if this is a simulator response
+              if (responseData.mode === 'simulator') {
+                // Display the simulated response
+                displaySimulatorResponse(responseData)
+                addRequestLog('POST', config.endpoint, webhookData, responseData, response.status)
+                return
+              }
+            } catch (jsonError) {
+              console.warn('Failed to parse JSON response:', jsonError)
+              console.warn('Response text:', responseText)
+              responseData = responseText
+            }
+          } else {
+            responseData = responseText
+          }
+          
+          // Log the request with actual response
+          addRequestLog('POST', config.endpoint, webhookData, responseData, response.status)
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+          // For non-simulator mode, show informational message
+          setTimeout(() => {
+            addInfoMessage(
+              `✅ Webhook delivered successfully (${response.status})\n\n` +
+              `📱 In a real WhatsApp integration:\n` +
+              `• Your endpoint processes this webhook\n` +
+              `• Response messages are sent via WhatsApp Cloud API\n` +
+              `• Messages appear in the actual WhatsApp chat\n\n` +
+              `💡 This simulator shows the webhook delivery only.\n` +
+              `To enable full simulator mode, configure your endpoint\n` +
+              `to handle simulator_mode parameter and return JSON responses.`
+            )
+          }, 500)
+          
+        } catch (error) {
+          // Log the error
+          addRequestLog('POST', config.endpoint, webhookData, null, 0, error.message)
+          
+          // Provide helpful error messages for common issues
+          let errorMessage = error.message
+          
+          if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Cannot connect to endpoint. Please check:\n' +
+                          '• Endpoint URL is correct\n' +
+                          '• Server is running\n' +
+                          '• CORS is configured if cross-origin\n' +
+                          '• SSL certificate is valid (for HTTPS)'
+          } else if (error.message.includes('404')) {
+            errorMessage = 'Endpoint not found (404). Please verify:\n' +
+                          '• The webhook URL is correct\n' +
+                          '• The route is properly configured\n' +
+                          '• The controller/handler exists'
+          } else if (error.message.includes('500')) {
+            errorMessage = 'Server error (500). Check server logs for:\n' +
+                          '• Application errors\n' +
+                          '• Missing dependencies\n' +
+                          '• Configuration issues'
+          }
+          
+          // Add error info message to chat
+          setTimeout(() => {
+            addInfoMessage(
+              `❌ Request Failed\n\n` +
+              `Error: ${errorMessage}\n\n` +
+              `💡 For simulator mode support, ensure your endpoint:\n` +
+              `• Accepts POST requests with simulator_mode parameter\n` +
+              `• Returns JSON with mode: "simulator" for simulator requests\n` +
+              `• Handles webhook verification (if required by your setup)`
+            )
+          }, 500)
+          
+          throw error
+        }
+      }
+
+      // Display Functions
+      function displayUSSDResponse(content) {
+        elements.ussdScreen.textContent = content
+        updateCharCount()
+      }
+
+      function displaySimulatorResponse(simulatorData) {
+        const messagePayload = simulatorData.would_send
+        const messageInfo = simulatorData.message_info
+        
+        // Extract message content based on type
+        let messageText = ''
+        let interactive = null
+        
+        switch (messagePayload.type) {
+          case 'text':
+            messageText = messagePayload.text.body
+            break
+          case 'interactive':
+            if (messagePayload.interactive.type === 'button') {
+              messageText = messagePayload.interactive.body.text
+              interactive = {
+                buttons: messagePayload.interactive.action.buttons.map(btn => ({
+                  id: btn.reply.id,
+                  title: btn.reply.title
+                }))
+              }
+            } else if (messagePayload.interactive.type === 'list') {
+              messageText = messagePayload.interactive.body.text
+              // For lists, we'll show a simplified view
+              const sections = messagePayload.interactive.action.sections
+              if (sections && sections.length > 0) {
+                interactive = {
+                  buttons: sections.flatMap(section => 
+                    section.rows.map(row => ({
+                      id: row.id,
+                      title: row.title,
+                      description: row.description
+                    }))
+                  )
+                }
+              }
+            }
+            break
+          case 'template':
+            messageText = `Template: ${messagePayload.template.name}`
+            if (messagePayload.template.components) {
+              const bodyComponent = messagePayload.template.components.find(c => c.type === 'BODY')
+              if (bodyComponent && bodyComponent.parameters) {
+                messageText += `\n${bodyComponent.parameters.map(p => p.text).join(' ')}`
+              }
+            }
+            break
+          case 'image':
+            messageText = messagePayload.image.caption || 'Image message'
+            // In a real implementation, you might want to show the image
+            messageText = `📷 ${messageText}`
+            break
+          case 'document':
+            messageText = messagePayload.document.caption || messagePayload.document.filename || 'Document'
+            messageText = `📄 ${messageText}`
+            break
+          case 'audio':
+            messageText = '🎵 Audio message'
+            break
+          case 'video':
+            messageText = messagePayload.video.caption || 'Video message'
+            messageText = `🎥 ${messageText}`
+            break
+          case 'location':
+            const loc = messagePayload.location
+            messageText = `📍 Location: ${loc.name || 'Shared location'}`
+            if (loc.address) messageText += `\n${loc.address}`
+            break
+          default:
+            messageText = `Unsupported message type: ${messagePayload.type}`
+            console.warn('Unsupported message type in simulator:', messagePayload.type, messagePayload)
+        }
+        
+        // Add the simulated message to the chat
+        addMessage(messageText, false, messagePayload.type, interactive)
+      }
+
+      function addMessage(content, isOutgoing = false, type = 'text', interactive = null) {
+        const messageDiv = document.createElement('div')
+        messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`
+        
+        const bubbleDiv = document.createElement('div')
+        bubbleDiv.className = 'message-bubble'
+        bubbleDiv.textContent = content
+        
+        messageDiv.appendChild(bubbleDiv)
+        
+        // Add interactive elements for incoming messages
+        if (!isOutgoing && interactive && interactive.buttons) {
+          const buttonsDiv = document.createElement('div')
+          buttonsDiv.className = 'interactive-buttons'
+          
+          interactive.buttons.forEach(button => {
+            const btn = document.createElement('div')
+            btn.className = 'interactive-button'
+            
+            // Create button content with title and optional description
+            const titleSpan = document.createElement('div')
+            titleSpan.style.fontWeight = '600'
+            titleSpan.textContent = button.title
+            btn.appendChild(titleSpan)
+            
+            if (button.description) {
+              const descSpan = document.createElement('div')
+              descSpan.style.fontSize = '11px'
+              descSpan.style.color = '#666'
+              descSpan.style.marginTop = '2px'
+              descSpan.textContent = button.description
+              btn.appendChild(descSpan)
+            }
+            
+            btn.onclick = () => selectOption(button.id)
+            buttonsDiv.appendChild(btn)
+          })
+          
+          bubbleDiv.appendChild(buttonsDiv)
+        }
+        
+        elements.messagesArea.appendChild(messageDiv)
+        elements.messagesArea.scrollTop = elements.messagesArea.scrollHeight
+      }
+
+      function addInfoMessage(content) {
+        const messageDiv = document.createElement('div')
+        messageDiv.className = 'message incoming'
+        
+        const bubbleDiv = document.createElement('div')
+        bubbleDiv.className = 'message-bubble'
+        bubbleDiv.style.background = '#e3f2fd'
+        bubbleDiv.style.borderColor = '#2196f3'
+        bubbleDiv.style.whiteSpace = 'pre-line'
+        bubbleDiv.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        bubbleDiv.textContent = content
+        
+        messageDiv.appendChild(bubbleDiv)
+        elements.messagesArea.appendChild(messageDiv)
+        elements.messagesArea.scrollTop = elements.messagesArea.scrollHeight
+      }
+
+      function selectOption(optionId) {
+        // Show visual feedback that the option was selected
+        const buttons = document.querySelectorAll('.interactive-button')
+        buttons.forEach(btn => {
+          if (btn.onclick && btn.onclick.toString().includes(optionId)) {
+            btn.style.background = '#dcf8c6'
+            btn.style.borderColor = '#075e54'
+            setTimeout(() => {
+              btn.style.background = '#f0f0f0'
+              btn.style.borderColor = '#e0e0e0'
+            }, 200)
+          }
+        })
+        
+        elements.messageInput.value = optionId
+        sendMessage()
+      }
+
+      // Utility Functions
+      function generateSessionId() {
+        return btoa(Math.random().toString()).substr(10, 10)
+      }
+
+      function handleError(error) {
+        console.error('Simulator error:', error)
+        updateStatus(`Error: ${error.message}`, 'disconnected')
+        alert(`Error: ${error.message}`)
+        state.isRunning = false
+        updateUI()
+      }
+
+      // Initialize
+      function init() {
+        // Set default configuration
+        handleConfigChange()
+        updateUI()
+        updateStatus('Ready', 'disconnected')
+      }
+
+      // Start the application
+      init()
+    </script>
+  </body>
+</html>

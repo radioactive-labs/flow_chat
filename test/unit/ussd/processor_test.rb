@@ -25,7 +25,7 @@ class UssdProcessorTest < Minitest::Test
     gateway_class = Class.new
     result = @processor.use_gateway(gateway_class)
 
-    assert_equal gateway_class, @processor.gateway
+    assert_equal gateway_class, @processor.instance_variable_get(:@gateway_class)
     assert_equal @processor, result  # Should return self for chaining
   end
 
@@ -102,7 +102,7 @@ class UssdProcessorTest < Minitest::Test
       p.use_resumable_sessions
     end
 
-    assert_equal gateway_class, processor.gateway
+    assert_equal gateway_class, processor.instance_variable_get(:@gateway_class)
 
     context = processor.instance_variable_get(:@context)
     assert_equal session_store, context["session.store"]
@@ -120,7 +120,7 @@ class UssdProcessorTest < Minitest::Test
       .use_resumable_sessions
 
     assert_equal @processor, result
-    assert_equal gateway_class, @processor.gateway
+    assert_equal gateway_class, @processor.instance_variable_get(:@gateway_class)
   end
 
   def test_run_yields_middleware_stack_for_modification

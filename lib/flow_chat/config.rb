@@ -9,6 +9,11 @@ module FlowChat
       @ussd ||= UssdConfig.new
     end
 
+    # WhatsApp-specific configuration object
+    def self.whatsapp
+      @whatsapp ||= WhatsappConfig.new
+    end
+
     class UssdConfig
       attr_accessor :pagination_page_size, :pagination_back_option, :pagination_back_text,
         :pagination_next_option, :pagination_next_text,
@@ -23,6 +28,37 @@ module FlowChat
         @resumable_sessions_enabled = false
         @resumable_sessions_global = true
         @resumable_sessions_timeout_seconds = 300
+      end
+    end
+
+    class WhatsappConfig
+      attr_accessor :message_handling_mode, :background_job_class
+
+      def initialize
+        @message_handling_mode = :inline
+        @background_job_class = 'WhatsappMessageJob'
+      end
+
+      # Validate message handling mode
+      def message_handling_mode=(mode)
+        valid_modes = [:inline, :background, :simulator]
+        unless valid_modes.include?(mode.to_sym)
+          raise ArgumentError, "Invalid message handling mode: #{mode}. Valid modes: #{valid_modes.join(', ')}"
+        end
+        @message_handling_mode = mode.to_sym
+      end
+
+      # Helper methods for mode checking
+      def inline_mode?
+        @message_handling_mode == :inline
+      end
+
+      def background_mode?
+        @message_handling_mode == :background
+      end
+
+      def simulator_mode?
+        @message_handling_mode == :simulator
       end
     end
   end

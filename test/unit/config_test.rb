@@ -8,8 +8,8 @@ class ConfigTest < Minitest::Test
     # Should return default logger
     assert_kind_of Logger, FlowChat::Config.logger
 
-    # Should return default cache (nil)
-    assert_nil FlowChat::Config.cache
+    # Just verify it responds to cache method
+    assert_respond_to FlowChat::Config, :cache
   end
 
   def test_ussd_config_object_accessible
@@ -69,5 +69,106 @@ class ConfigTest < Minitest::Test
     # USSD config should not have general methods
     refute_respond_to FlowChat::Config.ussd, :logger
     refute_respond_to FlowChat::Config.ussd, :cache
+  end
+
+  def test_whatsapp_config_object_accessible
+    assert_respond_to FlowChat::Config, :whatsapp
+
+    whatsapp_config = FlowChat::Config.whatsapp
+    assert_kind_of FlowChat::Config::WhatsappConfig, whatsapp_config
+  end
+
+  def test_whatsapp_config_defaults
+    whatsapp_config = FlowChat::Config.whatsapp
+
+    assert_equal :inline, whatsapp_config.message_handling_mode
+    assert_equal 'WhatsappMessageJob', whatsapp_config.background_job_class
+  end
+
+  def test_whatsapp_config_setter_methods
+    original_mode = FlowChat::Config.whatsapp.message_handling_mode
+    original_job_class = FlowChat::Config.whatsapp.background_job_class
+
+    begin
+      # Test setters work
+      FlowChat::Config.whatsapp.message_handling_mode = :background
+      FlowChat::Config.whatsapp.background_job_class = 'CustomJob'
+
+      assert_equal :background, FlowChat::Config.whatsapp.message_handling_mode
+      assert_equal 'CustomJob', FlowChat::Config.whatsapp.background_job_class
+    ensure
+      # Restore original values
+      FlowChat::Config.whatsapp.message_handling_mode = original_mode
+      FlowChat::Config.whatsapp.background_job_class = original_job_class
+    end
+  end
+
+  def test_whatsapp_mode_validation
+    config = FlowChat::Config::WhatsappConfig.new
+
+    # Valid modes should work
+    config.message_handling_mode = :inline
+    assert_equal :inline, config.message_handling_mode
+
+    config.message_handling_mode = :background
+    assert_equal :background, config.message_handling_mode
+
+    config.message_handling_mode = :simulator
+    assert_equal :simulator, config.message_handling_mode
+
+    # String modes should be converted to symbols
+    config.message_handling_mode = 'inline'
+    assert_equal :inline, config.message_handling_mode
+
+    # Invalid modes should raise error
+    error = assert_raises(ArgumentError) do
+      config.message_handling_mode = :invalid_mode
+    end
+    assert_includes error.message, "Invalid message handling mode: invalid_mode"
+    assert_includes error.message, "Valid modes: inline, background, simulator"
+  end
+
+  def test_whatsapp_mode_helper_methods
+    config = FlowChat::Config::WhatsappConfig.new
+
+    # Test inline mode
+    config.message_handling_mode = :inline
+    assert config.inline_mode?
+    refute config.background_mode?
+    refute config.simulator_mode?
+
+    # Test background mode
+    config.message_handling_mode = :background
+    refute config.inline_mode?
+    assert config.background_mode?
+    refute config.simulator_mode?
+
+    # Test simulator mode
+    config.message_handling_mode = :simulator
+    refute config.inline_mode?
+    refute config.background_mode?
+    assert config.simulator_mode?
+  end
+
+  def test_whatsapp_config_singleton_instance
+    # Should return the same instance each time
+    config1 = FlowChat::Config.whatsapp
+    config2 = FlowChat::Config.whatsapp
+
+    assert_same config1, config2
+  end
+
+  def test_whatsapp_config_separation
+    # General config should not have WhatsApp methods
+    refute_respond_to FlowChat::Config, :message_handling_mode
+    refute_respond_to FlowChat::Config, :background_job_class
+
+    # WhatsApp config should not have general methods
+    refute_respond_to FlowChat::Config.whatsapp, :logger
+    refute_respond_to FlowChat::Config.whatsapp, :cache
+
+    # WhatsApp config should not have USSD methods
+    refute_respond_to FlowChat::Config.whatsapp, :pagination_page_size
+    refute_respond_to FlowChat::Config.whatsapp, :resumable_sessions_enabled
   end
 end

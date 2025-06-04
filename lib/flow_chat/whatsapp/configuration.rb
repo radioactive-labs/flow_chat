@@ -2,9 +2,13 @@ module FlowChat
   module Whatsapp
     class Configuration
       attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
-                    :webhook_url, :webhook_verify_token, :business_account_id
+                    :webhook_url, :webhook_verify_token, :business_account_id, :name
 
-      def initialize
+      # Class-level storage for named configurations
+      @@configurations = {}
+
+      def initialize(name)
+        @name = name
         @access_token = nil
         @phone_number_id = nil
         @verify_token = nil
@@ -13,11 +17,13 @@ module FlowChat
         @webhook_url = nil
         @webhook_verify_token = nil
         @business_account_id = nil
+
+        register_as(name) if name.present?
       end
 
       # Load configuration from Rails credentials or environment variables
       def self.from_credentials
-        config = new
+        config = new(nil)
         
         if defined?(Rails) && Rails.application.credentials.whatsapp
           credentials = Rails.application.credentials.whatsapp
@@ -40,6 +46,38 @@ module FlowChat
         end
 
         config
+      end
+
+      # Register a named configuration
+      def self.register(name, config)
+        @@configurations[name.to_sym] = config
+      end
+
+      # Get a named configuration
+      def self.get(name)
+        @@configurations[name.to_sym] || raise(ArgumentError, "WhatsApp configuration '#{name}' not found")
+      end
+
+      # Check if a named configuration exists
+      def self.exists?(name)
+        @@configurations.key?(name.to_sym)
+      end
+
+      # Get all configuration names
+      def self.configuration_names
+        @@configurations.keys
+      end
+
+      # Clear all registered configurations (useful for testing)
+      def self.clear_all!
+        @@configurations.clear
+      end
+
+      # Register this configuration with a name
+      def register_as(name)
+        @name = name.to_sym
+        self.class.register(@name, self)
+        self
       end
 
       def valid?
