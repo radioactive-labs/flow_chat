@@ -297,14 +297,259 @@ class WhatsappPromptTest < Minitest::Test
   def test_truncate_text_helper
     prompt = FlowChat::Whatsapp::Prompt.new(nil)
     
-    # Test normal text (under limit)
-    short_text = "Short"
-    assert_equal "Short", prompt.send(:truncate_text, short_text, 10)
+    # Test no truncation needed
+    assert_equal "short", prompt.send(:truncate_text, "short", 10)
     
-    # Test text that needs truncation
-    long_text = "This is a very long text that needs truncation"
-    truncated = prompt.send(:truncate_text, long_text, 10)
-    assert_equal "This is...", truncated
-    assert_equal 10, truncated.length
+    # Test truncation
+    assert_equal "this is...", prompt.send(:truncate_text, "this is a long text", 10)
+    
+    # Test exact length
+    assert_equal "exact", prompt.send(:truncate_text, "exact", 5)
+  end
+
+  # ============================================================================
+  # MEDIA SUPPORT TESTS
+  # ============================================================================
+
+  def test_ask_with_media_image_raises_media_prompt
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("What do you think?", media: {
+        type: :image,
+        url: "https://example.com/image.jpg"
+      })
+    end
+
+    assert_equal :media_image, error.prompt[0]
+    assert_equal "", error.prompt[1]  # Empty content
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/image.jpg", options[:url]
+    assert_equal "What do you think?", options[:caption]
+  end
+
+  def test_ask_with_media_document_raises_media_prompt
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("Review this document:", media: {
+        type: :document,
+        url: "https://example.com/doc.pdf",
+        filename: "document.pdf"
+      })
+    end
+
+    assert_equal :media_document, error.prompt[0]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/doc.pdf", options[:url]
+    assert_equal "Review this document:", options[:caption]
+    assert_equal "document.pdf", options[:filename]
+  end
+
+  def test_ask_with_media_video_raises_media_prompt
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("Rate this video:", media: {
+        type: :video,
+        url: "https://example.com/video.mp4"
+      })
+    end
+
+    assert_equal :media_video, error.prompt[0]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/video.mp4", options[:url]
+    assert_equal "Rate this video:", options[:caption]
+  end
+
+  def test_ask_with_media_audio_raises_media_prompt
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("Listen to this:", media: {
+        type: :audio,
+        url: "https://example.com/audio.mp3"
+      })
+    end
+
+    assert_equal :media_audio, error.prompt[0]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/audio.mp3", options[:url]
+    assert_equal "Listen to this:", options[:caption]
+  end
+
+  def test_ask_with_media_sticker_raises_media_prompt
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("React to this:", media: {
+        type: :sticker,
+        url: "https://example.com/sticker.webp"
+      })
+    end
+
+    assert_equal :media_sticker, error.prompt[0]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/sticker.webp", options[:url]
+    # Stickers don't support captions
+    refute options.key?(:caption)
+  end
+
+  def test_ask_with_media_using_path_key
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_no_input.ask("What do you think?", media: {
+        type: :image,
+        path: "/path/to/image.jpg"  # Using path instead of url
+      })
+    end
+
+    options = error.prompt[2]
+    assert_equal "/path/to/image.jpg", options[:url]
+    assert_equal "What do you think?", options[:caption]
+  end
+
+  def test_ask_with_media_and_input_returns_input
+    prompt_with_input = FlowChat::Whatsapp::Prompt.new("user response")
+    
+    result = prompt_with_input.ask("What do you think?", media: {
+      type: :image,
+      url: "https://example.com/image.jpg"
+    })
+    
+    assert_equal "user response", result
+  end
+
+  def test_ask_with_media_unsupported_type_raises_error
+    prompt_no_input = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(ArgumentError) do
+      prompt_no_input.ask("What do you think?", media: {
+        type: :unsupported,
+        url: "https://example.com/file"
+      })
+    end
+
+    assert_includes error.message, "Unsupported media type: unsupported"
+  end
+
+  def test_say_with_media_image_raises_terminate
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Terminate) do
+      prompt.say("Here's your image:", media: {
+        type: :image,
+        url: "https://example.com/image.jpg"
+      })
+    end
+
+    assert_equal :media_image, error.prompt[0]
+    assert_equal "", error.prompt[1]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/image.jpg", options[:url]
+    assert_equal "Here's your image:", options[:caption]
+  end
+
+  def test_say_with_media_document_raises_terminate
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Terminate) do
+      prompt.say("Here's your receipt:", media: {
+        type: :document,
+        url: "https://example.com/receipt.pdf",
+        filename: "receipt.pdf"
+      })
+    end
+
+    assert_equal :media_document, error.prompt[0]
+    
+    options = error.prompt[2]
+    assert_equal "https://example.com/receipt.pdf", options[:url]
+    assert_equal "Here's your receipt:", options[:caption]
+    assert_equal "receipt.pdf", options[:filename]
+  end
+
+  def test_say_without_media_raises_text_terminate
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    error = assert_raises(FlowChat::Interrupt::Terminate) do
+      prompt.say("Thank you!")
+    end
+
+    assert_equal :text, error.prompt[0]
+    assert_equal "Thank you!", error.prompt[1]
+    assert_equal({}, error.prompt[2])
+  end
+
+  def test_select_does_not_support_media
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    # select method should not accept media parameter
+    # This should work fine without media
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt.select("Choose option:", ["A", "B"])
+    end
+    
+    # Should still be interactive list
+    assert_equal :interactive_list, error.prompt[0]
+  end
+
+  def test_yes_does_not_support_media
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    # yes? method should not accept media parameter
+    # This should work fine without media
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt.yes?("Are you sure?")
+    end
+    
+    # Should still be interactive buttons
+    assert_equal :interactive_buttons, error.prompt[0]
+  end
+
+  def test_build_media_prompt_with_default_image_type
+    prompt = FlowChat::Whatsapp::Prompt.new(nil)
+    
+    result = prompt.send(:build_media_prompt, "Test message", {
+      url: "https://example.com/file"
+      # No type specified, should default to :image
+    })
+    
+    assert_equal :media_image, result[0]
+    assert_equal "https://example.com/file", result[2][:url]
+    assert_equal "Test message", result[2][:caption]
+  end
+
+  def test_media_prompt_validation_with_conversion_and_validation
+    prompt_with_input = FlowChat::Whatsapp::Prompt.new("25")
+    
+    result = prompt_with_input.ask("Enter your age:", 
+      media: { type: :image, url: "https://example.com/age_help.jpg" },
+      convert: ->(input) { input.to_i },
+      validate: ->(input) { "Must be 18+" unless input >= 18 })
+    
+    assert_equal 25, result
+  end
+
+  def test_media_prompt_validation_failure
+    prompt_with_input = FlowChat::Whatsapp::Prompt.new("12")
+    
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      prompt_with_input.ask("Enter your age:", 
+        media: { type: :image, url: "https://example.com/age_help.jpg" },
+        convert: ->(input) { input.to_i },
+        validate: ->(input) { "Must be 18+" unless input >= 18 })
+    end
+
+    # Should show validation error as text message
+    assert_equal :text, error.prompt[0]
+    assert_includes error.prompt[1], "Must be 18+"
   end
 end 

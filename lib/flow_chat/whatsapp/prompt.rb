@@ -7,7 +7,7 @@ module FlowChat
         @input = input
       end
 
-      def ask(message, transform: nil, validate: nil, convert: nil)
+      def ask(message, transform: nil, validate: nil, convert: nil, media: nil)
         if input.present?
           begin
             processed_input = process_input(input, transform, validate, convert)
@@ -20,8 +20,20 @@ module FlowChat
           end
         end
 
-        # Send message and wait for response
-        raise FlowChat::Interrupt::Prompt.new([:text, message, {}])
+        # Send message and wait for response, optionally with media
+        if media
+          raise FlowChat::Interrupt::Prompt.new(build_media_prompt(message, media))
+        else
+          raise FlowChat::Interrupt::Prompt.new([:text, message, {}])
+        end
+      end
+
+      def say(message, media: nil)
+        if media
+          raise FlowChat::Interrupt::Terminate.new(build_media_prompt(message, media))
+        else
+          raise FlowChat::Interrupt::Terminate.new([:text, message, {}])
+        end
       end
 
       def select(message, choices, transform: nil, validate: nil, convert: nil)
@@ -33,22 +45,9 @@ module FlowChat
         # Validate choices
         validate_choices(choices)
 
-        # Determine the best way to present choices
-        if choices.is_a?(Array)
-          # Convert array to hash with index-based keys
-          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
-          present_choices_as_list(message, choice_hash)
-        elsif choices.is_a?(Hash)
-          if choices.length <= 3
-            # Use buttons for 3 or fewer choices
-            present_choices_as_buttons(message, choices)
-          else
-            # Use list for more than 3 choices
-            present_choices_as_list(message, choices)
-          end
-        else
-          raise ArgumentError, "choices must be an Array or Hash"
-        end
+        # Standard selection without media support
+        interactive_prompt = build_selection_prompt(message, choices)
+        raise FlowChat::Interrupt::Prompt.new(interactive_prompt)
       end
 
       def yes?(message, transform: nil, validate: nil, convert: nil)
@@ -61,11 +60,104 @@ module FlowChat
           { id: "yes", title: "Yes" },
           { id: "no", title: "No" }
         ]
-
         raise FlowChat::Interrupt::Prompt.new([:interactive_buttons, message, { buttons: buttons }])
       end
 
       private
+
+      def build_media_prompt(message, media)
+        media_type = media[:type] || :image
+        url = media[:url] || media[:path]
+        filename = media[:filename]
+
+        case media_type.to_sym
+        when :image
+          [:media_image, "", { url: url, caption: message }]
+        when :document
+          [:media_document, "", { url: url, caption: message, filename: filename }]
+        when :audio
+          [:media_audio, "", { url: url, caption: message }]
+        when :video
+          [:media_video, "", { url: url, caption: message }]
+        when :sticker
+          [:media_sticker, "", { url: url }] # Stickers don't support captions
+        else
+          raise ArgumentError, "Unsupported media type: #{media_type}"
+        end
+      end
+
+      def build_selection_prompt(message, choices)
+        # Determine the best way to present choices
+        if choices.is_a?(Array)
+          # Convert array to hash with index-based keys
+          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
+          build_list_prompt(message, choice_hash)
+        elsif choices.is_a?(Hash)
+          if choices.length <= 3
+            # Use buttons for 3 or fewer choices
+            build_buttons_prompt(message, choices)
+          else
+            # Use list for more than 3 choices
+            build_list_prompt(message, choices)
+          end
+        else
+          raise ArgumentError, "choices must be an Array or Hash"
+        end
+      end
+
+      def build_buttons_prompt(message, choices)
+        buttons = choices.map do |key, value|
+          {
+            id: key.to_s,
+            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
+          }
+        end
+
+        [:interactive_buttons, message, { buttons: buttons }]
+      end
+
+      def build_list_prompt(message, choices)
+        items = choices.map do |key, value|
+          original_text = value.to_s
+          truncated_title = truncate_text(original_text, 24)
+          
+          # If title was truncated, put full text in description (up to 72 chars)
+          description = if original_text.length > 24
+                         truncate_text(original_text, 72)
+                       else
+                         nil
+                       end
+          
+          {
+            id: key.to_s,
+            title: truncated_title,
+            description: description
+          }.compact
+        end
+
+        # If 10 or fewer items, use single section
+        if items.length <= 10
+          sections = [
+            {
+              title: "Options",
+              rows: items
+            }
+          ]
+        else
+          # Paginate into multiple sections (max 10 items per section)
+          sections = items.each_slice(10).with_index.map do |section_items, index|
+            start_num = (index * 10) + 1
+            end_num = start_num + section_items.length - 1
+            
+            {
+              title: "#{start_num}-#{end_num}",
+              rows: section_items
+            }
+          end
+        end
+
+        [:interactive_list, message, { sections: sections }]
+      end
 
       def process_input(input, transform, validate, convert)
         # Apply transformation
@@ -120,60 +212,6 @@ module FlowChat
         end
 
         process_input(boolean_value, transform, validate, convert)
-      end
-
-      def present_choices_as_buttons(message, choices)
-        buttons = choices.map do |key, value|
-          {
-            id: key.to_s,
-            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
-          }
-        end
-
-        raise FlowChat::Interrupt::Prompt.new([:interactive_buttons, message, { buttons: buttons }])
-      end
-
-      def present_choices_as_list(message, choices)
-        items = choices.map do |key, value|
-          original_text = value.to_s
-          truncated_title = truncate_text(original_text, 24)
-          
-          # If title was truncated, put full text in description (up to 72 chars)
-          description = if original_text.length > 24
-                         truncate_text(original_text, 72)
-                       else
-                         nil
-                       end
-          
-          {
-            id: key.to_s,
-            title: truncated_title,
-            description: description
-          }.compact
-        end
-
-        # If 10 or fewer items, use single section
-        if items.length <= 10
-          sections = [
-            {
-              title: "Options",
-              rows: items
-            }
-          ]
-        else
-          # Paginate into multiple sections (max 10 items per section)
-          sections = items.each_slice(10).with_index.map do |section_items, index|
-            start_num = (index * 10) + 1
-            end_num = start_num + section_items.length - 1
-            
-            {
-              title: "#{start_num}-#{end_num}",
-              rows: section_items
-            }
-          end
-        end
-
-        raise FlowChat::Interrupt::Prompt.new([:interactive_list, message, { sections: sections }])
       end
 
       def validate_choices(choices)

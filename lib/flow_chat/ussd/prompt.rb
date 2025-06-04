@@ -7,23 +7,31 @@ module FlowChat
         @user_input = input
       end
 
-      def ask(msg, choices: nil, convert: nil, validate: nil, transform: nil)
+      def ask(msg, choices: nil, convert: nil, validate: nil, transform: nil, media: nil)
         if user_input.present?
           input = user_input
           input = convert.call(input) if convert.present?
           validation_error = validate.call(input) if validate.present?
 
-          prompt!([validation_error, msg].join("\n\n"), choices:) if validation_error.present?
+          if validation_error.present?
+            # Include media URL in validation error message
+            original_message_with_media = build_message_with_media(msg, media)
+            prompt!([validation_error, original_message_with_media].join("\n\n"), choices:)
+          end
 
           input = transform.call(input) if transform.present?
           return input
         end
 
-        prompt! msg, choices:
+        # Include media URL in the message for USSD
+        final_message = build_message_with_media(msg, media)
+        prompt! final_message, choices:
       end
 
-      def say(message)
-        terminate! message
+      def say(message, media: nil)
+        # Include media URL in the message for USSD
+        final_message = build_message_with_media(message, media)
+        terminate! final_message
       end
 
       def select(msg, choices)
@@ -42,6 +50,32 @@ module FlowChat
       end
 
       private
+
+      def build_message_with_media(message, media)
+        return message unless media
+
+        media_url = media[:url] || media[:path]
+        media_type = media[:type] || :image
+
+        # For USSD, we append the media URL to the message
+        media_text = case media_type.to_sym
+                    when :image
+                      "📷 Image: #{media_url}"
+                    when :document
+                      "📄 Document: #{media_url}"
+                    when :audio
+                      "🎵 Audio: #{media_url}"
+                    when :video
+                      "🎥 Video: #{media_url}"
+                    when :sticker
+                      "😊 Sticker: #{media_url}"
+                    else
+                      "📎 Media: #{media_url}"
+                    end
+
+        # Combine message with media information
+        "#{message}\n\n#{media_text}"
+      end
 
       def build_select_choices(choices)
         case choices

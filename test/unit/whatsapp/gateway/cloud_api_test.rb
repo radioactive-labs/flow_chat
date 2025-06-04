@@ -1,4 +1,5 @@
 require "test_helper"
+require "webmock/minitest"
 
 class WhatsappCloudApiGatewayTest < Minitest::Test
   def setup
@@ -9,6 +10,19 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @mock_config.access_token = "test_access_token"
     
     @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    
+    # Setup WebMock for HTTP request stubbing
+    WebMock.enable!
+    WebMock.reset!
+    
+    # Stub the WhatsApp messages API
+    stub_request(:post, "https://graph.facebook.com/v18.0/test_phone_id/messages")
+      .to_return(status: 200, body: { "messages" => [{ "id" => "sent_123" }] }.to_json)
+  end
+
+  def teardown
+    WebMock.disable!
+    WebMock.reset!
   end
 
   def test_get_request_webhook_verification
