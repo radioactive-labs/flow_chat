@@ -138,6 +138,30 @@ export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
 
 FlowChat will automatically use Rails credentials first, falling back to environment variables if credentials are not available.
 
+**Option C: Per-Setup Configuration**
+
+For multi-tenant applications or when you need different WhatsApp accounts per endpoint:
+
+```ruby
+# Create custom configuration
+custom_config = FlowChat::Whatsapp::Configuration.new
+custom_config.access_token = "your_specific_access_token"
+custom_config.phone_number_id = "your_specific_phone_number_id"
+custom_config.verify_token = "your_specific_verify_token"
+custom_config.app_id = "your_specific_app_id"
+custom_config.app_secret = "your_specific_app_secret"
+custom_config.business_account_id = "your_specific_business_account_id"
+
+# Use in processor
+processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+  config.use_whatsapp_config(custom_config)  # Pass custom config
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+  config.use_session_store FlowChat::Session::CacheSessionStore
+end
+```
+
+💡 **Tip**: See [examples/multi_tenant_whatsapp_controller.rb](examples/multi_tenant_whatsapp_controller.rb) for comprehensive multi-tenant and per-setup configuration examples.
+
 ### 2. Create WhatsApp Controller
 
 ```ruby

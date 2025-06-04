@@ -8,8 +8,9 @@ module FlowChat
       class CloudApi
         WHATSAPP_API_URL = "https://graph.facebook.com/v18.0"
 
-        def initialize(app)
+        def initialize(app, config = nil)
           @app = app
+          @config = config || FlowChat::Whatsapp::Configuration.from_credentials
         end
 
         def call(context)
@@ -35,7 +36,7 @@ module FlowChat
           controller = context.controller
           params = controller.request.params
 
-          verify_token = Rails.application.credentials.dig(:whatsapp, :verify_token)
+          verify_token = @config.verify_token
           
           if params["hub.verify_token"] == verify_token
             controller.render plain: params["hub.challenge"]
@@ -117,8 +118,8 @@ module FlowChat
         def send_whatsapp_message(context, response)
           return unless response
 
-          phone_number_id = Rails.application.credentials.dig(:whatsapp, :phone_number_id)
-          access_token = Rails.application.credentials.dig(:whatsapp, :access_token)
+          phone_number_id = @config.phone_number_id
+          access_token = @config.access_token
           to = context["request.msisdn"]
 
           message_data = build_message_payload(response, to)

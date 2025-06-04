@@ -15,6 +15,30 @@ class WhatsappController < ApplicationController
   end
 end
 
+# Example with Custom Configuration
+class CustomWhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    # Create custom WhatsApp configuration for this endpoint
+    custom_config = FlowChat::Whatsapp::Configuration.new
+    custom_config.access_token = ENV['MY_WHATSAPP_ACCESS_TOKEN']
+    custom_config.phone_number_id = ENV['MY_WHATSAPP_PHONE_NUMBER_ID']
+    custom_config.verify_token = ENV['MY_WHATSAPP_VERIFY_TOKEN']
+    custom_config.app_id = ENV['MY_WHATSAPP_APP_ID']
+    custom_config.app_secret = ENV['MY_WHATSAPP_APP_SECRET']
+    custom_config.business_account_id = ENV['MY_WHATSAPP_BUSINESS_ACCOUNT_ID']
+
+    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+      config.use_whatsapp_config(custom_config)  # Use custom config
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+
 # Example Flow for WhatsApp
 # Add this to your Rails application as app/flow_chat/welcome_flow.rb
 

@@ -2,25 +2,13 @@ require "test_helper"
 
 class WhatsappCloudApiGatewayTest < Minitest::Test
   def setup
-    @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] })
+    # Create a mock configuration for testing
+    @mock_config = FlowChat::Whatsapp::Configuration.new
+    @mock_config.verify_token = "test_verify_token"
+    @mock_config.phone_number_id = "test_phone_id"
+    @mock_config.access_token = "test_access_token"
     
-    # Mock Rails application credentials
-    Rails.define_singleton_method(:application) do
-      OpenStruct.new(
-        credentials: OpenStruct.new(
-          whatsapp: OpenStruct.new(
-            verify_token: "test_verify_token",
-            phone_number_id: "test_phone_id", 
-            access_token: "test_access_token"
-          )
-        )
-      )
-    end
-  end
-
-  def teardown
-    # Clean up the Rails mock
-    Rails.singleton_class.remove_method(:application) if Rails.respond_to?(:application)
+    @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
   end
 
   def test_get_request_webhook_verification
