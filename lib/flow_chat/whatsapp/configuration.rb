@@ -2,7 +2,7 @@ module FlowChat
   module Whatsapp
     class Configuration
       attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
-        :webhook_url, :webhook_verify_token, :business_account_id, :name
+        :webhook_verify_token, :business_account_id, :name
 
       # Class-level storage for named configurations
       @@configurations = {}
@@ -14,7 +14,6 @@ module FlowChat
         @verify_token = nil
         @app_id = nil
         @app_secret = nil
-        @webhook_url = nil
         @webhook_verify_token = nil
         @business_account_id = nil
 
@@ -32,7 +31,6 @@ module FlowChat
           config.verify_token = credentials[:verify_token]
           config.app_id = credentials[:app_id]
           config.app_secret = credentials[:app_secret]
-          config.webhook_url = credentials[:webhook_url]
           config.business_account_id = credentials[:business_account_id]
         else
           # Fallback to environment variables
@@ -41,7 +39,6 @@ module FlowChat
           config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
           config.app_id = ENV["WHATSAPP_APP_ID"]
           config.app_secret = ENV["WHATSAPP_APP_SECRET"]
-          config.webhook_url = ENV["WHATSAPP_WEBHOOK_URL"]
           config.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
         end
 
@@ -82,10 +79,6 @@ module FlowChat
 
       def valid?
         access_token.present? && phone_number_id.present? && verify_token.present?
-      end
-
-      def webhook_configured?
-        webhook_url.present? && verify_token.present?
       end
 
       # API endpoints

@@ -49,8 +49,7 @@ module FlowChat
             settings: {
               phone_number: default_phone_number,
               contact_name: default_contact_name,
-              verify_token: "local_verify_token",
-              webhook_url: "http://localhost:3000/whatsapp/webhook"
+              verify_token: "local_verify_token"
             }
           }
         }

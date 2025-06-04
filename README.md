@@ -118,7 +118,6 @@ whatsapp:
   verify_token: "your_verify_token"
   app_id: "your_app_id"
   app_secret: "your_app_secret"
-  webhook_url: "your_webhook_url"
   business_account_id: "your_business_account_id"
 ```
 
@@ -133,7 +132,6 @@ export WHATSAPP_PHONE_NUMBER_ID="your_phone_number_id"
 export WHATSAPP_VERIFY_TOKEN="your_verify_token"
 export WHATSAPP_APP_ID="your_app_id"
 export WHATSAPP_APP_SECRET="your_app_secret"
-export WHATSAPP_WEBHOOK_URL="your_webhook_url"
 export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
 ```
 
@@ -237,7 +235,6 @@ class WhatsappController < ApplicationController
 end
 ```
 
-💡 **See [examples/README_whatsapp_modes.md](examples/README_whatsapp_modes.md) for detailed mode explanations and use cases.**
 
 ### 3. Add WhatsApp Route
 
@@ -437,7 +434,6 @@ class NotificationService
 end
 ```
 
-💡 **See [examples/whatsapp_controller_modes.rb](examples/whatsapp_controller_modes.rb) for comprehensive usage examples.**
 
 ## Cross-Platform Compatibility
 
@@ -1097,7 +1093,6 @@ The simulator automatically adapts its interface based on the selected configura
 - **USSD**: Shows traditional terminal-style interface with character limits and pagination
 - **WhatsApp**: Displays realistic WhatsApp chat interface with support for interactive elements
 
-💡 **Tip**: See [examples/simulator_controller.rb](examples/simulator_controller.rb) for advanced configurations including multi-tenant support and environment-specific endpoints.
 
 ## Best Practices
 
