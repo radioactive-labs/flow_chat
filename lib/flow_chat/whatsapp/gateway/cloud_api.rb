@@ -32,9 +32,7 @@ module FlowChat
         end
 
         # Expose client for out-of-band messaging
-        def client
-          @client
-        end
+        attr_reader :client
 
         private
 
@@ -53,7 +51,7 @@ module FlowChat
           params = controller.request.params
 
           verify_token = @config.verify_token
-          
+
           if params["hub.verify_token"] == verify_token
             controller.render plain: params["hub.challenge"]
           else
@@ -159,7 +157,7 @@ module FlowChat
         def handle_message_background(context, controller)
           # Process the flow synchronously (maintaining controller context)
           response = @app.call(context)
-          
+
           if response
             # Queue only the response delivery asynchronously
             send_data = {
@@ -170,7 +168,7 @@ module FlowChat
 
             # Get job class from configuration
             job_class_name = FlowChat::Config.whatsapp.background_job_class
-            
+
             # Enqueue background job for sending only
             begin
               job_class = job_class_name.constantize
@@ -186,12 +184,12 @@ module FlowChat
 
         def handle_message_simulator(context, controller)
           response = @app.call(context)
-          
+
           if response
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via WhatsApp API
             message_payload = @client.build_message_payload(response, context["request.msisdn"])
-            
+
             simulator_response = {
               mode: "simulator",
               webhook_processed: true,
@@ -204,10 +202,10 @@ module FlowChat
             }
 
             controller.render json: simulator_response
-            return
+            nil
           end
         end
       end
     end
   end
-end 
+end

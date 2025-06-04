@@ -57,10 +57,10 @@ module FlowChat
         end
 
         buttons = [
-          { id: "yes", title: "Yes" },
-          { id: "no", title: "No" }
+          {id: "yes", title: "Yes"},
+          {id: "no", title: "No"}
         ]
-        raise FlowChat::Interrupt::Prompt.new([:interactive_buttons, message, { buttons: buttons }])
+        raise FlowChat::Interrupt::Prompt.new([:interactive_buttons, message, {buttons: buttons}])
       end
 
       private
@@ -72,15 +72,15 @@ module FlowChat
 
         case media_type.to_sym
         when :image
-          [:media_image, "", { url: url, caption: message }]
+          [:media_image, "", {url: url, caption: message}]
         when :document
-          [:media_document, "", { url: url, caption: message, filename: filename }]
+          [:media_document, "", {url: url, caption: message, filename: filename}]
         when :audio
-          [:media_audio, "", { url: url, caption: message }]
+          [:media_audio, "", {url: url, caption: message}]
         when :video
-          [:media_video, "", { url: url, caption: message }]
+          [:media_video, "", {url: url, caption: message}]
         when :sticker
-          [:media_sticker, "", { url: url }] # Stickers don't support captions
+          [:media_sticker, "", {url: url}] # Stickers don't support captions
         else
           raise ArgumentError, "Unsupported media type: #{media_type}"
         end
@@ -113,21 +113,19 @@ module FlowChat
           }
         end
 
-        [:interactive_buttons, message, { buttons: buttons }]
+        [:interactive_buttons, message, {buttons: buttons}]
       end
 
       def build_list_prompt(message, choices)
         items = choices.map do |key, value|
           original_text = value.to_s
           truncated_title = truncate_text(original_text, 24)
-          
+
           # If title was truncated, put full text in description (up to 72 chars)
           description = if original_text.length > 24
-                         truncate_text(original_text, 72)
-                       else
-                         nil
-                       end
-          
+            truncate_text(original_text, 72)
+          end
+
           {
             id: key.to_s,
             title: truncated_title,
@@ -136,8 +134,8 @@ module FlowChat
         end
 
         # If 10 or fewer items, use single section
-        if items.length <= 10
-          sections = [
+        sections = if items.length <= 10
+          [
             {
               title: "Options",
               rows: items
@@ -145,10 +143,10 @@ module FlowChat
           ]
         else
           # Paginate into multiple sections (max 10 items per section)
-          sections = items.each_slice(10).with_index.map do |section_items, index|
+          items.each_slice(10).with_index.map do |section_items, index|
             start_num = (index * 10) + 1
             end_num = start_num + section_items.length - 1
-            
+
             {
               title: "#{start_num}-#{end_num}",
               rows: section_items
@@ -156,7 +154,7 @@ module FlowChat
           end
         end
 
-        [:interactive_list, message, { sections: sections }]
+        [:interactive_list, message, {sections: sections}]
       end
 
       def process_input(input, transform, validate, convert)
@@ -178,8 +176,8 @@ module FlowChat
       end
 
       def process_selection(input, choices, transform, validate, convert)
-        choice_hash = choices.is_a?(Array) ? 
-          choices.each_with_index.to_h { |choice, index| [index.to_s, choice] } : 
+        choice_hash = choices.is_a?(Array) ?
+          choices.each_with_index.to_h { |choice, index| [index.to_s, choice] } :
           choices
 
         # Check if input matches a valid choice
@@ -199,13 +197,11 @@ module FlowChat
 
       def process_boolean(input, transform, validate, convert)
         boolean_value = case input.to_s.downcase
-                       when "yes", "y", "1", "true"
-                         true
-                       when "no", "n", "0", "false"
-                         false
-                       else
-                         nil
-                       end
+        when "yes", "y", "1", "true"
+          true
+        when "no", "n", "0", "false"
+          false
+        end
 
         if boolean_value.nil?
           raise FlowChat::Interrupt::Prompt.new([:text, "Please answer with Yes or No.", {}])
@@ -220,7 +216,7 @@ module FlowChat
           raise ArgumentError, "choices cannot be empty"
         end
 
-        choice_count = choices.is_a?(Array) ? choices.length : choices.length
+        choice_count = choices.length
 
         # WhatsApp supports max 100 total items across all sections
         if choice_count > 100
@@ -248,4 +244,4 @@ module FlowChat
       end
     end
   end
-end 
+end

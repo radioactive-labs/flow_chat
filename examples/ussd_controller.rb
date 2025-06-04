@@ -9,7 +9,7 @@ class UssdController < ApplicationController
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       # Use Rails session for USSD (shorter sessions)
       config.use_session_store FlowChat::Session::RailsSessionStore
-      
+
       # Enable resumable sessions (optional)
       config.use_resumable_sessions
     end
@@ -33,7 +33,7 @@ class WelcomeFlow < FlowChat::Flow
     choice = app.screen(:main_menu) do |prompt|
       prompt.select "Hi #{name}! Choose an option:", {
         "1" => "Account Info",
-        "2" => "Make Payment", 
+        "2" => "Make Payment",
         "3" => "Get Balance",
         "4" => "Customer Support"
       }
@@ -118,7 +118,7 @@ class WelcomeFlow < FlowChat::Flow
     support_choice = app.screen(:support_menu) do |prompt|
       prompt.select "Customer Support:", {
         "1" => "Report an Issue",
-        "2" => "Account Questions", 
+        "2" => "Account Questions",
         "3" => "Technical Support",
         "4" => "Speak to Agent",
         "0" => "Main Menu"
@@ -159,12 +159,12 @@ class WelcomeFlow < FlowChat::Flow
 
     # Save the issue (your business logic here)
     ticket_id = create_support_ticket(issue_type, description, app.phone_number)
-    
+
     app.say "Issue reported successfully!\\n\\nTicket ID: #{ticket_id}\\nWe'll contact you within 24 hours.\\n\\nThank you!"
   end
 
   # Helper methods (implement your business logic)
-  
+
   def process_payment(amount, recipient)
     # Your payment processing logic here
     # Return transaction ID
@@ -175,7 +175,7 @@ class WelcomeFlow < FlowChat::Flow
     # Your balance checking logic here
     {
       available: "150.75",
-      pending: "25.00", 
+      pending: "25.00",
       total: "175.75"
     }
   end
@@ -190,6 +190,7 @@ end
 # Configuration Examples:
 
 # 1. Basic configuration with custom pagination
+# rubocop:disable Lint/DuplicateMethods
 class UssdController < ApplicationController
   skip_forgery_protection
 
@@ -207,6 +208,7 @@ class UssdController < ApplicationController
     processor.run WelcomeFlow, :main_page
   end
 end
+# rubocop:enable Lint/DuplicateMethods
 
 # 2. Configuration with custom middleware
 class LoggingMiddleware
@@ -215,18 +217,19 @@ class LoggingMiddleware
   end
 
   def call(context)
-    Rails.logger.info "USSD Request from #{context['request.msisdn']}: #{context.input}"
+    Rails.logger.info "USSD Request from #{context["request.msisdn"]}: #{context.input}"
     start_time = Time.current
-    
+
     result = @app.call(context)
-    
+
     duration = Time.current - start_time
     Rails.logger.info "USSD Response (#{duration.round(3)}s): #{result[1]}"
-    
+
     result
   end
 end
 
+# rubocop:disable Lint/DuplicateMethods
 class UssdController < ApplicationController
   skip_forgery_protection
 
@@ -241,8 +244,10 @@ class UssdController < ApplicationController
     processor.run WelcomeFlow, :main_page
   end
 end
+# rubocop:enable Lint/DuplicateMethods
 
 # 3. Configuration with cache-based sessions for longer persistence
+# rubocop:disable Lint/DuplicateMethods
 class UssdController < ApplicationController
   skip_forgery_protection
 
@@ -256,9 +261,10 @@ class UssdController < ApplicationController
     processor.run WelcomeFlow, :main_page
   end
 end
+# rubocop:enable Lint/DuplicateMethods
 
 # Add this route to your config/routes.rb:
 # post '/ussd', to: 'ussd#process_request'
 
 # For Nsano gateway, use:
-# config.use_gateway FlowChat::Ussd::Gateway::Nsano 
+# config.use_gateway FlowChat::Ussd::Gateway::Nsano

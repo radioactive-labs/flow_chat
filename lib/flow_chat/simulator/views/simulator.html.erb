@@ -1529,6 +1529,7 @@
         // Extract message content based on type
         let messageText = ''
         let interactive = null
+        let mediaContent = null
         
         switch (messagePayload.type) {
           case 'text':
@@ -1570,25 +1571,48 @@
             }
             break
           case 'image':
-            messageText = messagePayload.image.caption || 'Image message'
-            // In a real implementation, you might want to show the image
-            messageText = `📷 ${messageText}`
+            messageText = messagePayload.image.caption || ''
+            mediaContent = {
+              type: 'image',
+              url: messagePayload.image.link || `https://via.placeholder.com/300x200/25d366/white?text=Image+ID:+${messagePayload.image.id || 'media_123'}`,
+              caption: messagePayload.image.caption
+            }
             break
           case 'document':
-            messageText = messagePayload.document.caption || messagePayload.document.filename || 'Document'
-            messageText = `📄 ${messageText}`
+            messageText = messagePayload.document.caption || ''
+            mediaContent = {
+              type: 'document',
+              url: messagePayload.document.link,
+              filename: messagePayload.document.filename || 'document.pdf',
+              caption: messagePayload.document.caption
+            }
             break
           case 'audio':
-            messageText = '🎵 Audio message'
+            messageText = ''
+            mediaContent = {
+              type: 'audio',
+              url: messagePayload.audio.link || `data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmkcBzuU2e+saDUGOWOJ6+2SV0gYKT2L5zJAGyJH4f2GHz+7zJMxtx9R5Dsl`
+            }
             break
           case 'video':
-            messageText = messagePayload.video.caption || 'Video message'
-            messageText = `🎥 ${messageText}`
+            messageText = messagePayload.video.caption || ''
+            mediaContent = {
+              type: 'video',
+              url: messagePayload.video.link || `https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4`,
+              caption: messagePayload.video.caption
+            }
             break
           case 'location':
             const loc = messagePayload.location
-            messageText = `📍 Location: ${loc.name || 'Shared location'}`
+            messageText = loc.name || 'Shared location'
             if (loc.address) messageText += `\n${loc.address}`
+            mediaContent = {
+              type: 'location',
+              latitude: loc.latitude || 0,
+              longitude: loc.longitude || 0,
+              name: loc.name,
+              address: loc.address
+            }
             break
           default:
             messageText = `Unsupported message type: ${messagePayload.type}`
@@ -1596,16 +1620,235 @@
         }
         
         // Add the simulated message to the chat
-        addMessage(messageText, false, messagePayload.type, interactive)
+        addMessage(messageText, false, messagePayload.type, interactive, mediaContent)
       }
 
-      function addMessage(content, isOutgoing = false, type = 'text', interactive = null) {
+      function addMessage(content, isOutgoing = false, type = 'text', interactive = null, mediaContent = null) {
         const messageDiv = document.createElement('div')
         messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`
         
         const bubbleDiv = document.createElement('div')
         bubbleDiv.className = 'message-bubble'
-        bubbleDiv.textContent = content
+        
+        // Handle media content first
+        if (mediaContent) {
+          const mediaContainer = document.createElement('div')
+          mediaContainer.className = 'media-container'
+          mediaContainer.style.marginBottom = content ? '8px' : '0'
+          
+          switch (mediaContent.type) {
+            case 'image':
+              const img = document.createElement('img')
+              img.src = mediaContent.url
+              img.style.maxWidth = '100%'
+              img.style.height = 'auto'
+              img.style.borderRadius = '8px'
+              img.style.display = 'block'
+              img.alt = mediaContent.caption || 'Image'
+              img.onerror = function() {
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPvCfk7cgSW1hZ2U8L3RleHQ+PC9zdmc+'
+                this.style.border = '1px solid #e0e0e0'
+              }
+              mediaContainer.appendChild(img)
+              break
+              
+            case 'video':
+              const video = document.createElement('video')
+              video.src = mediaContent.url
+              video.controls = true
+              video.style.maxWidth = '100%'
+              video.style.height = 'auto'
+              video.style.borderRadius = '8px'
+              video.style.display = 'block'
+              video.preload = 'metadata'
+              video.onerror = function() {
+                const placeholder = document.createElement('div')
+                placeholder.style.width = '300px'
+                placeholder.style.height = '200px'
+                placeholder.style.backgroundColor = '#f0f0f0'
+                placeholder.style.border = '1px solid #e0e0e0'
+                placeholder.style.borderRadius = '8px'
+                placeholder.style.display = 'flex'
+                placeholder.style.alignItems = 'center'
+                placeholder.style.justifyContent = 'center'
+                placeholder.style.color = '#999'
+                placeholder.style.fontSize = '14px'
+                placeholder.textContent = '🎥 Video'
+                mediaContainer.replaceChild(placeholder, video)
+              }
+              mediaContainer.appendChild(video)
+              break
+              
+            case 'audio':
+              const audio = document.createElement('audio')
+              audio.src = mediaContent.url
+              audio.controls = true
+              audio.style.width = '100%'
+              audio.style.maxWidth = '300px'
+              audio.preload = 'metadata'
+              audio.onerror = function() {
+                const placeholder = document.createElement('div')
+                placeholder.style.padding = '12px 16px'
+                placeholder.style.backgroundColor = '#f0f0f0'
+                placeholder.style.border = '1px solid #e0e0e0'
+                placeholder.style.borderRadius = '8px'
+                placeholder.style.display = 'flex'
+                placeholder.style.alignItems = 'center'
+                placeholder.style.gap = '8px'
+                placeholder.style.color = '#666'
+                placeholder.style.fontSize = '14px'
+                placeholder.innerHTML = '🎵 <span>Audio message</span>'
+                mediaContainer.replaceChild(placeholder, audio)
+              }
+              mediaContainer.appendChild(audio)
+              break
+              
+            case 'document':
+              const docContainer = document.createElement('div')
+              docContainer.style.padding = '12px 16px'
+              docContainer.style.backgroundColor = '#f8f9fa'
+              docContainer.style.border = '1px solid #e0e0e0'
+              docContainer.style.borderRadius = '8px'
+              docContainer.style.display = 'flex'
+              docContainer.style.alignItems = 'center'
+              docContainer.style.gap = '12px'
+              docContainer.style.cursor = 'pointer'
+              docContainer.style.transition = 'background-color 0.2s'
+              
+              const docIcon = document.createElement('div')
+              docIcon.style.fontSize = '24px'
+              docIcon.textContent = getDocumentIcon(mediaContent.filename)
+              
+              const docInfo = document.createElement('div')
+              docInfo.style.flex = '1'
+              docInfo.style.minWidth = '0'
+              
+              const docName = document.createElement('div')
+              docName.style.fontWeight = '600'
+              docName.style.fontSize = '14px'
+              docName.style.color = '#333'
+              docName.style.overflow = 'hidden'
+              docName.style.textOverflow = 'ellipsis'
+              docName.style.whiteSpace = 'nowrap'
+              docName.textContent = mediaContent.filename
+              
+              const docType = document.createElement('div')
+              docType.style.fontSize = '12px'
+              docType.style.color = '#666'
+              docType.textContent = 'Document'
+              
+              docInfo.appendChild(docName)
+              docInfo.appendChild(docType)
+              docContainer.appendChild(docIcon)
+              docContainer.appendChild(docInfo)
+              
+              // Add click handler if URL is available
+              if (mediaContent.url) {
+                const downloadIcon = document.createElement('div')
+                downloadIcon.style.fontSize = '18px'
+                downloadIcon.style.color = '#666'
+                downloadIcon.textContent = '⬇️'
+                docContainer.appendChild(downloadIcon)
+                
+                docContainer.onclick = () => {
+                  if (mediaContent.url.startsWith('http')) {
+                    window.open(mediaContent.url, '_blank')
+                  }
+                }
+                
+                docContainer.onmouseover = () => {
+                  docContainer.style.backgroundColor = '#e8f5e8'
+                }
+                docContainer.onmouseout = () => {
+                  docContainer.style.backgroundColor = '#f8f9fa'
+                }
+              }
+              
+              mediaContainer.appendChild(docContainer)
+              break
+              
+            case 'location':
+              const locationContainer = document.createElement('div')
+              locationContainer.style.border = '1px solid #e0e0e0'
+              locationContainer.style.borderRadius = '8px'
+              locationContainer.style.overflow = 'hidden'
+              locationContainer.style.maxWidth = '300px'
+              
+              // Create a simple map-like visualization
+              const mapDiv = document.createElement('div')
+              mapDiv.style.height = '150px'
+              mapDiv.style.background = 'linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%)'
+              mapDiv.style.position = 'relative'
+              mapDiv.style.display = 'flex'
+              mapDiv.style.alignItems = 'center'
+              mapDiv.style.justifyContent = 'center'
+              mapDiv.style.fontSize = '32px'
+              mapDiv.textContent = '📍'
+              
+              // Add coordinate text
+              const coordDiv = document.createElement('div')
+              coordDiv.style.position = 'absolute'
+              coordDiv.style.bottom = '8px'
+              coordDiv.style.right = '8px'
+              coordDiv.style.background = 'rgba(255,255,255,0.9)'
+              coordDiv.style.padding = '4px 8px'
+              coordDiv.style.borderRadius = '4px'
+              coordDiv.style.fontSize = '10px'
+              coordDiv.style.color = '#666'
+              coordDiv.style.fontFamily = 'monospace'
+              coordDiv.textContent = `${mediaContent.latitude.toFixed(4)}, ${mediaContent.longitude.toFixed(4)}`
+              mapDiv.appendChild(coordDiv)
+              
+              const locationInfo = document.createElement('div')
+              locationInfo.style.padding = '12px'
+              locationInfo.style.backgroundColor = 'white'
+              
+              if (mediaContent.name) {
+                const nameDiv = document.createElement('div')
+                nameDiv.style.fontWeight = '600'
+                nameDiv.style.fontSize = '14px'
+                nameDiv.style.color = '#333'
+                nameDiv.style.marginBottom = '4px'
+                nameDiv.textContent = mediaContent.name
+                locationInfo.appendChild(nameDiv)
+              }
+              
+              if (mediaContent.address) {
+                const addressDiv = document.createElement('div')
+                addressDiv.style.fontSize = '12px'
+                addressDiv.style.color = '#666'
+                addressDiv.textContent = mediaContent.address
+                locationInfo.appendChild(addressDiv)
+              }
+              
+              // Add link to open in maps
+              const mapsLink = document.createElement('div')
+              mapsLink.style.fontSize = '12px'
+              mapsLink.style.color = '#25d366'
+              mapsLink.style.cursor = 'pointer'
+              mapsLink.style.marginTop = '8px'
+              mapsLink.textContent = '🗺️ View in Maps'
+              mapsLink.onclick = () => {
+                const url = `https://www.google.com/maps?q=${mediaContent.latitude},${mediaContent.longitude}`
+                window.open(url, '_blank')
+              }
+              locationInfo.appendChild(mapsLink)
+              
+              locationContainer.appendChild(mapDiv)
+              locationContainer.appendChild(locationInfo)
+              mediaContainer.appendChild(locationContainer)
+              break
+          }
+          
+          bubbleDiv.appendChild(mediaContainer)
+        }
+        
+        // Add text content if present
+        if (content) {
+          const textDiv = document.createElement('div')
+          textDiv.textContent = content
+          bubbleDiv.appendChild(textDiv)
+        }
         
         messageDiv.appendChild(bubbleDiv)
         
@@ -1640,8 +1883,40 @@
           bubbleDiv.appendChild(buttonsDiv)
         }
         
+        messageDiv.appendChild(bubbleDiv)
+        
         elements.messagesArea.appendChild(messageDiv)
         elements.messagesArea.scrollTop = elements.messagesArea.scrollHeight
+      }
+
+      function getDocumentIcon(filename) {
+        if (!filename) return '📄'
+        
+        const ext = filename.split('.').pop().toLowerCase()
+        
+        const iconMap = {
+          'pdf': '📕',
+          'doc': '📘',
+          'docx': '📘', 
+          'xls': '📗',
+          'xlsx': '📗',
+          'ppt': '📙',
+          'pptx': '📙',
+          'txt': '📝',
+          'zip': '🗜️',
+          'rar': '🗜️',
+          '7z': '🗜️',
+          'mp3': '🎵',
+          'wav': '🎵',
+          'mp4': '🎥',
+          'avi': '🎥',
+          'jpg': '🖼️',
+          'jpeg': '🖼️',
+          'png': '🖼️',
+          'gif': '🖼️'
+        }
+        
+        return iconMap[ext] || '📄'
       }
 
       function addInfoMessage(content) {

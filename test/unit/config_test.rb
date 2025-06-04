@@ -82,7 +82,7 @@ class ConfigTest < Minitest::Test
     whatsapp_config = FlowChat::Config.whatsapp
 
     assert_equal :inline, whatsapp_config.message_handling_mode
-    assert_equal 'WhatsappMessageJob', whatsapp_config.background_job_class
+    assert_equal "WhatsappMessageJob", whatsapp_config.background_job_class
   end
 
   def test_whatsapp_config_setter_methods
@@ -92,10 +92,10 @@ class ConfigTest < Minitest::Test
     begin
       # Test setters work
       FlowChat::Config.whatsapp.message_handling_mode = :background
-      FlowChat::Config.whatsapp.background_job_class = 'CustomJob'
+      FlowChat::Config.whatsapp.background_job_class = "CustomJob"
 
       assert_equal :background, FlowChat::Config.whatsapp.message_handling_mode
-      assert_equal 'CustomJob', FlowChat::Config.whatsapp.background_job_class
+      assert_equal "CustomJob", FlowChat::Config.whatsapp.background_job_class
     ensure
       # Restore original values
       FlowChat::Config.whatsapp.message_handling_mode = original_mode
@@ -117,7 +117,7 @@ class ConfigTest < Minitest::Test
     assert_equal :simulator, config.message_handling_mode
 
     # String modes should be converted to symbols
-    config.message_handling_mode = 'inline'
+    config.message_handling_mode = "inline"
     assert_equal :inline, config.message_handling_mode
 
     # Invalid modes should raise error

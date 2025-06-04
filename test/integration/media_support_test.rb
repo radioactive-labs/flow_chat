@@ -39,8 +39,6 @@ class MediaSupportTest < Minitest::Test
   def test_whatsapp_ask_with_media_processes_user_input
     @whatsapp_context.input = "I love it!"
     app = FlowChat::Whatsapp::App.new(@whatsapp_context)
-
-    result = nil
     flow = MediaTestFlow.new(app)
     result = flow.test_ask_with_image
 
@@ -111,8 +109,6 @@ class MediaSupportTest < Minitest::Test
   def test_ussd_ask_with_media_processes_user_input
     @ussd_context.input = "Great product!"
     app = FlowChat::Ussd::App.new(@ussd_context)
-
-    result = nil
     flow = MediaTestFlow.new(app)
     result = flow.test_ask_with_image
 
@@ -151,11 +147,11 @@ class MediaSupportTest < Minitest::Test
 
     # Test all media types
     media_types = [
-      { type: :image, url: "https://example.com/img.jpg", icon: "📷", label: "Image" },
-      { type: :document, url: "https://example.com/doc.pdf", icon: "📄", label: "Document" },
-      { type: :video, url: "https://example.com/vid.mp4", icon: "🎥", label: "Video" },
-      { type: :audio, url: "https://example.com/aud.mp3", icon: "🎵", label: "Audio" },
-      { type: :sticker, url: "https://example.com/sticker.webp", icon: "😊", label: "Sticker" }
+      {type: :image, url: "https://example.com/img.jpg", icon: "📷", label: "Image"},
+      {type: :document, url: "https://example.com/doc.pdf", icon: "📄", label: "Document"},
+      {type: :video, url: "https://example.com/vid.mp4", icon: "🎥", label: "Video"},
+      {type: :audio, url: "https://example.com/aud.mp3", icon: "🎵", label: "Audio"},
+      {type: :sticker, url: "https://example.com/sticker.webp", icon: "😊", label: "Sticker"}
     ]
 
     media_types.each do |media|
@@ -175,7 +171,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_same_flow_works_on_both_platforms
     # Test the same flow method on both platforms
-    media_hash = { type: :image, url: "https://example.com/product.jpg" }
+    media_hash = {type: :image, url: "https://example.com/product.jpg"}
 
     # WhatsApp - should get media prompt
     whatsapp_app = FlowChat::Whatsapp::App.new(@whatsapp_context)
@@ -305,8 +301,8 @@ class MediaTestFlow < FlowChat::Flow
 
   def test_ask_with_validation
     app.screen(:age_verification) do |prompt|
-      prompt.ask "Enter your age:", 
-        media: { type: :image, url: "https://example.com/age_verification.jpg" },
+      prompt.ask "Enter your age:",
+        media: {type: :image, url: "https://example.com/age_verification.jpg"},
         convert: ->(input) { input.to_i },
         validate: ->(age) { "Must be 18 or older" unless age >= 18 }
     end
@@ -323,7 +319,7 @@ class MediaTestFlow < FlowChat::Flow
 
   def test_say_with_media_type(type, url)
     # Use a unique screen name for each test to avoid duplication
-    screen_name = "send_media_#{type}_#{url.gsub(/[^a-zA-Z0-9]/, '_')}"
+    screen_name = "send_media_#{type}_#{url.gsub(/[^a-zA-Z0-9]/, "_")}"
     app.screen(screen_name.to_sym) do |prompt|
       prompt.say "Check this out:", media: {
         type: type,
@@ -384,4 +380,4 @@ class MediaTestFlow < FlowChat::Flow
       }
     end
   end
-end 
+end

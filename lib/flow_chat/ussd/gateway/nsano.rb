@@ -14,7 +14,7 @@ module FlowChat
 
           # Add timestamp for all requests
           context["request.timestamp"] = Time.current.iso8601
-          
+
           # Set a basic message_id (can be enhanced based on actual Nsano implementation)
           context["request.message_id"] = SecureRandom.uuid
 

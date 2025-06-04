@@ -15,11 +15,11 @@ module FlowChat
       def perform_whatsapp_send(send_data)
         config = resolve_whatsapp_config(send_data)
         client = FlowChat::Whatsapp::Client.new(config)
-        
+
         result = client.send_message(send_data[:msisdn], send_data[:response])
-        
+
         if result
-          Rails.logger.info "WhatsApp message sent successfully: #{result['messages']&.first&.dig('id')}"
+          Rails.logger.info "WhatsApp message sent successfully: #{result["messages"]&.first&.dig("id")}"
           on_whatsapp_send_success(send_data, result)
         else
           Rails.logger.error "Failed to send WhatsApp message to #{send_data[:msisdn]}"
@@ -47,20 +47,20 @@ module FlowChat
       def handle_whatsapp_send_error(error, send_data, config = nil)
         Rails.logger.error "WhatsApp send job error: #{error.message}"
         Rails.logger.error error.backtrace&.join("\n") if error.backtrace
-        
+
         # Try to send error message to user if we have config
         if config
           begin
             client = FlowChat::Whatsapp::Client.new(config)
             client.send_text(
-              send_data[:msisdn], 
+              send_data[:msisdn],
               "⚠️ We're experiencing technical difficulties. Please try again in a few minutes."
             )
           rescue => send_error
             Rails.logger.error "Failed to send error message: #{send_error.message}"
           end
         end
-        
+
         # Re-raise for job retry logic
         raise error
       end
@@ -76,4 +76,4 @@ module FlowChat
       end
     end
   end
-end 
+end

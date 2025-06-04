@@ -32,18 +32,19 @@ module FlowChat
     end
 
     class WhatsappConfig
-      attr_accessor :message_handling_mode, :background_job_class
+      attr_accessor :background_job_class
+      attr_reader :message_handling_mode
 
       def initialize
         @message_handling_mode = :inline
-        @background_job_class = 'WhatsappMessageJob'
+        @background_job_class = "WhatsappMessageJob"
       end
 
       # Validate message handling mode
       def message_handling_mode=(mode)
         valid_modes = [:inline, :background, :simulator]
         unless valid_modes.include?(mode.to_sym)
-          raise ArgumentError, "Invalid message handling mode: #{mode}. Valid modes: #{valid_modes.join(', ')}"
+          raise ArgumentError, "Invalid message handling mode: #{mode}. Valid modes: #{valid_modes.join(", ")}"
         end
         @message_handling_mode = mode.to_sym
       end

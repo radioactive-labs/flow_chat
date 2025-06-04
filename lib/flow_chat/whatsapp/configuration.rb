@@ -2,7 +2,7 @@ module FlowChat
   module Whatsapp
     class Configuration
       attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
-                    :webhook_url, :webhook_verify_token, :business_account_id, :name
+        :webhook_url, :webhook_verify_token, :business_account_id, :name
 
       # Class-level storage for named configurations
       @@configurations = {}
@@ -24,7 +24,7 @@ module FlowChat
       # Load configuration from Rails credentials or environment variables
       def self.from_credentials
         config = new(nil)
-        
+
         if defined?(Rails) && Rails.application.credentials.whatsapp
           credentials = Rails.application.credentials.whatsapp
           config.access_token = credentials[:access_token]
@@ -36,13 +36,13 @@ module FlowChat
           config.business_account_id = credentials[:business_account_id]
         else
           # Fallback to environment variables
-          config.access_token = ENV['WHATSAPP_ACCESS_TOKEN']
-          config.phone_number_id = ENV['WHATSAPP_PHONE_NUMBER_ID']
-          config.verify_token = ENV['WHATSAPP_VERIFY_TOKEN']
-          config.app_id = ENV['WHATSAPP_APP_ID']
-          config.app_secret = ENV['WHATSAPP_APP_SECRET']
-          config.webhook_url = ENV['WHATSAPP_WEBHOOK_URL']
-          config.business_account_id = ENV['WHATSAPP_BUSINESS_ACCOUNT_ID']
+          config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
+          config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
+          config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
+          config.app_id = ENV["WHATSAPP_APP_ID"]
+          config.app_secret = ENV["WHATSAPP_APP_SECRET"]
+          config.webhook_url = ENV["WHATSAPP_WEBHOOK_URL"]
+          config.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
         end
 
         config
@@ -110,4 +110,4 @@ module FlowChat
       end
     end
   end
-end 
+end

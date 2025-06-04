@@ -63,19 +63,19 @@ class MediaSupportFlow < FlowChat::Flow
   private
 
   def handle_received_media
-    media_type = app.media['type']
-    media_id = app.media['id']
-    
+    media_type = app.media["type"]
+    media_id = app.media["id"]
+
     Rails.logger.info "Received #{media_type} from #{app.phone_number}: #{media_id}"
-    
+
     case media_type
-    when 'image'
+    when "image"
       app.say "Thanks for the image! I can see it's a #{media_type} file. Let me process it for you."
-    when 'document'
+    when "document"
       app.say "I've received your document. I'll review it and get back to you shortly."
-    when 'audio'
+    when "audio"
       app.say "Got your voice message! I'll listen to it and respond appropriately."
-    when 'video'
+    when "video"
       app.say "Thanks for the video! I'll analyze it and provide feedback."
     end
   end
@@ -83,32 +83,32 @@ class MediaSupportFlow < FlowChat::Flow
   def send_product_catalog
     # Send multiple product images from URLs
     client = get_whatsapp_client
-    
+
     app.say "Here's our latest product catalog:"
-    
+
     # Product images stored in cloud storage (CDN, S3, etc.)
     product_images = [
       "https://cdn.example.com/products/product1.jpg",
-      "https://cdn.example.com/products/product2.jpg", 
+      "https://cdn.example.com/products/product2.jpg",
       "https://cdn.example.com/products/product3.jpg"
     ]
-    
+
     product_images.each_with_index do |image_url, index|
       client.send_image(app.phone_number, image_url, "Product #{index + 1}")
       sleep(0.5) # Small delay to avoid rate limiting
     end
-    
+
     app.say "Which product interests you the most?"
   end
 
   def send_report
     # Send a PDF report from cloud storage
     report_url = generate_report_url # Your method to generate/get report URL
-    
+
     if report_url
       client = get_whatsapp_client
       client.send_document(app.phone_number, report_url, "Your monthly report is ready!")
-      
+
       app.say "📊 Report sent! Please check the document above."
     else
       app.say "Sorry, I couldn't generate the report right now. Please try again later."
@@ -118,10 +118,10 @@ class MediaSupportFlow < FlowChat::Flow
   def send_voice_message
     # Send a pre-recorded voice message from cloud storage
     audio_url = "https://cdn.example.com/audio/support_greeting.mp3"
-    
+
     client = get_whatsapp_client
     client.send_audio(app.phone_number, audio_url)
-    
+
     app.say "🎵 Please listen to the voice message above. You can also send me a voice message with your question!"
   end
 
@@ -129,15 +129,15 @@ class MediaSupportFlow < FlowChat::Flow
     feedback = app.screen(:feedback_text) do |prompt|
       prompt.ask "Please share your feedback. You can also send images or documents if needed:"
     end
-    
+
     # Save feedback to database
     save_feedback(feedback, app.phone_number)
-    
+
     # Send a thank you sticker from cloud storage
     sticker_url = "https://cdn.example.com/stickers/thanks.webp"
     client = get_whatsapp_client
     client.send_sticker(app.phone_number, sticker_url)
-    
+
     app.say "Thank you for your feedback! We really appreciate it. 🙏"
   end
 
@@ -149,7 +149,7 @@ class MediaSupportFlow < FlowChat::Flow
   def generate_report_url
     # Your report generation logic here
     # This could return a signed URL from S3, Google Cloud Storage, etc.
-    "https://storage.example.com/reports/monthly_report_#{Time.current.strftime('%Y%m')}.pdf"
+    "https://storage.example.com/reports/monthly_report_#{Time.current.strftime("%Y%m")}.pdf"
   end
 
   def save_feedback(feedback, phone_number)
@@ -187,8 +187,8 @@ class WhatsAppMediaService
   def send_order_confirmation(phone_number, order_id, invoice_url)
     # Send invoice document from cloud storage
     @client.send_document(
-      phone_number, 
-      invoice_url, 
+      phone_number,
+      invoice_url,
       "Order ##{order_id} confirmed! Here's your invoice.",
       "Invoice_#{order_id}.pdf"
     )
@@ -198,9 +198,9 @@ class WhatsAppMediaService
       phone_number,
       "Your order has been confirmed! 🛍️",
       [
-        { id: 'track_order', title: '📦 Track Order' },
-        { id: 'modify_order', title: '✏️ Modify Order' },
-        { id: 'support', title: '💬 Contact Support' }
+        {id: "track_order", title: "📦 Track Order"},
+        {id: "modify_order", title: "✏️ Modify Order"},
+        {id: "support", title: "💬 Contact Support"}
       ]
     )
   end
@@ -220,54 +220,52 @@ class WhatsAppMediaService
       phone_number,
       "Don't miss out on this amazing deal!",
       [
-        { id: 'buy_now', title: '🛒 Buy Now' },
-        { id: 'more_info', title: 'ℹ️ More Info' },
-        { id: 'remind_later', title: '⏰ Remind Later' }
+        {id: "buy_now", title: "🛒 Buy Now"},
+        {id: "more_info", title: "ℹ️ More Info"},
+        {id: "remind_later", title: "⏰ Remind Later"}
       ]
     )
   end
 
   # Handle media uploads with processing
   def process_uploaded_media(media_id, media_type, user_phone)
-    begin
-      # Download the media from WhatsApp
-      media_url = @client.get_media_url(media_id)
-      media_content = @client.download_media(media_id) if media_url
+    # Download the media from WhatsApp
+    media_url = @client.get_media_url(media_id)
+    media_content = @client.download_media(media_id) if media_url
 
-      if media_content
-        # Upload to your cloud storage (S3, Google Cloud, etc.)
-        cloud_url = upload_to_cloud_storage(media_content, media_type, media_id)
-        
-        # Process based on media type
-        case media_type
-        when 'image'
-          process_image(cloud_url, user_phone)
-        when 'document'
-          process_document(cloud_url, user_phone)
-        when 'audio'
-          process_audio(cloud_url, user_phone)
-        when 'video'
-          process_video(cloud_url, user_phone)
-        end
-        
-        Rails.logger.info "Successfully processed #{media_type} from #{user_phone}"
+    if media_content
+      # Upload to your cloud storage (S3, Google Cloud, etc.)
+      cloud_url = upload_to_cloud_storage(media_content, media_type, media_id)
+
+      # Process based on media type
+      case media_type
+      when "image"
+        process_image(cloud_url, user_phone)
+      when "document"
+        process_document(cloud_url, user_phone)
+      when "audio"
+        process_audio(cloud_url, user_phone)
+      when "video"
+        process_video(cloud_url, user_phone)
       end
-    rescue => e
-      Rails.logger.error "Error processing media: #{e.message}"
-      @client.send_text(user_phone, "Sorry, I couldn't process your file. Please try again.")
+
+      Rails.logger.info "Successfully processed #{media_type} from #{user_phone}"
     end
+  rescue => e
+    Rails.logger.error "Error processing media: #{e.message}"
+    @client.send_text(user_phone, "Sorry, I couldn't process your file. Please try again.")
   end
 
   # Send personalized content based on user data
   def send_personalized_content(phone_number, user_id)
     # Get user's preferred content from your system
     user_content = fetch_user_content(user_id)
-    
+
     # Send personalized image
     if user_content[:image_url]
       @client.send_image(phone_number, user_content[:image_url], user_content[:image_caption])
     end
-    
+
     # Send personalized document
     if user_content[:document_url]
       @client.send_document(phone_number, user_content[:document_url], user_content[:document_description])
@@ -278,7 +276,7 @@ class WhatsAppMediaService
   def send_qr_code(phone_number, data)
     # Generate QR code and get URL (using your QR service)
     qr_url = generate_qr_code_url(data)
-    
+
     @client.send_image(phone_number, qr_url, "Here's your QR code!")
   end
 
@@ -286,7 +284,7 @@ class WhatsAppMediaService
   def send_analytics_chart(phone_number, chart_type, period)
     # Generate chart URL from your analytics service
     chart_url = generate_analytics_chart_url(chart_type, period)
-    
+
     @client.send_image(phone_number, chart_url, "#{chart_type.humanize} for #{period}")
   end
 
@@ -340,11 +338,11 @@ class WhatsAppMediaService
 
   def get_file_extension(media_type)
     case media_type
-    when 'image' then 'jpg'
-    when 'document' then 'pdf'
-    when 'audio' then 'mp3'
-    when 'video' then 'mp4'
-    else 'bin'
+    when "image" then "jpg"
+    when "document" then "pdf"
+    when "audio" then "mp3"
+    when "video" then "mp4"
+    else "bin"
     end
   end
 end
@@ -356,45 +354,45 @@ end
 class NotificationController < ApplicationController
   def send_media_notification
     service = WhatsAppMediaService.new
-    
+
     # Send welcome package to new users
     service.send_welcome_package(params[:phone_number], params[:user_name])
-    
-    render json: { status: 'sent' }
+
+    render json: {status: "sent"}
   end
-  
+
   def send_order_confirmation
     service = WhatsAppMediaService.new
-    
+
     # Get invoice URL from your system (could be from S3, Google Cloud, etc.)
     invoice_url = get_invoice_url(params[:order_id])
-    
+
     service.send_order_confirmation(
-      params[:phone_number], 
-      params[:order_id], 
+      params[:phone_number],
+      params[:order_id],
       invoice_url
     )
-    
-    render json: { status: 'sent' }
+
+    render json: {status: "sent"}
   end
 
   def send_promo
     service = WhatsAppMediaService.new
-    
+
     # Promotional content from CDN
     promo_image = "https://cdn.example.com/promos/#{params[:promo_id]}/banner.jpg"
     promo_video = "https://cdn.example.com/promos/#{params[:promo_id]}/video.mp4"
-    
+
     service.send_promotion(params[:phone_number], promo_image, promo_video)
-    
-    render json: { status: 'sent' }
+
+    render json: {status: "sent"}
   end
 
   def send_qr_code
     service = WhatsAppMediaService.new
     service.send_qr_code(params[:phone_number], params[:qr_data])
-    
-    render json: { status: 'sent' }
+
+    render json: {status: "sent"}
   end
 
   private
@@ -403,4 +401,4 @@ class NotificationController < ApplicationController
     # Your logic to get invoice URL from cloud storage
     "https://storage.example.com/invoices/#{order_id}.pdf"
   end
-end 
+end

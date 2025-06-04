@@ -355,7 +355,7 @@ class UssdPromptTest < Minitest::Test
     prompt = FlowChat::Ussd::Prompt.new("25")
 
     result = prompt.ask("Enter your age:",
-      media: { type: :image, url: "https://example.com/age_help.jpg" },
+      media: {type: :image, url: "https://example.com/age_help.jpg"},
       convert: ->(input) { input.to_i },
       validate: ->(input) { "Must be at least 18" unless input >= 18 })
 
@@ -367,7 +367,7 @@ class UssdPromptTest < Minitest::Test
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
-        media: { type: :image, url: "https://example.com/age_help.jpg" },
+        media: {type: :image, url: "https://example.com/age_help.jpg"},
         convert: ->(input) { input.to_i },
         validate: ->(input) { "Must be at least 18" unless input >= 18 })
     end

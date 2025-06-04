@@ -7,7 +7,7 @@ class WhatsappClientTest < Minitest::Test
     @config.access_token = "test_token"
     @config.phone_number_id = "123456789"
     @client = FlowChat::Whatsapp::Client.new(@config)
-    
+
     # Setup WebMock for HTTP request stubbing
     WebMock.enable!
     WebMock.reset!
@@ -38,13 +38,13 @@ class WhatsappClientTest < Minitest::Test
   end
 
   def test_cleanup_temp_file
-    temp_file = Tempfile.new(['test', '.jpg'])
+    temp_file = Tempfile.new(["test", ".jpg"])
     temp_file.write("test data")
     temp_file.close
-    
+
     file_path = temp_file.path
     assert File.exist?(file_path)
-    
+
     File.unlink(file_path) if File.exist?(file_path)
     refute File.exist?(file_path)
   end
@@ -55,29 +55,29 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_text_message
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_text("+1234567890", "Hello, World!")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
         "messaging_product" => "whatsapp",
         "to" => "+1234567890",
         "type" => "text",
-        "text" => { "body" => "Hello, World!" }
+        "text" => {"body" => "Hello, World!"}
       })
   end
 
   def test_send_buttons_message
     stub_whatsapp_messages_api(success_response)
-    
+
     buttons = [
-      { id: "btn1", title: "Button 1" },
-      { id: "btn2", title: "Button 2" }
+      {id: "btn1", title: "Button 1"},
+      {id: "btn2", title: "Button 2"}
     ]
-    
+
     result = @client.send_buttons("+1234567890", "Choose an option:", buttons)
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -86,25 +86,25 @@ class WhatsappClientTest < Minitest::Test
         "type" => "interactive",
         "interactive" => hash_including({
           "type" => "button",
-          "body" => { "text" => "Choose an option:" }
+          "body" => {"text" => "Choose an option:"}
         })
       })
   end
 
   def test_send_list_message
     stub_whatsapp_messages_api(success_response)
-    
+
     sections = [
       {
         title: "Section 1",
         rows: [
-          { id: "row1", title: "Row 1", description: "Description 1" }
+          {id: "row1", title: "Row 1", description: "Description 1"}
         ]
       }
     ]
-    
+
     result = @client.send_list("+1234567890", "Select from menu:", sections)
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -113,25 +113,25 @@ class WhatsappClientTest < Minitest::Test
         "type" => "interactive",
         "interactive" => hash_including({
           "type" => "list",
-          "body" => { "text" => "Select from menu:" }
+          "body" => {"text" => "Select from menu:"}
         })
       })
   end
 
   def test_send_template_message
     stub_whatsapp_messages_api(success_response)
-    
+
     components = [
       {
         type: "body",
         parameters: [
-          { type: "text", text: "John" }
+          {type: "text", text: "John"}
         ]
       }
     ]
-    
+
     result = @client.send_template("+1234567890", "hello_world", components, "en_US")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -140,7 +140,7 @@ class WhatsappClientTest < Minitest::Test
         "type" => "template",
         "template" => hash_including({
           "name" => "hello_world",
-          "language" => { "code" => "en_US" },
+          "language" => {"code" => "en_US"},
           "components" => components
         })
       })
@@ -152,9 +152,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_image_with_url
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_image("+1234567890", "https://example.com/image.jpg", "Photo caption")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -170,9 +170,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_image_with_media_id
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_image("+1234567890", "media_id_123", "Photo caption")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -188,9 +188,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_document_with_url_and_filename
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_document("+1234567890", "https://example.com/doc.pdf", "Document caption", "receipt.pdf")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -207,9 +207,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_document_extracts_filename_from_url
     stub_whatsapp_messages_api(success_response)
-    
-    result = @client.send_document("+1234567890", "https://example.com/receipt.pdf", "Document caption")
-    
+
+    @client.send_document("+1234567890", "https://example.com/receipt.pdf", "Document caption")
+
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
         "document" => hash_including({
@@ -220,9 +220,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_video_with_url
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_video("+1234567890", "https://example.com/video.mp4", "Video caption")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -238,9 +238,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_audio_with_media_id
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_audio("+1234567890", "audio_media_id_123")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -255,9 +255,9 @@ class WhatsappClientTest < Minitest::Test
 
   def test_send_sticker_with_url
     stub_whatsapp_messages_api(success_response)
-    
+
     result = @client.send_sticker("+1234567890", "https://example.com/sticker.webp")
-    
+
     assert_equal "message_123", result["messages"][0]["id"]
     assert_requested :post, whatsapp_messages_url,
       body: hash_including({
@@ -275,28 +275,28 @@ class WhatsappClientTest < Minitest::Test
   # ============================================================================
 
   def test_upload_media_with_file_path
-    stub_media_upload_api({ "id" => "uploaded_media_123" })
-    
+    stub_media_upload_api({"id" => "uploaded_media_123"})
+
     # Create a test file
-    test_file = Tempfile.new(['test', '.jpg'])
+    test_file = Tempfile.new(["test", ".jpg"])
     test_file.write("fake image data")
     test_file.close
-    
+
     result = @client.upload_media(test_file.path, "image/jpeg")
-    
+
     assert_equal "uploaded_media_123", result
     assert_requested :post, whatsapp_media_url
-    
+
     test_file.unlink
   end
 
   def test_upload_media_with_io_object
-    stub_media_upload_api({ "id" => "uploaded_media_456" })
-    
+    stub_media_upload_api({"id" => "uploaded_media_456"})
+
     io_object = StringIO.new("fake file content")
-    
+
     result = @client.upload_media(io_object, "application/pdf", "document.pdf")
-    
+
     assert_equal "uploaded_media_456", result
     assert_requested :post, whatsapp_media_url
   end
@@ -305,7 +305,7 @@ class WhatsappClientTest < Minitest::Test
     error = assert_raises(ArgumentError) do
       @client.upload_media("test.jpg", nil)
     end
-    
+
     assert_equal "mime_type is required", error.message
   end
 
@@ -313,23 +313,23 @@ class WhatsappClientTest < Minitest::Test
     error = assert_raises(ArgumentError) do
       @client.upload_media("nonexistent_file.jpg", "image/jpeg")
     end
-    
+
     assert_match(/File not found/, error.message)
   end
 
   def test_upload_media_api_error
     stub_media_upload_api_error("Invalid file format")
-    
-    test_file = Tempfile.new(['test', '.jpg'])
+
+    test_file = Tempfile.new(["test", ".jpg"])
     test_file.write("fake image data")
     test_file.close
-    
+
     error = assert_raises(StandardError) do
       @client.upload_media(test_file.path, "image/jpeg")
     end
-    
+
     assert_match(/Media upload failed/, error.message)
-    
+
     test_file.unlink
   end
 
@@ -345,23 +345,23 @@ class WhatsappClientTest < Minitest::Test
       "file_size" => "12345",
       "id" => "media_123"
     }
-    
+
     stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
-      .with(headers: { "Authorization" => "Bearer test_token" })
+      .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: media_response.to_json)
-    
+
     result = @client.get_media_url("media_123")
-    
+
     assert_equal "https://media.example.com/file.jpg", result
   end
 
   def test_get_media_url_error
     stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
-      .with(headers: { "Authorization" => "Bearer test_token" })
-      .to_return(status: 404, body: { "error" => "Media not found" }.to_json)
-    
+      .with(headers: {"Authorization" => "Bearer test_token"})
+      .to_return(status: 404, body: {"error" => "Media not found"}.to_json)
+
     result = @client.get_media_url("media_123")
-    
+
     assert_nil result
   end
 
@@ -370,28 +370,28 @@ class WhatsappClientTest < Minitest::Test
     media_response = {
       "url" => "https://media.example.com/file.jpg"
     }
-    
+
     stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
-      .with(headers: { "Authorization" => "Bearer test_token" })
+      .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: media_response.to_json)
-    
+
     # Then stub the actual media download
     stub_request(:get, "https://media.example.com/file.jpg")
-      .with(headers: { "Authorization" => "Bearer test_token" })
+      .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: "binary image data")
-    
+
     result = @client.download_media("media_123")
-    
+
     assert_equal "binary image data", result
   end
 
   def test_download_media_url_fetch_fails
     stub_request(:get, "https://graph.facebook.com/v18.0/media_123")
-      .with(headers: { "Authorization" => "Bearer test_token" })
-      .to_return(status: 404, body: { "error" => "Media not found" }.to_json)
-    
+      .with(headers: {"Authorization" => "Bearer test_token"})
+      .to_return(status: 404, body: {"error" => "Media not found"}.to_json)
+
     result = @client.download_media("media_123")
-    
+
     assert_nil result
   end
 
@@ -401,24 +401,24 @@ class WhatsappClientTest < Minitest::Test
 
   def test_build_message_payload_text
     response = [:text, "Hello, World!", {}]
-    
+
     payload = @client.build_message_payload(response, "+1234567890")
-    
+
     expected = {
       messaging_product: "whatsapp",
       to: "+1234567890",
       type: "text",
-      text: { body: "Hello, World!" }
+      text: {body: "Hello, World!"}
     }
-    
+
     assert_equal expected, payload
   end
 
   def test_build_message_payload_interactive_buttons
-    response = [:interactive_buttons, "Choose option:", { buttons: [{ id: "1", title: "Option 1" }] }]
-    
+    response = [:interactive_buttons, "Choose option:", {buttons: [{id: "1", title: "Option 1"}]}]
+
     payload = @client.build_message_payload(response, "+1234567890")
-    
+
     assert_equal "whatsapp", payload[:messaging_product]
     assert_equal "+1234567890", payload[:to]
     assert_equal "interactive", payload[:type]
@@ -427,33 +427,33 @@ class WhatsappClientTest < Minitest::Test
   end
 
   def test_build_message_payload_media_image
-    response = [:media_image, "", { url: "https://example.com/image.jpg", caption: "Photo" }]
-    
+    response = [:media_image, "", {url: "https://example.com/image.jpg", caption: "Photo"}]
+
     payload = @client.build_message_payload(response, "+1234567890")
-    
+
     expected = {
       messaging_product: "whatsapp",
       to: "+1234567890",
       type: "image",
-      image: { link: "https://example.com/image.jpg", caption: "Photo" }
+      image: {link: "https://example.com/image.jpg", caption: "Photo"}
     }
-    
+
     assert_equal expected, payload
   end
 
   def test_build_message_payload_unknown_type
     response = [:unknown_type, "Content", {}]
-    
+
     payload = @client.build_message_payload(response, "+1234567890")
-    
+
     # Should default to text message
     expected = {
       messaging_product: "whatsapp",
       to: "+1234567890",
       type: "text",
-      text: { body: "Content" }
+      text: {body: "Content"}
     }
-    
+
     assert_equal expected, payload
   end
 
@@ -463,10 +463,10 @@ class WhatsappClientTest < Minitest::Test
 
   def test_api_error_handling
     stub_request(:post, whatsapp_messages_url)
-      .to_return(status: 400, body: { "error" => "Invalid request" }.to_json)
-    
+      .to_return(status: 400, body: {"error" => "Invalid request"}.to_json)
+
     result = @client.send_text("+1234567890", "Hello")
-    
+
     assert_nil result
   end
 
@@ -474,7 +474,7 @@ class WhatsappClientTest < Minitest::Test
     # Test that network errors are raised (not handled by client)
     stub_request(:post, whatsapp_messages_url)
       .to_raise(Net::OpenTimeout)
-    
+
     # The client should allow the exception to bubble up
     assert_raises(Net::OpenTimeout) do
       @client.send_text("+1234567890", "Hello")
@@ -487,18 +487,18 @@ class WhatsappClientTest < Minitest::Test
 
   def test_get_media_mime_type
     stub_request(:head, "https://example.com/image.jpg")
-      .to_return(status: 200, headers: { "Content-Type" => "image/jpeg" })
-    
+      .to_return(status: 200, headers: {"Content-Type" => "image/jpeg"})
+
     mime_type = @client.get_media_mime_type("https://example.com/image.jpg")
-    
+
     assert_equal "image/jpeg", mime_type
   end
 
   def test_get_media_mime_type_error
     stub_request(:head, "https://example.com/image.jpg").to_timeout
-    
+
     mime_type = @client.get_media_mime_type("https://example.com/image.jpg")
-    
+
     assert_nil mime_type
   end
 
@@ -520,27 +520,27 @@ class WhatsappClientTest < Minitest::Test
   def test_media_methods_accept_correct_parameters
     # These methods will raise errors when called with invalid parameters
     # Test that they expect the right number of parameters
-    
+
     # send_image expects (to, image_url_or_id, caption=nil, mime_type=nil)
     assert_raises(ArgumentError) { @client.send_image }
     assert_raises(ArgumentError) { @client.send_image("+1234567890") }
-    
+
     # send_document expects (to, document_url_or_id, caption=nil, filename=nil, mime_type=nil)
     assert_raises(ArgumentError) { @client.send_document }
     assert_raises(ArgumentError) { @client.send_document("+1234567890") }
-    
+
     # send_video expects (to, video_url_or_id, caption=nil, mime_type=nil)
     assert_raises(ArgumentError) { @client.send_video }
     assert_raises(ArgumentError) { @client.send_video("+1234567890") }
-    
+
     # send_audio expects (to, audio_url_or_id, mime_type=nil)
     assert_raises(ArgumentError) { @client.send_audio }
     assert_raises(ArgumentError) { @client.send_audio("+1234567890") }
-    
+
     # send_sticker expects (to, sticker_url_or_id, mime_type=nil)
     assert_raises(ArgumentError) { @client.send_sticker }
     assert_raises(ArgumentError) { @client.send_sticker("+1234567890") }
-    
+
     # upload_media expects (file_path_or_io, mime_type, filename=nil)
     assert_raises(ArgumentError) { @client.upload_media }
   end
@@ -562,26 +562,26 @@ class WhatsappClientTest < Minitest::Test
   def success_response
     {
       "messaging_product" => "whatsapp",
-      "contacts" => [{ "input" => "+1234567890", "wa_id" => "+1234567890" }],
-      "messages" => [{ "id" => "message_123" }]
+      "contacts" => [{"input" => "+1234567890", "wa_id" => "+1234567890"}],
+      "messages" => [{"id" => "message_123"}]
     }
   end
 
   def stub_whatsapp_messages_api(response)
     stub_request(:post, whatsapp_messages_url)
-      .with(headers: { "Authorization" => "Bearer test_token", "Content-Type" => "application/json" })
+      .with(headers: {"Authorization" => "Bearer test_token", "Content-Type" => "application/json"})
       .to_return(status: 200, body: response.to_json)
   end
 
   def stub_media_upload_api(response)
     stub_request(:post, whatsapp_media_url)
-      .with(headers: { "Authorization" => "Bearer test_token" })
+      .with(headers: {"Authorization" => "Bearer test_token"})
       .to_return(status: 200, body: response.to_json)
   end
 
   def stub_media_upload_api_error(error_message)
     stub_request(:post, whatsapp_media_url)
-      .with(headers: { "Authorization" => "Bearer test_token" })
-      .to_return(status: 400, body: { "error" => error_message }.to_json)
+      .with(headers: {"Authorization" => "Bearer test_token"})
+      .to_return(status: 400, body: {"error" => error_message}.to_json)
   end
-end 
+end

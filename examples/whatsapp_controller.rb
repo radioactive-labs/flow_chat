@@ -22,12 +22,12 @@ class CustomWhatsappController < ApplicationController
   def webhook
     # Create custom WhatsApp configuration for this endpoint
     custom_config = FlowChat::Whatsapp::Configuration.new
-    custom_config.access_token = ENV['MY_WHATSAPP_ACCESS_TOKEN']
-    custom_config.phone_number_id = ENV['MY_WHATSAPP_PHONE_NUMBER_ID']
-    custom_config.verify_token = ENV['MY_WHATSAPP_VERIFY_TOKEN']
-    custom_config.app_id = ENV['MY_WHATSAPP_APP_ID']
-    custom_config.app_secret = ENV['MY_WHATSAPP_APP_SECRET']
-    custom_config.business_account_id = ENV['MY_WHATSAPP_BUSINESS_ACCOUNT_ID']
+    custom_config.access_token = ENV["MY_WHATSAPP_ACCESS_TOKEN"]
+    custom_config.phone_number_id = ENV["MY_WHATSAPP_PHONE_NUMBER_ID"]
+    custom_config.verify_token = ENV["MY_WHATSAPP_VERIFY_TOKEN"]
+    custom_config.app_id = ENV["MY_WHATSAPP_APP_ID"]
+    custom_config.app_secret = ENV["MY_WHATSAPP_APP_SECRET"]
+    custom_config.business_account_id = ENV["MY_WHATSAPP_BUSINESS_ACCOUNT_ID"]
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
@@ -53,7 +53,7 @@ class WelcomeFlow < FlowChat::Flow
     choice = app.screen(:main_menu) do |prompt|
       prompt.select "Hi #{name}! What can I help you with today?", {
         "info" => "📋 Get Information",
-        "support" => "🆘 Contact Support", 
+        "support" => "🆘 Contact Support",
         "feedback" => "💬 Give Feedback"
       }
     end
@@ -94,7 +94,7 @@ class WelcomeFlow < FlowChat::Flow
     contact_method = app.screen(:contact_method) do |prompt|
       prompt.select "How would you like to contact support?", {
         "call" => "📞 Call Us",
-        "email" => "📧 Email Us", 
+        "email" => "📧 Email Us",
         "chat" => "💬 Live Chat"
       }
     end
@@ -113,7 +113,7 @@ class WelcomeFlow < FlowChat::Flow
     rating = app.screen(:rating) do |prompt|
       prompt.select "How would you rate our service?", {
         "5" => "⭐⭐⭐⭐⭐ Excellent",
-        "4" => "⭐⭐⭐⭐ Good", 
+        "4" => "⭐⭐⭐⭐ Good",
         "3" => "⭐⭐⭐ Average",
         "2" => "⭐⭐ Poor",
         "1" => "⭐ Very Poor"
@@ -137,4 +137,4 @@ class WelcomeFlow < FlowChat::Flow
 end
 
 # Add this route to your config/routes.rb:
-# post '/whatsapp/webhook', to: 'whatsapp#webhook' 
+# post '/whatsapp/webhook', to: 'whatsapp#webhook'

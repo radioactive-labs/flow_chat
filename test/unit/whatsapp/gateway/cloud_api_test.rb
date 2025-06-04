@@ -8,16 +8,16 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @mock_config.verify_token = "test_verify_token"
     @mock_config.phone_number_id = "test_phone_id"
     @mock_config.access_token = "test_access_token"
-    
+
     @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
-    
+
     # Setup WebMock for HTTP request stubbing
     WebMock.enable!
     WebMock.reset!
-    
+
     # Stub the WhatsApp messages API
     stub_request(:post, "https://graph.facebook.com/v18.0/test_phone_id/messages")
-      .to_return(status: 200, body: { "messages" => [{ "id" => "sent_123" }] }.to_json)
+      .to_return(status: 200, body: {"messages" => [{"id" => "sent_123"}]}.to_json)
   end
 
   def teardown
@@ -30,13 +30,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :get,
       params: {
         "hub.mode" => "subscribe",
-        "hub.verify_token" => "test_verify_token", 
+        "hub.verify_token" => "test_verify_token",
         "hub.challenge" => "test_challenge"
       }
     )
-    
-    result = @gateway.call(context)
-    
+
+    @gateway.call(context)
+
     # Should render the challenge as plain text
     assert_equal "test_challenge", context.controller.last_render[:plain]
   end
@@ -50,9 +50,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "hub.challenge" => "test_challenge"
       }
     )
-    
-    result = @gateway.call(context)
-    
+
+    @gateway.call(context)
+
     # Should return forbidden
     assert_equal :forbidden, context.controller.last_head_status
   end
@@ -62,9 +62,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_text_message_payload("Hello", "wamid.test123")
     )
-    
+
     @gateway.call(context)
-    
+
     # Verify context was set correctly
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
@@ -79,9 +79,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_button_response_payload("btn_0", "Yes", "wamid.test456")
     )
-    
+
     @gateway.call(context)
-    
+
     assert_equal "btn_0", context.input
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.test456", context["request.message_id"]
@@ -92,9 +92,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_list_response_payload("list_1", "Option 2", "wamid.test789")
     )
-    
+
     @gateway.call(context)
-    
+
     assert_equal "list_1", context.input
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.test789", context["request.message_id"]
@@ -105,9 +105,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_location_message_payload(0.3476, 32.5825, "wamid.location123")
     )
-    
+
     @gateway.call(context)
-    
+
     expected_location = {
       "latitude" => 0.3476,
       "longitude" => 32.5825,
@@ -125,9 +125,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_media_message_payload("media123", "image/jpeg", "wamid.media123")
     )
-    
+
     @gateway.call(context)
-    
+
     expected_media = {
       "type" => "image",
       "id" => "media123",
@@ -145,9 +145,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: "{}"
     )
-    
+
     @gateway.call(context)
-    
+
     # Should handle gracefully and return ok
     assert_equal :ok, context.controller.last_head_status
   end
@@ -157,7 +157,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: "invalid json"
     )
-    
+
     # Should not crash - JSON.parse error is expected but should be handled
     assert_raises(JSON::ParserError) do
       @gateway.call(context)
@@ -169,9 +169,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       method: :post,
       body: create_unsupported_message_payload("wamid.unsupported123")
     )
-    
+
     @gateway.call(context)
-    
+
     # Should still set basic context but input might be nil
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.unsupported123", context["request.message_id"]
@@ -180,9 +180,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   def test_bad_request_handling
     context = create_context_with_request(method: :put)
-    
+
     @gateway.call(context)
-    
+
     assert_equal :bad_request, context.controller.last_head_status
   end
 
@@ -196,11 +196,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         app_called = true
         [:text, "Response", {}]
       end
-      
+
       # Mock the client send_message call
       mock_client = Minitest::Mock.new
-      mock_client.expect(:send_message, { "messages" => [{ "id" => "sent_123" }] }, ["+256700000000", [:text, "Response", {}]])
-      
+      mock_client.expect(:send_message, {"messages" => [{"id" => "sent_123"}]}, ["+256700000000", [:text, "Response", {}]])
+
       # Stub the WhatsApp Client class to return our mock
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
         # Create gateway which will use our mocked client
@@ -209,15 +209,15 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
           method: :post,
           body: create_text_message_payload("Hello", "wamid.test123")
         )
-        
+
         gateway.call(context)
-        
+
         # Verify app was called and processed correctly
         assert app_called, "App should have been called"
-        
+
         # In inline mode, message should be sent immediately
         mock_client.verify
-        assert_equal({ "messages" => [{ "id" => "sent_123" }] }, context["whatsapp.message_result"])
+        assert_equal({"messages" => [{"id" => "sent_123"}]}, context["whatsapp.message_result"])
       end
     end
   end
@@ -225,20 +225,20 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_background_mode_message_handling
     # Mock background mode
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
         # Mock job class
         job_class = Minitest::Mock.new
         job_class.expect(:perform_later, true, [Hash])
-        
+
         # Stub constantize to return our mock
-        stub_constantize('TestBackgroundJob', job_class) do
+        stub_constantize("TestBackgroundJob", job_class) do
           context = create_context_with_request(
             method: :post,
             body: create_text_message_payload("Hello", "wamid.test123")
           )
-          
+
           @gateway.call(context)
-          
+
           job_class.verify
         end
       end
@@ -248,22 +248,25 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_background_mode_fallback_to_inline_when_job_missing
     # Mock background mode with missing job class
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, 'NonExistentJob') do
+      FlowChat::Config.whatsapp.stub(:background_job_class, "NonExistentJob") do
         # Create a simple mock client that tracks if send_message was called
         send_message_called = false
         mock_client = Object.new
         mock_client.define_singleton_method(:send_message) do |phone, response|
           send_message_called = true
-          { "messages" => [{ "id" => "fallback_123" }] }
+          {"messages" => [{"id" => "fallback_123"}]}
         end
-        
+
         # Capture logged warning
         logged_warning = nil
         logger_mock = Minitest::Mock.new
-        logger_mock.expect(:warn, nil) { |msg| logged_warning = msg; true }
-        
+        logger_mock.expect(:warn, nil) { |msg|
+          logged_warning = msg
+          true
+        }
+
         # Use the helper to make constantize fail for NonExistentJob
-        stub_constantize_to_fail('NonExistentJob') do
+        stub_constantize_to_fail("NonExistentJob") do
           # Mock the WhatsApp Client class to return our mock
           FlowChat::Whatsapp::Client.stub(:new, mock_client) do
             Rails.stub(:logger, logger_mock) do
@@ -272,17 +275,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
                 method: :post,
                 body: create_text_message_payload("Hello", "wamid.test123")
               )
-              
+
               gateway.call(context)
-              
+
               # Verify fallback behavior
               assert send_message_called, "Should have called send_message for fallback inline sending"
               assert_includes logged_warning, "Background mode requested but no NonExistentJob found. Falling back to inline sending."
-              assert_equal({ "messages" => [{ "id" => "fallback_123" }] }, context["whatsapp.message_result"])
+              assert_equal({"messages" => [{"id" => "fallback_123"}]}, context["whatsapp.message_result"])
             end
           end
         end
-        
+
         logger_mock.verify
       end
     end
@@ -293,17 +296,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :simulator) do
       # Mock client build_message_payload method
       mock_client = Minitest::Mock.new
-      mock_client.expect(:build_message_payload, { "to" => "+256700000000", "type" => "text", "text" => { "body" => "Response" } }, [[:text, "Response", {}], "+256700000000"])
-      
+      mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
+
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
         gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
         context = create_context_with_request(
           method: :post,
           body: create_text_message_payload("Hello", "wamid.test123")
         )
-        
+
         gateway.call(context)
-        
+
         mock_client.verify
         # Should render simulator response
         assert_equal "simulator", context.controller.last_render[:json][:mode]
@@ -318,17 +321,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Even if global mode is inline, simulator parameter should override
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
       mock_client = Minitest::Mock.new
-      mock_client.expect(:build_message_payload, { "to" => "+256700000000", "type" => "text", "text" => { "body" => "Response" } }, [[:text, "Response", {}], "+256700000000"])
-      
+      mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
+
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
         gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
         context = create_context_with_request(
           method: :post,
           body: create_text_message_payload("Hello", "wamid.test123").merge("simulator_mode" => true)
         )
-        
+
         gateway.call(context)
-        
+
         mock_client.verify
         # Should render simulator response despite global inline mode
         assert_equal "simulator", context.controller.last_render[:json][:mode]
@@ -339,7 +342,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_flow_processing_happens_synchronously_in_background_mode
     # Verify that flow processing happens sync, even in background mode
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
         # Track if flow was called
         flow_called = false
         test_app = proc do |context|
@@ -349,19 +352,19 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
           assert_equal "+256700000000", context["request.msisdn"]
           [:text, "Flow executed with context", {}]
         end
-        
+
         job_class = Minitest::Mock.new
         job_class.expect(:perform_later, true, [Hash])
-        
-        stub_constantize('TestBackgroundJob', job_class) do
+
+        stub_constantize("TestBackgroundJob", job_class) do
           gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
           context = create_context_with_request(
             method: :post,
             body: create_text_message_payload("Hello", "wamid.test123")
           )
-          
+
           gateway.call(context)
-          
+
           # Flow should have been executed synchronously
           assert flow_called, "Flow should be executed synchronously even in background mode"
           job_class.verify
@@ -373,26 +376,26 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_background_mode_preserves_controller_context
     # Verify that controller context is preserved during flow execution
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, 'TestBackgroundJob') do
+      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
         controller_preserved = false
         test_app = proc do |context|
           # Verify controller is available during flow execution
           controller_preserved = !context.controller.nil?
           [:text, "Controller context preserved", {}]
         end
-        
+
         job_class = Minitest::Mock.new
         job_class.expect(:perform_later, true, [Hash])
-        
-        stub_constantize('TestBackgroundJob', job_class) do
+
+        stub_constantize("TestBackgroundJob", job_class) do
           gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
           context = create_context_with_request(
             method: :post,
             body: create_text_message_payload("Hello", "wamid.test123")
           )
-          
+
           gateway.call(context)
-          
+
           assert controller_preserved, "Controller context should be preserved during flow execution"
           job_class.verify
         end
@@ -404,34 +407,34 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   def create_context_with_request(method:, params: {}, body: nil)
     context = FlowChat::Context.new
-    
+
     # Create mock request
     request = OpenStruct.new(params: params)
     request.define_singleton_method(:get?) { method == :get }
     request.define_singleton_method(:post?) { method == :post }
-    
+
     if body
       request.define_singleton_method(:body) do
         StringIO.new(body.is_a?(String) ? body : body.to_json)
       end
     end
-    
+
     # Create mock controller
     controller = OpenStruct.new(request: request)
-    
+
     # Track render calls
     controller.define_singleton_method(:render) do |options|
       @last_render = options
     end
     controller.define_singleton_method(:last_render) { @last_render }
-    
+
     # Track head calls
     controller.define_singleton_method(:head) do |status, options = {}|
       @last_head_status = status
       @last_head_options = options
     end
     controller.define_singleton_method(:last_head_status) { @last_head_status }
-    
+
     context["controller"] = controller
     context
   end
@@ -445,11 +448,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "id" => message_id,
               "from" => "256700000000",
               "timestamp" => "1702891800",
-              "text" => { "body" => text },
+              "text" => {"body" => text},
               "type" => "text"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -469,12 +472,12 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "timestamp" => "1702891800",
               "interactive" => {
                 "type" => "button_reply",
-                "button_reply" => { "id" => button_id, "title" => button_title }
+                "button_reply" => {"id" => button_id, "title" => button_title}
               },
               "type" => "interactive"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -494,12 +497,12 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "timestamp" => "1702891800",
               "interactive" => {
                 "type" => "list_reply",
-                "list_reply" => { "id" => list_id, "title" => list_title }
+                "list_reply" => {"id" => list_id, "title" => list_title}
               },
               "type" => "interactive"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -524,7 +527,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "type" => "location"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -549,7 +552,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "type" => "image"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -570,7 +573,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "type" => "unsupported"
             }],
             "contacts" => [{
-              "profile" => { "name" => "John Doe" },
+              "profile" => {"name" => "John Doe"},
               "wa_id" => "256700000000"
             }]
           }
@@ -578,4 +581,4 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }]
     }
   end
-end 
+end

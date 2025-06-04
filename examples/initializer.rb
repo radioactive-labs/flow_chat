@@ -28,4 +28,4 @@ FlowChat::Config.ussd.pagination_next_text = "More"
 
 # Configure resumable sessions (optional)
 FlowChat::Config.ussd.resumable_sessions_enabled = true
-FlowChat::Config.ussd.resumable_sessions_timeout_seconds = 300 # 5 minutes 
+FlowChat::Config.ussd.resumable_sessions_timeout_seconds = 300 # 5 minutes

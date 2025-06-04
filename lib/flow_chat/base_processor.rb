@@ -64,4 +64,4 @@ module FlowChat
       raise NotImplementedError, "Subclasses must implement configure_middleware_stack"
     end
   end
-end 
+end

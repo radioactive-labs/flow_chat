@@ -54,7 +54,7 @@ class UrgentWhatsappSendJob < ApplicationJob
       error: error.message,
       user: send_data[:msisdn]
     )
-    
+
     # Still send user notification
     super
   end
@@ -96,7 +96,7 @@ class MultiTenantWhatsappSendJob < ApplicationJob
 end
 
 # Usage in Rails configuration
-# 
+#
 # Add to config/application.rb:
 # config.active_job.queue_adapter = :sidekiq
 #
@@ -108,4 +108,4 @@ end
 # 1. Controller receives WhatsApp webhook
 # 2. Flow is processed synchronously (maintains controller context)
 # 3. Response is queued for async delivery via background job
-# 4. Job only handles sending the response, not processing flows 
+# 4. Job only handles sending the response, not processing flows

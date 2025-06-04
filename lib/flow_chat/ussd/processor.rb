@@ -24,4 +24,4 @@ module FlowChat
       end
     end
   end
-end 
+end

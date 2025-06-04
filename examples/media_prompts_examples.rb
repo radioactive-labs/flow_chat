@@ -9,7 +9,7 @@ class MediaPromptFlow < FlowChat::Flow
   def main_page
     # ✅ Simple text input with attached image
     # The prompt text becomes the image caption
-    feedback = app.screen(:feedback) do |prompt|
+    app.screen(:feedback) do |prompt|
       prompt.ask "What do you think of our new product?",
         media: {
           type: :image,
@@ -25,4 +25,3 @@ class MediaPromptFlow < FlowChat::Flow
       }
   end
 end
-

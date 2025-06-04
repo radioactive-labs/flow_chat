@@ -23,7 +23,7 @@ module FlowChat
       end
 
       # Send a text message
-      # @param to [String] Phone number in E.164 format  
+      # @param to [String] Phone number in E.164 format
       # @param text [String] Message text
       # @return [Hash] API response or nil on error
       def send_text(to, text)
@@ -36,7 +36,7 @@ module FlowChat
       # @param buttons [Array] Array of button hashes with :id and :title
       # @return [Hash] API response or nil on error
       def send_buttons(to, text, buttons)
-        send_message(to, [:interactive_buttons, text, { buttons: buttons }])
+        send_message(to, [:interactive_buttons, text, {buttons: buttons}])
       end
 
       # Send interactive list
@@ -46,7 +46,7 @@ module FlowChat
       # @param button_text [String] Button text (default: "Choose")
       # @return [Hash] API response or nil on error
       def send_list(to, text, sections, button_text = "Choose")
-        send_message(to, [:interactive_list, text, { sections: sections, button_text: button_text }])
+        send_message(to, [:interactive_list, text, {sections: sections, button_text: button_text}])
       end
 
       # Send a template message
@@ -56,10 +56,10 @@ module FlowChat
       # @param language [String] Language code (default: "en_US")
       # @return [Hash] API response or nil on error
       def send_template(to, template_name, components = [], language = "en_US")
-        send_message(to, [:template, "", { 
-          template_name: template_name, 
-          components: components, 
-          language: language 
+        send_message(to, [:template, "", {
+          template_name: template_name,
+          components: components,
+          language: language
         }])
       end
 
@@ -121,12 +121,12 @@ module FlowChat
       # @raise [StandardError] If upload fails
       def upload_media(file_path_or_io, mime_type, filename = nil)
         raise ArgumentError, "mime_type is required" if mime_type.nil? || mime_type.empty?
-        
+
         if file_path_or_io.is_a?(String)
           # File path
           raise ArgumentError, "File not found: #{file_path_or_io}" unless File.exist?(file_path_or_io)
           filename ||= File.basename(file_path_or_io)
-          file = File.open(file_path_or_io, 'rb')
+          file = File.open(file_path_or_io, "rb")
         else
           # IO object
           file = file_path_or_io
@@ -140,24 +140,24 @@ module FlowChat
 
         # Prepare multipart form data
         boundary = "----WebKitFormBoundary#{SecureRandom.hex(16)}"
-        
+
         form_data = []
         form_data << "--#{boundary}"
         form_data << 'Content-Disposition: form-data; name="messaging_product"'
         form_data << ""
         form_data << "whatsapp"
-        
+
         form_data << "--#{boundary}"
         form_data << "Content-Disposition: form-data; name=\"file\"; filename=\"#{filename}\""
         form_data << "Content-Type: #{mime_type}"
         form_data << ""
         form_data << file.read
-        
+
         form_data << "--#{boundary}"
         form_data << 'Content-Disposition: form-data; name="type"'
         form_data << ""
         form_data << mime_type
-        
+
         form_data << "--#{boundary}--"
 
         body = form_data.join("\r\n")
@@ -168,14 +168,10 @@ module FlowChat
         request.body = body
 
         response = http.request(request)
-        
+
         if response.is_a?(Net::HTTPSuccess)
           data = JSON.parse(response.body)
-          if data['id']
-            data['id']
-          else
-            raise StandardError, "Failed to upload media: #{data}"
-          end
+          data["id"] || raise(StandardError, "Failed to upload media: #{data}")
         else
           Rails.logger.error "WhatsApp Media Upload error: #{response.body}"
           raise StandardError, "Media upload failed: #{response.body}"
@@ -195,7 +191,7 @@ module FlowChat
             messaging_product: "whatsapp",
             to: to,
             type: "text",
-            text: { body: content }
+            text: {body: content}
           }
         when :interactive_buttons
           {
@@ -204,7 +200,7 @@ module FlowChat
             type: "interactive",
             interactive: {
               type: "button",
-              body: { text: content },
+              body: {text: content},
               action: {
                 buttons: options[:buttons].map.with_index do |button, index|
                   {
@@ -225,7 +221,7 @@ module FlowChat
             type: "interactive",
             interactive: {
               type: "list",
-              body: { text: content },
+              body: {text: content},
               action: {
                 button: options[:button_text] || "Choose",
                 sections: options[:sections]
@@ -239,7 +235,7 @@ module FlowChat
             type: "template",
             template: {
               name: options[:template_name],
-              language: { code: options[:language] || "en_US" },
+              language: {code: options[:language] || "en_US"},
               components: options[:components] || []
             }
           }
@@ -284,7 +280,7 @@ module FlowChat
             messaging_product: "whatsapp",
             to: to,
             type: "text",
-            text: { body: content.to_s }
+            text: {body: content.to_s}
           }
         end
       end
@@ -301,7 +297,7 @@ module FlowChat
         request["Authorization"] = "Bearer #{@config.access_token}"
 
         response = http.request(request)
-        
+
         if response.is_a?(Net::HTTPSuccess)
           data = JSON.parse(response.body)
           data["url"]
@@ -326,7 +322,7 @@ module FlowChat
         request["Authorization"] = "Bearer #{@config.access_token}"
 
         response = http.request(request)
-        
+
         if response.is_a?(Net::HTTPSuccess)
           response.body
         else
@@ -337,15 +333,15 @@ module FlowChat
 
       # Get MIME type from URL without downloading (HEAD request)
       def get_media_mime_type(url)
-        require 'net/http'
-        
+        require "net/http"
+
         uri = URI(url)
         http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = (uri.scheme == 'https')
-        
+        http.use_ssl = (uri.scheme == "https")
+
         # Use HEAD request to get headers without downloading content
         response = http.head(uri.path)
-        response['content-type']
+        response["content-type"]
       rescue => e
         Rails.logger.warn "Could not detect MIME type for #{url}: #{e.message}"
         nil
@@ -358,7 +354,7 @@ module FlowChat
       # @return [Hash] Media object for WhatsApp API
       def build_media_object(options)
         media_obj = {}
-        
+
         # Handle URL or ID
         if options[:url]
           # Use URL directly
@@ -367,17 +363,17 @@ module FlowChat
           # Use provided media ID directly
           media_obj[:id] = options[:id]
         end
-        
+
         # Add optional fields
         media_obj[:caption] = options[:caption] if options[:caption]
         media_obj[:filename] = options[:filename] if options[:filename]
-        
+
         media_obj
       end
 
       # Check if input is a URL or file path/media ID
       def url?(input)
-        input.to_s.start_with?('http://', 'https://')
+        input.to_s.start_with?("http://", "https://")
       end
 
       # Extract filename from URL
@@ -403,7 +399,7 @@ module FlowChat
         request.body = message_data.to_json
 
         response = http.request(request)
-        
+
         if response.is_a?(Net::HTTPSuccess)
           JSON.parse(response.body)
         else
@@ -414,21 +410,21 @@ module FlowChat
 
       def send_media_message(to, media_type, url_or_id, caption: nil, filename: nil, mime_type: nil)
         media_object = if url?(url_or_id)
-                         { link: url_or_id }
-                       else
-                         { id: url_or_id }
-                       end
+          {link: url_or_id}
+        else
+          {id: url_or_id}
+        end
 
         # Add caption if provided (stickers don't support captions)
         media_object[:caption] = caption if caption && media_type != :sticker
-        
+
         # Add filename for documents
         media_object[:filename] = filename if filename && media_type == :document
 
         message = {
-          messaging_product: "whatsapp",
-          to: to,
-          type: media_type.to_s,
+          :messaging_product => "whatsapp",
+          :to => to,
+          :type => media_type.to_s,
           media_type.to_s => media_object
         }
 
@@ -436,4 +432,4 @@ module FlowChat
       end
     end
   end
-end 
+end

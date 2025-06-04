@@ -16,7 +16,7 @@ module FlowChat
           type: "template",
           template: {
             name: template_name,
-            language: { code: language },
+            language: {code: language},
             components: components
           }
         }
@@ -27,7 +27,7 @@ module FlowChat
       # Common template structures
       def send_welcome_template(to:, name: nil)
         components = []
-        
+
         if name
           components << {
             type: "header",
@@ -87,7 +87,7 @@ module FlowChat
       def create_template(name:, category:, language: "en_US", components: [])
         business_account_id = @config.business_account_id
         uri = URI("https://graph.facebook.com/v18.0/#{business_account_id}/message_templates")
-        
+
         template_data = {
           name: name,
           category: category, # AUTHENTICATION, MARKETING, UTILITY
@@ -111,7 +111,7 @@ module FlowChat
       def list_templates
         business_account_id = @config.business_account_id
         uri = URI("https://graph.facebook.com/v18.0/#{business_account_id}/message_templates")
-        
+
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
 
@@ -125,7 +125,7 @@ module FlowChat
       # Get template status
       def template_status(template_id)
         uri = URI("https://graph.facebook.com/v18.0/#{template_id}")
-        
+
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
 
@@ -149,7 +149,7 @@ module FlowChat
         request.body = message_data.to_json
 
         response = http.request(request)
-        
+
         unless response.is_a?(Net::HTTPSuccess)
           Rails.logger.error "WhatsApp Template API error: #{response.body}"
           return nil
@@ -159,4 +159,4 @@ module FlowChat
       end
     end
   end
-end 
+end

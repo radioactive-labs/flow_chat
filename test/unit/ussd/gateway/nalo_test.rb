@@ -215,14 +215,14 @@ class UssdNaloGatewayTest < Minitest::Test
 
   def mock_controller
     controller = super
-    
+
     # Add render tracking
     controller.define_singleton_method(:render) do |options|
       @last_render = options
     end
-    
+
     controller.define_singleton_method(:last_render) { @last_render }
-    
+
     controller
   end
-end 
+end

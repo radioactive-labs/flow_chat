@@ -59,19 +59,19 @@ module FlowChat
 
         # For USSD, we append the media URL to the message
         media_text = case media_type.to_sym
-                    when :image
-                      "📷 Image: #{media_url}"
-                    when :document
-                      "📄 Document: #{media_url}"
-                    when :audio
-                      "🎵 Audio: #{media_url}"
-                    when :video
-                      "🎥 Video: #{media_url}"
-                    when :sticker
-                      "😊 Sticker: #{media_url}"
-                    else
-                      "📎 Media: #{media_url}"
-                    end
+        when :image
+          "📷 Image: #{media_url}"
+        when :document
+          "📄 Document: #{media_url}"
+        when :audio
+          "🎵 Audio: #{media_url}"
+        when :video
+          "🎥 Video: #{media_url}"
+        when :sticker
+          "😊 Sticker: #{media_url}"
+        else
+          "📎 Media: #{media_url}"
+        end
 
         # Combine message with media information
         "#{message}\n\n#{media_text}"
