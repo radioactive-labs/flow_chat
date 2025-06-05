@@ -31,9 +31,9 @@ class MediaSupportTest < Minitest::Test
       flow.test_ask_with_image
     end
 
-    assert_equal :media_image, error.prompt[0]
-    assert_equal "https://example.com/help.jpg", error.prompt[2][:url]
-    assert_equal "What do you think of this product?", error.prompt[2][:caption]
+    assert_equal "What do you think of this product?", error.prompt
+    assert_equal :image, error.media[:type]
+    assert_equal "https://example.com/help.jpg", error.media[:url]
   end
 
   def test_whatsapp_ask_with_media_processes_user_input
@@ -54,10 +54,10 @@ class MediaSupportTest < Minitest::Test
       flow.test_say_with_document
     end
 
-    assert_equal :media_document, error.prompt[0]
-    assert_equal "https://example.com/receipt.pdf", error.prompt[2][:url]
-    assert_equal "Here's your receipt:", error.prompt[2][:caption]
-    assert_equal "receipt.pdf", error.prompt[2][:filename]
+    assert_equal "Here's your receipt:", error.prompt
+    assert_equal :document, error.media[:type]
+    assert_equal "https://example.com/receipt.pdf", error.media[:url]
+    assert_equal "receipt.pdf", error.media[:filename]
   end
 
   def test_whatsapp_media_with_validation_error
@@ -69,10 +69,10 @@ class MediaSupportTest < Minitest::Test
       flow.test_ask_with_validation
     end
 
-    # When validation fails, WhatsApp shows text error with original message
-    assert_equal :text, error.prompt[0]
-    assert_includes error.prompt[1], "Must be 18 or older"
-    assert_includes error.prompt[1], "Enter your age:"
+    assert_includes error.prompt, "Must be 18 or older"
+    assert_includes error.prompt, "Enter your age:"
+    assert_equal :image, error.media[:type]
+    assert_equal "https://example.com/age_verification.jpg", error.media[:url]
   end
 
   def test_whatsapp_sticker_without_caption
@@ -84,9 +84,10 @@ class MediaSupportTest < Minitest::Test
       flow.test_say_sticker
     end
 
-    assert_equal :media_sticker, error.prompt[0]
-    assert_equal "https://example.com/happy.webp", error.prompt[2][:url]
-    refute error.prompt[2].key?(:caption)  # Stickers don't have captions
+    assert_equal "Thanks for your order!", error.prompt
+    assert_equal :sticker, error.media[:type]
+    assert_equal "https://example.com/happy.webp", error.media[:url]
+    refute error.media.key?(:caption)  # Stickers don't have captions
   end
 
   # ============================================================================
@@ -102,8 +103,9 @@ class MediaSupportTest < Minitest::Test
       flow.test_ask_with_image
     end
 
-    expected_message = "What do you think of this product?\n\n📷 Image: https://example.com/help.jpg"
-    assert_equal expected_message, error.prompt
+    assert_equal "What do you think of this product?", error.prompt
+    assert_equal :image, error.media[:type]
+    assert_equal "https://example.com/help.jpg", error.media[:url]
   end
 
   def test_ussd_ask_with_media_processes_user_input
@@ -123,8 +125,9 @@ class MediaSupportTest < Minitest::Test
       flow.test_say_with_document
     end
 
-    expected_message = "Here's your receipt:\n\n📄 Document: https://example.com/receipt.pdf"
-    assert_equal expected_message, error.prompt
+    assert_equal "Here's your receipt:", error.prompt
+    assert_equal :document, error.media[:type]
+    assert_equal "https://example.com/receipt.pdf", error.media[:url]
   end
 
   def test_ussd_media_with_validation_error_includes_media_url
@@ -136,10 +139,10 @@ class MediaSupportTest < Minitest::Test
       flow.test_ask_with_validation
     end
 
-    # Should include both validation error and original prompt with media
     assert_includes error.prompt, "Must be 18 or older"
     assert_includes error.prompt, "Enter your age:"
-    assert_includes error.prompt, "📷 Image: https://example.com/age_verification.jpg"
+    assert_equal :image, error.media[:type]
+    assert_equal "https://example.com/age_verification.jpg", error.media[:url]
   end
 
   def test_ussd_all_media_types_have_correct_icons
@@ -160,8 +163,9 @@ class MediaSupportTest < Minitest::Test
         flow.test_say_with_media_type(media[:type], media[:url])
       end
 
-      expected_message = "Check this out:\n\n#{media[:icon]} #{media[:label]}: #{media[:url]}"
-      assert_equal expected_message, error.prompt
+      assert_equal "Check this out:", error.prompt
+      assert_equal media[:type], error.media[:type]
+      assert_equal media[:url], error.media[:url]
     end
   end
 
@@ -173,21 +177,25 @@ class MediaSupportTest < Minitest::Test
     # Test the same flow method on both platforms
     media_hash = {type: :image, url: "https://example.com/product.jpg"}
 
-    # WhatsApp - should get media prompt
+    # WhatsApp - should get prompt with media attribute
     whatsapp_app = FlowChat::Whatsapp::App.new(@whatsapp_context)
     whatsapp_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_cross_platform_ask(media_hash)
     end
-    assert_equal :media_image, whatsapp_error.prompt[0]
+    assert_equal "Rate this product:", whatsapp_error.prompt
+    assert_equal :image, whatsapp_error.media[:type]
+    assert_equal "https://example.com/product.jpg", whatsapp_error.media[:url]
 
-    # USSD - should get text with URL
+    # USSD - now also uses raw message + media attribute (architectural unification)
     ussd_app = FlowChat::Ussd::App.new(@ussd_context)
     ussd_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(ussd_app)
       flow.test_cross_platform_ask(media_hash)
     end
-    assert_includes ussd_error.prompt, "📷 Image: https://example.com/product.jpg"
+    assert_equal "Rate this product:", ussd_error.prompt
+    assert_equal :image, ussd_error.media[:type]
+    assert_equal "https://example.com/product.jpg", ussd_error.media[:url]
   end
 
   def test_flow_without_media_works_normally_on_both_platforms
@@ -197,8 +205,8 @@ class MediaSupportTest < Minitest::Test
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_ask_without_media
     end
-    assert_equal :text, whatsapp_error.prompt[0]
-    assert_equal "What's your name?", whatsapp_error.prompt[1]
+    assert_equal "What's your name?", whatsapp_error.prompt
+    assert_nil whatsapp_error.media
 
     # USSD
     ussd_app = FlowChat::Ussd::App.new(@ussd_context)
@@ -224,9 +232,9 @@ class MediaSupportTest < Minitest::Test
     end
 
     # Should show the first screen with media
-    assert_equal :media_image, error.prompt[0]
-    assert_equal "https://example.com/step1.jpg", error.prompt[2][:url]
-    assert_equal "Step 1: Choose your preference", error.prompt[2][:caption]
+    assert_equal "Step 1: Choose your preference", error.prompt
+    assert_equal :image, error.media[:type]
+    assert_equal "https://example.com/step1.jpg", error.media[:url]
   end
 
   def test_media_url_vs_path_handling
@@ -237,14 +245,14 @@ class MediaSupportTest < Minitest::Test
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_media_with_url
     end
-    assert_equal "https://example.com/image.jpg", error1.prompt[2][:url]
+    assert_equal "https://example.com/image.jpg", error1.media[:url]
 
     # Test with path (should be treated as URL in the prompt system)
     error2 = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_media_with_path
     end
-    assert_equal "/local/path/image.jpg", error2.prompt[2][:url]
+    assert_equal "/local/path/image.jpg", error2.media[:url]
   end
 
   private

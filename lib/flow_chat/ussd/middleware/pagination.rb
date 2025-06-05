@@ -14,9 +14,9 @@ module FlowChat
             type, prompt = handle_intercepted_request
           else
             @session.delete "ussd.pagination"
-            type, prompt, choices = @app.call(context)
+            type, prompt, choices, media = @app.call(context)
 
-            prompt = FlowChat::Ussd::Renderer.new(prompt, choices).render
+            prompt = FlowChat::Ussd::Renderer.new(prompt, choices: choices, media: media).render
             type, prompt = maybe_paginate(type, prompt) if prompt.present?
           end
           [type, prompt, []]

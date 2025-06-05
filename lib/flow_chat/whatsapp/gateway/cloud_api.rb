@@ -114,14 +114,26 @@ module FlowChat
             handler_mode = determine_message_handler(context)
 
             # Process the message based on handling mode
-            case handler_mode
-            when :inline
-              handle_message_inline(context, controller)
-            when :background
-              handle_message_background(context, controller)
-            when :simulator
-              # Return early from simulator mode to preserve the JSON response
-              return handle_message_simulator(context, controller)
+            begin
+              case handler_mode
+              when :inline
+                handle_message_inline(context, controller)
+              when :background
+                handle_message_background(context, controller)
+              when :simulator
+                # Return early from simulator mode to preserve the JSON response
+                return handle_message_simulator(context, controller)
+              end
+            rescue => e
+              # Log the error and set appropriate HTTP status
+              Rails.logger.error "Error processing WhatsApp message: #{e.message}"
+              Rails.logger.error e.backtrace&.join("\n") if e.backtrace
+              
+              # Return error status to WhatsApp so they know processing failed
+              controller.head :internal_server_error
+              
+              # Re-raise the error to bubble it up for proper error tracking/monitoring
+              raise e
             end
           end
 
@@ -217,7 +229,9 @@ module FlowChat
         def handle_message_inline(context, controller)
           response = @app.call(context)
           if response
-            result = @client.send_message(context["request.msisdn"], response)
+            _type, prompt, choices, media = response
+            rendered_message = render_response(prompt, choices, media)
+            result = @client.send_message(context["request.msisdn"], rendered_message)
             context["whatsapp.message_result"] = result
           end
         end
@@ -227,10 +241,13 @@ module FlowChat
           response = @app.call(context)
 
           if response
+            _type, prompt, choices, media = response
+            rendered_message = render_response(prompt, choices, media)
+            
             # Queue only the response delivery asynchronously
             send_data = {
               msisdn: context["request.msisdn"],
-              response: response,
+              response: rendered_message,
               config_name: @config.name
             }
 
@@ -244,7 +261,7 @@ module FlowChat
             rescue NameError
               # Fallback to inline sending if no job system
               Rails.logger.warn "Background mode requested but no #{job_class_name} found. Falling back to inline sending."
-              result = @client.send_message(context["request.msisdn"], response)
+              result = @client.send_message(context["request.msisdn"], rendered_message)
               context["whatsapp.message_result"] = result
             end
           end
@@ -254,9 +271,12 @@ module FlowChat
           response = @app.call(context)
 
           if response
+            _type, prompt, choices, media = response
+            rendered_message = render_response(prompt, choices, media)
+            
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via WhatsApp API
-            message_payload = @client.build_message_payload(response, context["request.msisdn"])
+            message_payload = @client.build_message_payload(rendered_message, context["request.msisdn"])
 
             simulator_response = {
               mode: "simulator",
@@ -316,6 +336,10 @@ module FlowChat
 
         def parse_request_body(request)
           @body ||= JSON.parse(request.body.read)
+        end
+
+        def render_response(prompt, choices, media)
+          FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
         end
       end
     end

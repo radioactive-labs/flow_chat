@@ -4,6 +4,9 @@ module FlowChat
     mattr_accessor :logger, default: Logger.new($stdout)
     mattr_accessor :cache, default: nil
     mattr_accessor :simulator_secret, default: nil
+    # When true (default), validation errors are combined with the original message.
+    # When false, only the validation error message is shown to the user.
+    mattr_accessor :combine_validation_error_with_message, default: true
 
     # USSD-specific configuration object
     def self.ussd

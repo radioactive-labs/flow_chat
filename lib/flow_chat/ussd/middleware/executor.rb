@@ -11,10 +11,10 @@ module FlowChat
           flow = context.flow.new ussd_app
           flow.send context["flow.action"]
         rescue FlowChat::Interrupt::Prompt => e
-          [:prompt, e.prompt, e.choices]
+          [:prompt, e.prompt, e.choices, e.media]
         rescue FlowChat::Interrupt::Terminate => e
           context.session.destroy
-          [:terminate, e.prompt, nil]
+          [:terminate, e.prompt, nil, e.media]
         end
 
         private

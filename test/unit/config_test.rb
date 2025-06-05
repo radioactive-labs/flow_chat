@@ -171,4 +171,22 @@ class ConfigTest < Minitest::Test
     refute_respond_to FlowChat::Config.whatsapp, :pagination_page_size
     refute_respond_to FlowChat::Config.whatsapp, :resumable_sessions_enabled
   end
+
+  def test_combine_validation_error_with_message_default
+    # Should default to true
+    assert_equal true, FlowChat::Config.combine_validation_error_with_message
+  end
+
+  def test_combine_validation_error_with_message_can_be_changed
+    original_setting = FlowChat::Config.combine_validation_error_with_message
+    
+    # Should be able to change the setting
+    FlowChat::Config.combine_validation_error_with_message = false
+    assert_equal false, FlowChat::Config.combine_validation_error_with_message
+
+    FlowChat::Config.combine_validation_error_with_message = true
+    assert_equal true, FlowChat::Config.combine_validation_error_with_message
+  ensure
+    FlowChat::Config.combine_validation_error_with_message = original_setting
+  end
 end

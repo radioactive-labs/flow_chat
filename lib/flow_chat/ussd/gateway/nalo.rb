@@ -20,20 +20,20 @@ module FlowChat
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response
           context.input = params["USERDATA"].presence
 
-          type, prompt, choices = @app.call(context)
+          type, prompt, choices, media = @app.call(context)
 
           context.controller.render json: {
             USERID: params["USERID"],
             MSISDN: params["MSISDN"],
-            MSG: render_prompt(prompt, choices),
+            MSG: render_prompt(prompt, choices, media),
             MSGTYPE: type == :prompt
           }
         end
 
         private
 
-        def render_prompt(prompt, choices)
-          FlowChat::Ussd::Renderer.new(prompt, choices).render
+        def render_prompt(prompt, choices, media)
+          FlowChat::Ussd::Renderer.new(prompt, choices: choices, media: media).render
         end
       end
     end

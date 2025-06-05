@@ -10,7 +10,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @mock_config.access_token = "test_access_token"
     @mock_config.app_secret = "test_app_secret"
 
-    @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    @gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
 
     # Setup WebMock for HTTP request stubbing
     WebMock.enable!
@@ -196,7 +196,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       app_called = false
       test_app = proc do |context|
         app_called = true
-        [:text, "Response", {}]
+        [:text, "Response", nil, nil]
       end
 
       # Mock the client send_message call
@@ -272,7 +272,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
           # Mock the WhatsApp Client class to return our mock
           FlowChat::Whatsapp::Client.stub(:new, mock_client) do
             Rails.stub(:logger, logger_mock) do
-              gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+              gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
               context = create_context_with_request(
                 method: :post,
                 body: create_text_message_payload("Hello", "wamid.test123")
@@ -296,12 +296,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_simulator_mode_message_handling
     # Mock simulator mode
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :simulator) do
-      # Mock client build_message_payload method
+      # Mock client build_message_payload method - expects final rendered format
       mock_client = Minitest::Mock.new
       mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
 
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+        # App returns new format: [type, message, choices, media]
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
         context = create_context_with_request(
           method: :post,
           body: create_text_message_payload("Hello", "wamid.test123")
@@ -335,7 +336,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
 
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+        # App returns new format: [type, message, choices, media]
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
         context = create_context_with_request(
           method: :post,
           body: create_text_message_payload("Hello", "wamid.test123").merge("simulator_mode" => true),
@@ -370,7 +372,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
           # Verify we have full context during flow execution
           assert_equal "Hello", context.input
           assert_equal "+256700000000", context["request.msisdn"]
-          [:text, "Flow executed with context", {}]
+          [:text, "Flow executed with context", nil, nil]
         end
 
         job_class = Minitest::Mock.new
@@ -401,7 +403,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         test_app = proc do |context|
           # Verify controller is available during flow execution
           controller_preserved = !context.controller.nil?
-          [:text, "Controller context preserved", {}]
+          [:text, "Controller context preserved", nil, nil]
         end
 
         job_class = Minitest::Mock.new
@@ -440,7 +442,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
 
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+        # App returns new format: [type, message, choices, media]
+        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
         
         payload_hash = create_text_message_payload("Hello", "wamid.test123")
         payload_json = payload_hash.to_json
@@ -498,7 +501,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should process successfully with valid signature
@@ -522,7 +525,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should reject with unauthorized status
@@ -543,7 +546,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       # No signature header provided
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should reject with unauthorized status
@@ -565,7 +568,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should reject with unauthorized status
@@ -585,7 +588,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       # No signature header - should raise exception without app_secret
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     
     # Should raise ConfigurationError when app_secret is missing and validation not explicitly disabled
     assert_raises(FlowChat::Whatsapp::ConfigurationError) do
@@ -605,7 +608,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       # No signature header - should raise exception with empty app_secret
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     
     # Should raise ConfigurationError when app_secret is empty and validation not explicitly disabled
     assert_raises(FlowChat::Whatsapp::ConfigurationError) do
@@ -626,7 +629,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       # No signature header - should be fine when explicitly disabled
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should process successfully when validation is explicitly disabled
@@ -650,7 +653,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should process successfully even with invalid signature when validation is disabled
@@ -669,7 +672,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       body: payload_hash.to_json
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     
     # Should raise ConfigurationError with helpful message
     error = assert_raises(FlowChat::Whatsapp::ConfigurationError) do
@@ -705,7 +708,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }
     )
     
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
     
     # Should reject because signature doesn't match the actual body
@@ -714,7 +717,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   end
 
   def test_secure_compare_method
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", {}] }, @mock_config)
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     
     # Test identical strings
     assert gateway.send(:secure_compare, "hello", "hello")

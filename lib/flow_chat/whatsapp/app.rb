@@ -23,7 +23,7 @@ module FlowChat
           user_input = nil
         end
 
-        prompt = FlowChat::Whatsapp::Prompt.new user_input
+        prompt = FlowChat::Prompt.new user_input
         @input = nil # input is being submitted to prompt so we clear it
 
         value = yield prompt
@@ -31,8 +31,8 @@ module FlowChat
         value
       end
 
-      def say(msg)
-        raise FlowChat::Interrupt::Terminate.new([:text, msg, {}])
+      def say(msg, media: nil)
+        raise FlowChat::Interrupt::Terminate.new(msg, media: media)
       end
 
       # WhatsApp-specific data accessors (read-only)

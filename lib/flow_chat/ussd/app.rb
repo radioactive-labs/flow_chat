@@ -17,7 +17,7 @@ module FlowChat
         navigation_stack << key
         return session.get(key) if session.get(key).present?
 
-        prompt = FlowChat::Ussd::Prompt.new input
+        prompt = FlowChat::Prompt.new input
         @input = nil # input is being submitted to prompt so we clear it
 
         value = yield prompt
@@ -25,7 +25,7 @@ module FlowChat
         value
       end
 
-      def say(msg)
+      def say(msg, media: nil)
         raise FlowChat::Interrupt::Terminate.new(msg)
       end
 

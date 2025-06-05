@@ -11,12 +11,12 @@ module FlowChat
           flow = context.flow.new whatsapp_app
           flow.send context["flow.action"]
         rescue FlowChat::Interrupt::Prompt => e
-          # Return the interrupt data for WhatsApp message formatting
-          e.prompt
+          # Return the same triplet format as USSD for consistency
+          [:prompt, e.prompt, e.choices, e.media]
         rescue FlowChat::Interrupt::Terminate => e
           # Clean up session and return terminal message
           context.session.destroy
-          e.prompt
+          [:terminate, e.prompt, nil, e.media]
         end
 
         private

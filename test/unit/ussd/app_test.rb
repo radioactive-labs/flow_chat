@@ -51,7 +51,7 @@ class UssdAppTest < Minitest::Test
     executed = false
     result = @app.screen(:new_screen) do |prompt|
       executed = true
-      assert_kind_of FlowChat::Ussd::Prompt, prompt
+      assert_kind_of FlowChat::Prompt, prompt
       "block_result"
     end
 

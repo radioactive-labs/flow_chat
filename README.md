@@ -77,7 +77,7 @@ class UssdController < ApplicationController
   def process_request
     processor = FlowChat::Ussd::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page
@@ -485,7 +485,7 @@ end
 
 ## Cross-Platform Compatibility
 
-FlowChat provides a unified API that works across both USSD and WhatsApp platforms, with graceful degradation for platform-specific features:
+FlowChat provides a unified API that works across both USSD and WhatsApp platforms, with graceful degradation for platform-specific features. Under the hood, FlowChat uses a unified prompt architecture that ensures consistent behavior across platforms while optimizing the user experience for each channel.
 
 ### Shared Features (Both USSD & WhatsApp)
 - ✅ `app.screen()` - Interactive screens with prompts
@@ -773,6 +773,46 @@ app.screen(:credit_card) do |prompt|
 end
 ```
 
+### Validation Error Display
+
+Configure how validation errors are displayed to users:
+
+```ruby
+# config/initializers/flowchat.rb
+
+# Default behavior: combine error with original message
+FlowChat::Config.combine_validation_error_with_message = true
+# User sees: "Card number must be 16 digits\n\nEnter credit card number:"
+
+# Show only the error message
+FlowChat::Config.combine_validation_error_with_message = false  
+# User sees: "Card number must be 16 digits"
+```
+
+**Use cases for each approach:**
+
+- **Combined (default)**: Better for first-time users who need context about what they're entering
+- **Error only**: Cleaner UX for experienced users, reduces message length for USSD character limits
+
+**Example with both approaches:**
+
+```ruby
+# This validation code works the same way regardless of config
+age = app.screen(:age) do |prompt|
+  prompt.ask "How old are you?",
+    convert: ->(input) { input.to_i },
+    validate: ->(input) { "You must be at least 18 years old" unless input >= 18 }
+end
+
+# With combine_validation_error_with_message = true (default):
+# "You must be at least 18 years old
+# 
+# How old are you?"
+
+# With combine_validation_error_with_message = false:
+# "You must be at least 18 years old"
+```
+
 ### Background Job Support
 
 For high-volume WhatsApp applications, use background response delivery:
@@ -861,7 +901,7 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
   
   # Session storage (required)
-  config.use_session_store FlowChat::Session::RailsSessionStore
+  config.use_session_store FlowChat::Session::CacheSessionStore
   
   # Add custom middleware (optional)
   config.use_middleware MyLoggingMiddleware
@@ -906,7 +946,7 @@ FlowChat::Config.ussd.pagination_back_text = "Back"     # Default: "Back"
 ```ruby
 processor = FlowChat::Ussd::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
-  config.use_session_store FlowChat::Session::RailsSessionStore
+  config.use_session_store FlowChat::Session::CacheSessionStore
   config.use_resumable_sessions  # Enable resumable sessions
 end
 ```
@@ -933,7 +973,7 @@ end
 # Use your custom middleware
 processor = FlowChat::Ussd::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
-  config.use_session_store FlowChat::Session::RailsSessionStore
+  config.use_session_store FlowChat::Session::CacheSessionStore
   config.use_middleware LoggingMiddleware
 end
 ```
@@ -1084,6 +1124,11 @@ end
 FlowChat::Config.logger = Rails.logger
 FlowChat::Config.cache = Rails.cache
 FlowChat::Config.simulator_secret = "your_secure_secret_here"
+
+# Validation error display behavior
+# When true (default), validation errors are combined with the original message.
+# When false, only the validation error message is shown to the user.
+FlowChat::Config.combine_validation_error_with_message = true
 
 # USSD configuration
 FlowChat::Config.ussd.pagination_page_size = 140

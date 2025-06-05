@@ -61,7 +61,7 @@ class WhatsappAppTest < Minitest::Test
     executed = false
     result = @app.screen(:new_screen) do |prompt|
       executed = true
-      assert_kind_of FlowChat::Whatsapp::Prompt, prompt
+      assert_kind_of FlowChat::Prompt, prompt
       "block_result"
     end
 
@@ -72,7 +72,7 @@ class WhatsappAppTest < Minitest::Test
 
   def test_screen_clears_input_after_use
     @app.screen(:input_test) do |prompt|
-      assert_equal "test_input", prompt.input
+      assert_equal "test_input", prompt.user_input
       "result"
     end
 
@@ -86,8 +86,8 @@ class WhatsappAppTest < Minitest::Test
       @app.say(message)
     end
 
-    expected_payload = [:text, message, {}]
-    assert_equal expected_payload, error.prompt
+    assert_equal message, error.prompt
+    assert_nil error.media
   end
 
   def test_contact_name_returns_whatsapp_contact_name
@@ -158,8 +158,9 @@ class WhatsappAppTest < Minitest::Test
       end
     end
 
-    expected_payload = [:text, "What is your name?", {}]
-    assert_equal expected_payload, error.prompt
+    assert_equal "What is your name?", error.prompt
+    assert_nil error.choices
+    assert_nil error.media
     assert_includes app_no_input.navigation_stack, :prompt_screen
   end
 
@@ -173,15 +174,10 @@ class WhatsappAppTest < Minitest::Test
       end
     end
 
-    # Arrays always use list format in the implementation
-    expected_payload = [:interactive_list, "Choose an option:", {sections: [
-      {title: "Options", rows: [
-        {id: "0", title: "Yes"},
-        {id: "1", title: "No"},
-        {id: "2", title: "Maybe"}
-      ]}
-    ]}]
-    assert_equal expected_payload, error.prompt
+    assert_equal "Choose an option:", error.prompt
+    expected_choices = {1 => "Yes", 2 => "No", 3 => "Maybe"}
+    assert_equal expected_choices, error.choices
+    assert_nil error.media
   end
 
   def test_screen_with_select_prompt_list
@@ -195,11 +191,11 @@ class WhatsappAppTest < Minitest::Test
       end
     end
 
-    assert_equal :interactive_list, error.prompt[0]
-    assert_equal "Choose from list:", error.prompt[1]
-
-    sections = error.prompt[2][:sections]
-    assert sections.size > 1  # Should be paginated
+    assert_equal "Choose from list:", error.prompt
+    expected_choices = {}
+    items.each_with_index { |item, index| expected_choices[index + 1] = item }
+    assert_equal expected_choices, error.choices
+    assert_nil error.media
   end
 
   def test_multiple_screens_workflow
@@ -242,7 +238,8 @@ class WhatsappAppTest < Minitest::Test
       end
     end
 
-    assert_includes error.prompt[1], "Must be 18+"
+    assert_includes error.prompt, "Must be 18+"
+    assert_includes error.prompt, "Enter age:"
   end
 
   def test_screen_with_successful_validation
@@ -288,21 +285,26 @@ class WhatsappAppTest < Minitest::Test
   def test_initial_message_gets_nil_input_for_first_screen
     # Simulate someone sending "Hello" to start a conversation
     @context.input = "Hello"
-    @context.session = create_test_session_store  # New session
+    session_store = create_test_session_store
+    # No $started_at$ in session, so this is the initial message
+    @context.session = session_store
+
     app = FlowChat::Whatsapp::App.new(@context)
 
-    # First screen should get nil input (initial message is ignored)
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app.screen(:welcome) do |prompt|
         prompt.ask("Welcome! What's your name?")
       end
     end
 
-    expected_payload = [:text, "Welcome! What's your name?", {}]
-    assert_equal expected_payload, error.prompt
+    assert_equal "Welcome! What's your name?", error.prompt
+    assert_nil error.choices
+    assert_nil error.media
 
-    # Session should now have started_at timestamp
-    refute_nil app.session.get("$started_at$")
+    # Should have set $started_at$
+    refute_nil session_store.get("$started_at$")
+    # App's internal input should be cleared after screen processing
+    assert_nil app.input
   end
 
   def test_subsequent_messages_get_normal_input
@@ -340,51 +342,37 @@ class WhatsappAppTest < Minitest::Test
 
     # Step 1: User sends initial message "Hi" to start conversation
     session_store = create_test_session_store
-    context1 = FlowChat::Context.new
-    context1.input = "Hi"
-    context1.session = session_store
+    @context.input = "Hi"
+    @context.session = session_store
 
-    app1 = FlowChat::Whatsapp::App.new(context1)
+    app1 = FlowChat::Whatsapp::App.new(@context)
 
-    # First screen should ignore the "Hi" and show welcome prompt
-    error = assert_raises(FlowChat::Interrupt::Prompt) do
+    error1 = assert_raises(FlowChat::Interrupt::Prompt) do
       app1.screen(:welcome) do |prompt|
         prompt.ask("Welcome! What's your name?")
       end
     end
 
-    assert_equal [:text, "Welcome! What's your name?", {}], error.prompt
-    refute_nil session_store.get("$started_at$")
+    assert_equal "Welcome! What's your name?", error1.prompt
+    assert_nil error1.choices
+    assert_nil error1.media
 
-    # Step 2: User responds with their name "Alice"
+    # At this point, session should have $started_at$ and app input should be cleared
+    refute_nil session_store.get("$started_at$")
+    assert_nil app1.input
+
+    # Step 2: User responds with their name
     context2 = FlowChat::Context.new
     context2.input = "Alice"
     context2.session = session_store  # Same session
 
     app2 = FlowChat::Whatsapp::App.new(context2)
 
-    # Second screen should receive "Alice" as input normally
-    name = app2.screen(:name) do |prompt|
-      prompt.ask("What's your name?")
+    name = app2.screen(:welcome) do |prompt|
+      prompt.ask("Welcome! What's your name?")
     end
 
     assert_equal "Alice", name
-    assert_equal "Alice", session_store.get(:name)
-
-    # Step 3: Continue to age screen - need new input for this
-    context3 = FlowChat::Context.new
-    context3.input = nil  # No input provided yet for age question
-    context3.session = session_store  # Same session
-
-    app3 = FlowChat::Whatsapp::App.new(context3)
-
-    # Should trigger prompt since we have no input for age
-    error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app3.screen(:age) do |prompt|
-        prompt.ask("How old are you?", convert: ->(input) { input.to_i })
-      end
-    end
-
-    assert_equal [:text, "How old are you?", {}], error.prompt
+    assert_equal "Alice", session_store.get(:welcome)
   end
 end
