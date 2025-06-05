@@ -10,7 +10,9 @@ module FlowChat
       end
 
       def render
-        if media
+        if media && choices
+          build_selection_message_with_media
+        elsif media
           build_media_message
         elsif choices
           build_selection_message
@@ -59,6 +61,18 @@ module FlowChat
         end
       end
 
+      def build_selection_message_with_media
+        # Convert array to hash with index-based keys if needed, same as build_selection_message
+        if choices.is_a?(Array)
+          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
+          build_buttons_message_with_media(choice_hash)
+        elsif choices.is_a?(Hash)
+          build_buttons_message_with_media(choices)
+        else
+          raise ArgumentError, "choices must be an Array or Hash"
+        end
+      end
+
       def build_interactive_message(choice_hash)
         if choice_hash.length <= 3
           # Use buttons for 3 or fewer choices
@@ -78,6 +92,53 @@ module FlowChat
         end
 
         [:interactive_buttons, message, {buttons: buttons}]
+      end
+
+      def build_buttons_message_with_media(choices)
+        buttons = choices.map do |key, value|
+          {
+            id: key.to_s,
+            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
+          }
+        end
+
+        # Build media header
+        header = build_media_header
+
+        [:interactive_buttons, message, {buttons: buttons, header: header}]
+      end
+
+      def build_media_header
+        media_type = media[:type] || :image
+        url = media[:url] || media[:path]
+        filename = media[:filename]
+
+        case media_type.to_sym
+        when :image
+          {
+            type: "image",
+            image: {link: url}
+          }
+        when :video
+          {
+            type: "video", 
+            video: {link: url}
+          }
+        when :document
+          header_doc = {link: url}
+          header_doc[:filename] = filename if filename
+          {
+            type: "document",
+            document: header_doc
+          }
+        when :text
+          {
+            type: "text",
+            text: url # For text headers, url contains the text
+          }
+        else
+          raise ArgumentError, "Unsupported header media type: #{media_type}. Supported types for button headers: image, video, document, text"
+        end
       end
 
       def build_list_message(choices)

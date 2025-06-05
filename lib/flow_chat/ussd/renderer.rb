@@ -14,7 +14,7 @@ module FlowChat
       private
 
       def build_prompt
-        parts = [prompt, build_choices, build_media].compact
+        parts = [prompt, build_media, build_choices].compact
         parts.join "\n\n"
       end
 

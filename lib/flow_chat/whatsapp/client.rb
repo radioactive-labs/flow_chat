@@ -192,25 +192,32 @@ module FlowChat
             text: {body: content}
           }
         when :interactive_buttons
+          interactive_payload = {
+            type: "button",
+            body: {text: content},
+            action: {
+              buttons: options[:buttons].map.with_index do |button, index|
+                {
+                  type: "reply",
+                  reply: {
+                    id: button[:id] || index.to_s,
+                    title: button[:title]
+                  }
+                }
+              end
+            }
+          }
+
+          # Add header if provided (for media support)
+          if options[:header]
+            interactive_payload[:header] = options[:header]
+          end
+
           {
             messaging_product: "whatsapp",
             to: to,
             type: "interactive",
-            interactive: {
-              type: "button",
-              body: {text: content},
-              action: {
-                buttons: options[:buttons].map.with_index do |button, index|
-                  {
-                    type: "reply",
-                    reply: {
-                      id: button[:id] || index.to_s,
-                      title: button[:title]
-                    }
-                  }
-                end
-              }
-            }
+            interactive: interactive_payload
           }
         when :interactive_list
           {

@@ -7,6 +7,9 @@ module FlowChat
     end
 
     def ask(msg, choices: nil, convert: nil, validate: nil, transform: nil, media: nil)
+      # Validate media and choices compatibility
+      validate_media_choices_compatibility(media, choices)
+
       if user_input.present?
         input = user_input
         input = convert.call(input) if convert.present?
@@ -36,6 +39,9 @@ module FlowChat
     end
 
     def select(msg, choices, media: nil)
+      # Validate media and choices compatibility
+      validate_media_choices_compatibility(media, choices)
+
       choices, choices_prompt = build_select_choices choices
       ask(
         msg,
@@ -52,6 +58,14 @@ module FlowChat
     end
 
     private
+
+    def validate_media_choices_compatibility(media, choices)
+      return unless media && choices
+
+      if choices.length > 3
+        raise ArgumentError, "Media with more than 3 choices is not supported. Please use either media OR choices for more than 3 options."
+      end
+    end
 
     def build_select_choices(choices)
       case choices
