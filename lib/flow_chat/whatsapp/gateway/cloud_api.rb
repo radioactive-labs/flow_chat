@@ -114,26 +114,14 @@ module FlowChat
             handler_mode = determine_message_handler(context)
 
             # Process the message based on handling mode
-            begin
-              case handler_mode
-              when :inline
-                handle_message_inline(context, controller)
-              when :background
-                handle_message_background(context, controller)
-              when :simulator
-                # Return early from simulator mode to preserve the JSON response
-                return handle_message_simulator(context, controller)
-              end
-            rescue => e
-              # Log the error and set appropriate HTTP status
-              Rails.logger.error "Error processing WhatsApp message: #{e.message}"
-              Rails.logger.error e.backtrace&.join("\n") if e.backtrace
-              
-              # Return error status to WhatsApp so they know processing failed
-              controller.head :internal_server_error
-              
-              # Re-raise the error to bubble it up for proper error tracking/monitoring
-              raise e
+            case handler_mode
+            when :inline
+              handle_message_inline(context, controller)
+            when :background
+              handle_message_background(context, controller)
+            when :simulator
+              # Return early from simulator mode to preserve the JSON response
+              return handle_message_simulator(context, controller)
             end
           end
 

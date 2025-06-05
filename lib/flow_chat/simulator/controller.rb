@@ -100,7 +100,7 @@ module FlowChat
         }
       rescue => e
         Rails.logger.warn "Failed to set simulator cookie: #{e.message}"
-        raise e # Re-raise the exception so it's not silently ignored
+        raise # Re-raise the exception so it's not silently ignored
       end
     end
   end

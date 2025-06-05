@@ -12,7 +12,7 @@ module FlowChat
 
       def screen(key)
         raise ArgumentError, "a block is expected" unless block_given?
-        raise ArgumentError, "screen has been presented" if navigation_stack.include?(key)
+        raise ArgumentError, "screen has already been presented" if navigation_stack.include?(key)
 
         navigation_stack << key
         return session.get(key) if session.get(key).present?
