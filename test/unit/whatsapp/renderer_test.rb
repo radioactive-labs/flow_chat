@@ -9,14 +9,14 @@ class WhatsappRendererTest < Minitest::Test
   end
 
   def test_render_with_choices_as_buttons
-    choices = ["Option 1", "Option 2", "Option 3"]
+    choices = ["Option 1", "Option 2", "Option 3"].map.with_index { |c, i| [i + 1, c] }.to_h
     renderer = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices)
     result = renderer.render
 
     expected_buttons = [
-      {id: "0", title: "Option 1"},
-      {id: "1", title: "Option 2"},
-      {id: "2", title: "Option 3"}
+      {id: "1", title: "Option 1"},
+      {id: "2", title: "Option 2"},
+      {id: "3", title: "Option 3"}
     ]
 
     assert_equal :interactive_buttons, result[0]
@@ -25,7 +25,7 @@ class WhatsappRendererTest < Minitest::Test
   end
 
   def test_render_with_choices_as_list
-    choices = ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"]
+    choices = ["Option 1", "Option 2", "Option 3", "Option 4", "Option 5"].map.with_index { |c, i| [i + 1, c] }.to_h
     renderer = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices)
     result = renderer.render
 
@@ -149,7 +149,7 @@ class WhatsappRendererTest < Minitest::Test
 
   def test_button_title_truncation
     long_title = "This is a very long option title that exceeds twenty characters"
-    choices = [long_title]
+    choices = [long_title].map.with_index { |c, i| [i + 1, c] }.to_h
     
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
     result = renderer.render
@@ -170,22 +170,8 @@ class WhatsappRendererTest < Minitest::Test
     refute result[2].key?(:caption) # Stickers don't support captions
   end
 
-  def test_choices_with_array_converts_to_indexed_hash
-    choices = ["First", "Second", "Third"]
-    renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
-    result = renderer.render
-
-    expected_buttons = [
-      {id: "0", title: "First"},
-      {id: "1", title: "Second"},
-      {id: "2", title: "Third"}
-    ]
-
-    assert_equal expected_buttons, result[2][:buttons]
-  end
-
   def test_large_list_pagination
-    choices = (1..25).map { |i| "Option #{i}" }
+    choices = (1..25).map { |i| [i, "Option #{i}"] }.to_h
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
     result = renderer.render
 
@@ -198,7 +184,7 @@ class WhatsappRendererTest < Minitest::Test
 
   def test_list_item_description_for_long_titles
     long_title = "This is a very long option title that should be truncated in the title but appear fully in description"
-    choices = [long_title, "Short", "Another option", "Fourth option"] # >3 choices to force list
+    choices = [long_title, "Short", "Another option", "Fourth option"].map.with_index { |c, i| [i + 1, c] }.to_h # >3 choices to force list
     
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
     result = renderer.render
@@ -218,6 +204,7 @@ class WhatsappRendererTest < Minitest::Test
     end
   end
 
+
   def test_invalid_choices_type_raises_error
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: "invalid")
     
@@ -225,8 +212,9 @@ class WhatsappRendererTest < Minitest::Test
       renderer.render
     end
     
-    assert_equal "choices must be an Array or Hash", error.message
+    assert_equal "choices must be a Hash", error.message
   end
+
 
   def test_media_uses_path_fallback
     media = {type: :image, path: "/local/image.jpg"}

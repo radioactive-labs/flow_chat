@@ -49,15 +49,10 @@ module FlowChat
       end
 
       def build_selection_message
-        # Determine the best way to present choices
-        if choices.is_a?(Array)
-          # Convert array to hash with index-based keys
-          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
-          build_interactive_message(choice_hash)
-        elsif choices.is_a?(Hash)
+        if choices.is_a?(Hash)
           build_interactive_message(choices)
         else
-          raise ArgumentError, "choices must be an Array or Hash"
+          raise ArgumentError, "choices must be a Hash"
         end
       end
 
