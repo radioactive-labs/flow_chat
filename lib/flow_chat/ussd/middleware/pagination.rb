@@ -12,14 +12,16 @@ module FlowChat
 
           if intercept?
             type, prompt = handle_intercepted_request
+            [type, prompt, []]
           else
             @session.delete "ussd.pagination"
             type, prompt, choices, media = @app.call(context)
 
             prompt = FlowChat::Ussd::Renderer.new(prompt, choices: choices, media: media).render
             type, prompt = maybe_paginate(type, prompt) if prompt.present?
+
+            [type, prompt, []]
           end
-          [type, prompt, []]
         end
 
         private
@@ -34,7 +36,7 @@ module FlowChat
           FlowChat::Config.logger&.info "FlowChat::Middleware::Pagination :: Intercepted to handle pagination"
           start, finish, has_more = calculate_offsets
           type = (pagination_state["type"].to_sym == :terminal && !has_more) ? :terminal : :prompt
-          prompt = pagination_state["prompt"][start..finish].strip + build_pagination_options(type, has_more)
+          prompt = pagination_state["prompt"][start..finish] + build_pagination_options(type, has_more)
           set_pagination_state(current_page, start, finish)
 
           [type, prompt]
@@ -44,11 +46,11 @@ module FlowChat
           if prompt.length > FlowChat::Config.ussd.pagination_page_size
             original_prompt = prompt
             FlowChat::Config.logger&.info "FlowChat::Middleware::Pagination :: Response length (#{prompt.length}) exceeds page size (#{FlowChat::Config.ussd.pagination_page_size}). Paginating."
-            prompt = prompt[0..single_option_slice_size]
+            slice_end = single_option_slice_size
             # Ensure we do not cut words and options off in the middle.
-            current_pagebreak = prompt[single_option_slice_size + 1].blank? ? single_option_slice_size : prompt.rindex("\n") || prompt.rindex(" ") || single_option_slice_size
+            current_pagebreak = original_prompt[slice_end + 1].blank? ? slice_end : original_prompt[0..slice_end].rindex("\n") || original_prompt[0..slice_end].rindex(" ") || slice_end
             set_pagination_state(1, 0, current_pagebreak, original_prompt, type)
-            prompt = prompt[0..current_pagebreak].strip + "\n\n" + next_option
+            prompt = original_prompt[0..current_pagebreak] + "\n\n" + next_option
             type = :prompt
           end
           [type, prompt]
@@ -72,13 +74,27 @@ module FlowChat
             finish = start + len
             if start > pagination_state["prompt"].length
               FlowChat::Config.logger&.debug "FlowChat::Middleware::Pagination :: No content exists for page: #{page}. Reverting to page: #{page - 1}"
+              page -= 1
               has_more = false
               start = previous_offset["start"]
               finish = previous_offset["finish"]
             else
-              prompt = pagination_state["prompt"][start..finish]
-              current_pagebreak = pagination_state["prompt"][finish + 1].blank? ? len : prompt.rindex("\n") || prompt.rindex(" ") || len
-              finish = start + current_pagebreak
+              # Apply word boundary logic for the new page
+              full_prompt = pagination_state["prompt"]
+              if finish < full_prompt.length
+                # Look for word boundary within the slice
+                slice_text = full_prompt[start..finish]
+                # Check if the character after our slice point is a word boundary
+                next_char = full_prompt[finish + 1]
+                if next_char && !next_char.match(/\s/)
+                  # We're in the middle of a word, find the last word boundary
+                  boundary_pos = slice_text.rindex("\n") || slice_text.rindex(" ")
+                  if boundary_pos
+                    finish = start + boundary_pos
+                  end
+                  # If no boundary found, we'll have to break mid-word (fallback)
+                end
+              end
             end
           end
           [start, finish, has_more]
@@ -134,21 +150,22 @@ module FlowChat
         end
 
         def pagination_state
-          @pagination_state ||= @context.session.get("ussd.pagination") || {}
+          @context.session.get("ussd.pagination") || {}
         end
 
         def set_pagination_state(page, offset_start, offset_finish, prompt = nil, type = nil)
-          offsets = pagination_state["offsets"] || {}
-          offsets[page] = {start: offset_start, finish: offset_finish}
-          prompt ||= pagination_state["prompt"]
-          type ||= pagination_state["type"]
-          @pagination_state = {
+          current_state = pagination_state
+          offsets = current_state["offsets"] || {}
+          offsets[page.to_s] = {"start" => offset_start, "finish" => offset_finish}
+          prompt ||= current_state["prompt"]
+          type ||= current_state["type"]
+          new_state = {
             "page" => page,
             "offsets" => offsets,
             "prompt" => prompt,
-            "type" => type
+            "type" => type.to_s
           }
-          @session.set "ussd.pagination", @pagination_state
+          @session.set "ussd.pagination", new_state
         end
       end
     end
