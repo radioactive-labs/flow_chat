@@ -11,7 +11,11 @@ class MultiTenantWhatsappController < ApplicationController
     # Get tenant-specific WhatsApp configuration
     whatsapp_config = get_whatsapp_config_for_tenant(tenant)
 
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    # Enable simulator for local endpoint testing during development
+    # This allows testing different tenant endpoints via the simulator interface
+    enable_simulator = Rails.env.development? || Rails.env.staging?
+
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end

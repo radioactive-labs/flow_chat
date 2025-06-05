@@ -5,6 +5,7 @@ class WhatsappController < ApplicationController
   skip_forgery_protection
 
   def webhook
+    # Enable simulator mode for local endpoint testing in development
     processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
       # Use cache-based session store for longer WhatsApp conversations
@@ -38,6 +39,7 @@ class CustomWhatsappController < ApplicationController
     # Security configuration
     custom_config.skip_signature_validation = !Rails.env.production? # Only skip in non-production
 
+    # Enable simulator for local endpoint testing in non-production environments  
     processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
       config.use_session_store FlowChat::Session::CacheSessionStore
@@ -61,7 +63,7 @@ class EnvironmentAwareWhatsappController < ApplicationController
     # Configure security based on environment
     custom_config = build_whatsapp_config
     
-    # Enable simulator only in development/staging
+    # Enable simulator for local endpoint testing in development/staging
     enable_simulator = Rails.env.development? || Rails.env.staging?
 
     processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator) do |config|
