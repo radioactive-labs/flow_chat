@@ -4,7 +4,7 @@ module FlowChat
   class BaseProcessor
     attr_reader :middleware
 
-    def initialize(controller, enable_simulator: false)
+    def initialize(controller, enable_simulator: nil)
       @context = FlowChat::Context.new
       @context["controller"] = controller
       @context["enable_simulator"] = enable_simulator.nil? ? (defined?(Rails) && Rails.env.local?) : enable_simulator

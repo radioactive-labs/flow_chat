@@ -1331,7 +1331,8 @@
           const response = await fetch(config.endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestData)
+            body: JSON.stringify(requestData),
+            credentials: 'include'
           })
           
           const data = await response.json()
@@ -1426,7 +1427,8 @@
           const response = await fetch(config.endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(webhookData)
+            body: JSON.stringify(webhookData),
+            credentials: 'include'
           })
           
           // Read the response body once and store it
