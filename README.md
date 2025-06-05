@@ -8,7 +8,7 @@ FlowChat is a Rails framework designed for building sophisticated conversational
 - ✅ **Input Validation & Transformation** - Built-in validation and data conversion
 - 🌊 **Middleware Architecture** - Flexible request processing pipeline
 - 📱 **USSD Gateway Support** - Currently supports Nalo gateways
-- 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with multiple processing modes
+- 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with multiple processing modes and webhook signature validation
 - 🔧 **Reusable WhatsApp Client** - Standalone client for out-of-band messaging
 - 🧪 **Built-in Testing Tools** - Unified simulator for both USSD and WhatsApp testing
 
@@ -119,6 +119,7 @@ whatsapp:
   app_id: "your_app_id"
   app_secret: "your_app_secret"
   business_account_id: "your_business_account_id"
+  skip_signature_validation: false  # Set to true only for development/testing
 ```
 
 **Option B: Using Environment Variables**
@@ -133,6 +134,7 @@ export WHATSAPP_VERIFY_TOKEN="your_verify_token"
 export WHATSAPP_APP_ID="your_app_id"
 export WHATSAPP_APP_SECRET="your_app_secret"
 export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
+export WHATSAPP_SKIP_SIGNATURE_VALIDATION="false"  # Set to "true" only for development/testing
 ```
 
 FlowChat will automatically use Rails credentials first, falling back to environment variables if credentials are not available.
@@ -150,6 +152,7 @@ custom_config.verify_token = "your_specific_verify_token"
 custom_config.app_id = "your_specific_app_id"
 custom_config.app_secret = "your_specific_app_secret"
 custom_config.business_account_id = "your_specific_business_account_id"
+custom_config.skip_signature_validation = false  # Security setting
 
 # Use in processor
 processor = FlowChat::Whatsapp::Processor.new(self) do |config|
@@ -160,7 +163,55 @@ end
 
 💡 **Tip**: See [examples/multi_tenant_whatsapp_controller.rb](examples/multi_tenant_whatsapp_controller.rb) for comprehensive multi-tenant and per-setup configuration examples.
 
-### 2. Choose Message Handling Mode
+### 2. Security Configuration
+
+FlowChat includes robust security features for WhatsApp webhook validation:
+
+**Webhook Signature Validation** (Recommended for Production)
+
+FlowChat automatically validates WhatsApp webhook signatures using your app secret:
+
+```ruby
+# config/initializers/flowchat.rb
+
+# Global security configuration
+FlowChat::Config.simulator_secret = "your_secure_random_secret_for_simulator"
+
+# WhatsApp security is configured per-configuration
+# The app_secret from your WhatsApp configuration is used for webhook validation
+```
+
+**Security Options:**
+
+```ruby
+# Option 1: Full security (recommended for production)
+custom_config.app_secret = "your_whatsapp_app_secret"  # Required for signature validation
+custom_config.skip_signature_validation = false       # Default: enforce validation
+
+# Option 2: Disable validation (development/testing only)
+custom_config.app_secret = nil                        # Not required when disabled
+custom_config.skip_signature_validation = true        # Explicitly disable validation
+```
+
+⚠️ **Security Warning**: Only disable signature validation in development/testing environments. Production environments should always validate webhook signatures using your WhatsApp app secret.
+
+**Simulator Authentication**
+
+The simulator mode requires authentication:
+
+```ruby
+# config/initializers/flowchat.rb
+FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_simulator"
+
+# Or use a dedicated secret
+FlowChat::Config.simulator_secret = "your_secure_random_secret_here"
+```
+
+The simulator uses HMAC-SHA256 signed cookies for authentication with 24-hour expiration.
+
+📚 **For comprehensive security documentation, see [SECURITY.md](SECURITY.md)**
+
+### 3. Choose Message Handling Mode
 
 FlowChat offers three WhatsApp message handling modes. Configure them in an initializer:
 
@@ -235,8 +286,7 @@ class WhatsappController < ApplicationController
 end
 ```
 
-
-### 3. Add WhatsApp Route
+### 4. Add WhatsApp Route
 
 ```ruby
 Rails.application.routes.draw do
@@ -244,117 +294,116 @@ Rails.application.routes.draw do
 end
 ```
 
-### 4. Enhanced Features for WhatsApp
+### 5. Enhanced Simulator Setup
 
-The same flow works for both USSD and WhatsApp, but WhatsApp provides additional data and better interactive features:
+FlowChat provides a powerful built-in simulator for testing flows in both USSD and WhatsApp modes.
+
+**Setup Simulator Controller:**
 
 ```ruby
-class WelcomeFlow < FlowChat::Flow
-  def main_page
-    # Access WhatsApp-specific data
-    Rails.logger.info "Contact: #{app.contact_name}, Phone: #{app.phone_number}"
-    Rails.logger.info "Message ID: #{app.message_id}, Timestamp: #{app.timestamp}"
-    
-    # Handle location sharing
-    if app.location
-      app.say "Thanks for sharing your location! We see you're at #{app.location['latitude']}, #{app.location['longitude']}"
-      return
-    end
-    
-    # Handle media messages  
-    if app.media
-      app.say "Thanks for the #{app.media['type']} file! We received: #{app.media['id']}"
-      return
-    end
+# app/controllers/simulator_controller.rb
+class SimulatorController < ApplicationController
+  include FlowChat::Simulator::Controller
 
-    name = app.screen(:name) do |prompt|
-      prompt.ask "Hello! Welcome to our WhatsApp service. What's your name?",
-        transform: ->(input) { input.strip.titleize }
-    end
-
-    # WhatsApp supports interactive buttons and lists via prompt.select
-    choice = app.screen(:main_menu) do |prompt|
-      prompt.select "Hi #{name}! How can I help you?", {
-        "info" => "📋 Get Information",
-        "support" => "🆘 Contact Support",
-        "feedback" => "💬 Give Feedback"
-      }
-    end
-
-    case choice
-    when "info"
-      show_information_menu
-    when "support"
-      contact_support  
-    when "feedback"
-      collect_feedback
-    end
+  def index
+    flowchat_simulator
   end
 
-  private
+  protected
 
-  def show_information_menu
-    info_choice = app.screen(:info_menu) do |prompt|
-      prompt.select "What information do you need?", {
-        "hours" => "🕒 Business Hours",
-        "location" => "📍 Our Location", 
-        "services" => "💼 Our Services"
+  def configurations
+    {
+      local_whatsapp: {
+        name: "Local WhatsApp",
+        icon: "💬",
+        processor_type: "whatsapp",
+        provider: "cloud_api",
+        endpoint: "/whatsapp/webhook",
+        color: "#25D366"
+      },
+      local_ussd: {
+        name: "Local USSD",
+        icon: "📱",
+        processor_type: "ussd",
+        provider: "nalo",
+        endpoint: "/ussd",
+        color: "#007bff"
+      },
+      staging_whatsapp: {
+        name: "Staging WhatsApp",
+        icon: "🧪",
+        processor_type: "whatsapp",
+        provider: "cloud_api",
+        endpoint: "https://staging.yourapp.com/whatsapp/webhook",
+        color: "#17a2b8"
       }
-    end
-
-    case info_choice
-    when "hours"
-      app.say "We're open Monday-Friday 9AM-6PM, Saturday 10AM-4PM. Closed Sundays."
-    when "location"
-      app.say "📍 Visit us at 123 Main Street, Downtown. We're next to the coffee shop!"
-    when "services"
-      app.say "💼 We offer: Web Development, Mobile Apps, Cloud Services, and IT Consulting."
-    end
+    }
   end
 
-  def contact_support
-    support_choice = app.screen(:support_menu) do |prompt|
-      prompt.select "How would you like to contact support?", {
-        "call" => "📞 Call Us",
-        "email" => "📧 Email Us",
-        "chat" => "💬 Continue Here"
-      }
-    end
-
-    case support_choice
-    when "call"
-      app.say "📞 Call us at: +1-555-HELP (4357)\nAvailable Mon-Fri 9AM-5PM"
-    when "email"  
-      app.say "📧 Email us at: support@company.com\nWe typically respond within 24 hours"
-    when "chat"
-      app.say "💬 Great! Please describe your issue and we'll help you right away."
-    end
+  def default_config_key
+    :local_whatsapp
   end
 
-  def collect_feedback
-    rating = app.screen(:rating) do |prompt|
-      prompt.select "How would you rate our service?", {
-        "5" => "⭐⭐⭐⭐⭐ Excellent",
-        "4" => "⭐⭐⭐⭐ Good",
-        "3" => "⭐⭐⭐ Average",
-        "2" => "⭐⭐ Poor",
-        "1" => "⭐ Very Poor"
-      }
-    end
+  def default_phone_number
+    "+1234567890"
+  end
 
-    feedback = app.screen(:feedback_text) do |prompt|
-      prompt.ask "Thank you for the #{rating}-star rating! Please share any additional feedback:"
-    end
-
-    # Use WhatsApp-specific data for logging
-    Rails.logger.info "Feedback from #{app.contact_name} (#{app.phone_number}): #{rating} stars - #{feedback}"
-
-    app.say "Thank you for your feedback! We really appreciate it. 🙏"
+  def default_contact_name
+    "John Doe"
   end
 end
 ```
 
-For detailed WhatsApp setup instructions, see [WhatsApp Integration Guide](docs/whatsapp_setup.md).
+**Add Simulator Route:**
+
+```ruby
+# config/routes.rb
+Rails.application.routes.draw do
+  get '/simulator' => 'simulator#index'
+  # ... other routes
+end
+```
+
+**Configure Simulator Security:**
+
+```ruby
+# config/initializers/flowchat.rb
+FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_simulator"
+```
+
+**Enable Simulator Mode in Controllers:**
+
+For controllers that should support simulator mode, enable it in the processor:
+
+```ruby
+# app/controllers/whatsapp_controller.rb
+class WhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.local?) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+```
+
+This is enabled by default in `Rails.env.local?` (development and testing) environments.
+
+**Simulator Features:**
+- 🔄 **Platform Toggle** - Switch between USSD and WhatsApp modes
+- 📱 **USSD Mode** - Classic terminal simulation with pagination
+- 💬 **WhatsApp Mode** - Full WhatsApp interface with interactive elements
+- ⚙️ **Multi-Environment** - Support for different configurations
+- 🎨 **Modern UI** - Beautiful, responsive interface
+- 📊 **Request Logging** - View HTTP requests and responses in real-time
+- 🔧 **Developer Tools** - Character counts, connection status, error handling
+- 🔒 **Secure Authentication** - HMAC-signed cookies with expiration
+
+Visit `http://localhost:3000/simulator` to access the simulator interface.
 
 ## 🔧 Reusable WhatsApp Client
 
@@ -901,6 +950,48 @@ config.use_gateway FlowChat::Ussd::Gateway::Nalo
 
 ## Testing
 
+FlowChat provides comprehensive testing capabilities for both USSD and WhatsApp flows. This section covers all testing approaches from simple unit tests to complex integration scenarios.
+
+### Testing Approaches Overview
+
+FlowChat supports two main testing strategies:
+
+**🎯 Option 1: Simulator Mode (Recommended)**
+- Bypasses WhatsApp API entirely
+- No webhook signature validation required  
+- Responses returned as JSON instead of sent to WhatsApp
+- Perfect for unit and integration testing
+- Works with built-in web simulator interface
+
+**🔒 Option 2: Skip Signature Validation**
+- Tests real webhook endpoints without security complexity
+- Useful for staging environments
+- Set `skip_signature_validation = true`
+
+### Environment-Specific Testing Configuration
+
+Configure testing behavior per environment:
+
+```ruby
+# config/initializers/flowchat.rb
+case Rails.env
+when 'development', 'test'
+  # Use simulator mode for easy testing
+  FlowChat::Config.whatsapp.message_handling_mode = :simulator
+  FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_#{Rails.env}"
+  
+when 'staging'
+  # Test real webhooks but skip validation for easier setup
+  FlowChat::Config.whatsapp.message_handling_mode = :inline
+  # Individual configurations can set skip_signature_validation = true
+  
+when 'production'
+  # Full security - never skip validation
+  FlowChat::Config.whatsapp.message_handling_mode = :background
+  FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+end
+```
+
 ### Unit Testing Flows
 
 Test your flows in isolation using the provided test helpers:
@@ -942,239 +1033,521 @@ end
 
 ### Integration Testing
 
-Test complete user journeys:
+#### Simulator Mode Testing
+
+Test complete flows using simulator mode with authentication:
 
 ```ruby
-class RegistrationFlowIntegrationTest < Minitest::Test
-  def test_complete_registration_flow
-    controller = mock_controller
-    processor = FlowChat::Ussd::Processor.new(controller) do |config|
-      config.use_gateway MockGateway
-      config.use_session_store FlowChat::Session::RailsSessionStore
-    end
+require 'test_helper'
 
-    # Simulate the complete flow
-    # First request - ask for phone
-    # Second request - provide phone, ask for age  
-    # Third request - provide age, complete registration
-  end
-end
-```
-
-### Testing Middleware
-
-Test your custom middleware in isolation:
-
-```ruby
-class LoggingMiddlewareTest < Minitest::Test
-  def test_logs_request_and_response
-    # Mock the next app in the chain
-    app = lambda { |context| [:prompt, "Test response", []] }
-    middleware = LoggingMiddleware.new(app)
-    
-    context = FlowChat::Context.new
-    context.input = "test input"
-    
-    # Capture log output
-    log_output = StringIO.new
-    Rails.stub(:logger, Logger.new(log_output)) do
-      type, prompt, choices = middleware.call(context)
-      
-      assert_equal :prompt, type
-      assert_equal "Test response", prompt
-      assert_includes log_output.string, "Processing USSD request: test input"
-      assert_includes log_output.string, "Response: Test response"
-    end
-  end
-end
-```
-
-### Testing Middleware Stack Modification
-
-Test runtime middleware modifications:
-
-```ruby
-class ProcessorMiddlewareTest < Minitest::Test
-  def test_custom_middleware_insertion
-    controller = mock_controller
-    processor = FlowChat::Ussd::Processor.new(controller) do |config|
-      config.use_gateway MockGateway
-      config.use_session_store FlowChat::Session::RailsSessionStore
-    end
-    
-    custom_middleware_called = false
-    custom_middleware = Class.new do
-      define_method(:initialize) { |app| @app = app }
-      define_method(:call) do |context|
-        custom_middleware_called = true
-        @app.call(context)
-      end
-    end
-    
-    processor.run(TestFlow, :main_page) do |stack|
-      stack.use custom_middleware
-      stack.insert_before FlowChat::Ussd::Middleware::Executor, custom_middleware
-    end
-    
-    assert custom_middleware_called, "Custom middleware should have been executed"
-  end
-end
-```
-
-### FlowChat Unified Simulator
-
-Use the built-in unified simulator for interactive testing of both USSD and WhatsApp flows:
-
-```ruby
-class SimulatorController < ApplicationController
-  include FlowChat::Simulator::Controller
-
-  def index
-    flowchat_simulator
+class WhatsappIntegrationTest < ActionDispatch::IntegrationTest
+  setup do
+    # Configure test credentials
+    FlowChat::Config.simulator_secret = "test_secret"
+    @app_secret = "test_app_secret_for_webhook_validation"
   end
 
-  protected
-
-  def configurations
-    {
-      production_ussd: {
-        name: "Production USSD",
-        icon: "🏭",
-        processor_type: "ussd",
-        provider: "nalo", 
-        endpoint: "/ussd",
-        color: "#28a745"
-      },
-      staging_whatsapp: {
-        name: "Staging WhatsApp", 
-        icon: "🧪",
-        processor_type: "whatsapp",
-        provider: "cloud_api",
-        endpoint: "/whatsapp/webhook",
-        color: "#17a2b8"
-      },
-      local_ussd: {
-        name: "Local USSD",
-        icon: "💻", 
-        processor_type: "ussd",
-        provider: "nalo",
-        endpoint: "http://localhost:3000/ussd",
-        color: "#6f42c1"
-      }
+  test "complete flow via simulator" do
+    # Generate valid simulator cookie for authentication
+    valid_cookie = generate_simulator_cookie
+    
+    # Create webhook payload
+    webhook_payload = {
+      entry: [{
+        changes: [{
+          value: {
+            messages: [{
+              from: "1234567890",
+              text: { body: "Hello" },
+              type: "text",
+              id: "wamid.test123"
+            }]
+          }
+        }]
+      }],
+      simulator_mode: true
     }
-  end
 
-  def default_config_key
-    :local_ussd
-  end
+    post "/whatsapp/webhook", 
+      params: webhook_payload,
+      cookies: { flowchat_simulator: valid_cookie }
 
-  def default_phone_number
-    "+254712345678"
-  end
-
-  def default_contact_name
-    "John Doe"
+    assert_response :success
+    response_data = JSON.parse(response.body)
+    assert_equal "simulator", response_data["mode"]
+    assert response_data["webhook_processed"]
   end
 end
 ```
 
-Add to routes and visit `http://localhost:3000/simulator`.
+#### Testing with Skipped Validation
 
-**Key Features:**
-- 🔄 **Platform Toggle** - Switch between USSD and WhatsApp modes with configuration selection
-- 📱 **USSD Mode** - Classic green-screen terminal simulation with provider support (Nalo, Nsano)
-- 💬 **WhatsApp Mode** - Full WhatsApp interface with interactive buttons, lists, and rich messaging
-- ⚙️ **Multi-Environment** - Support for different configurations (local, staging, production)
-- 🎨 **Modern UI** - Beautiful, responsive interface with real-time status indicators
-- 📊 **Request Logging** - View all HTTP requests and responses in real-time
-- 🔧 **Developer Tools** - Character counts, connection status, and comprehensive error handling
-
-The simulator automatically adapts its interface based on the selected configuration:
-- **USSD**: Shows traditional terminal-style interface with character limits and pagination
-- **WhatsApp**: Displays realistic WhatsApp chat interface with support for interactive elements
-
-
-## Best Practices
-
-### 1. Keep Flows Focused
-
-Create separate flows for different user journeys:
+For testing real webhook processing without signature complexity:
 
 ```ruby
-# Good: Focused flows
-class LoginFlow < FlowChat::Flow
-  # Handle user authentication
-end
+test "webhook processing with skipped validation" do
+  # Configure controller to skip validation
+  config = FlowChat::Whatsapp::Configuration.new
+  config.access_token = "test_token"
+  config.phone_number_id = "test_phone_id"
+  config.skip_signature_validation = true  # Skip for testing
 
-class RegistrationFlow < FlowChat::Flow
-  # Handle user registration  
-end
+  webhook_payload = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{
+            from: "1234567890",
+            text: { body: "Test message" },
+            type: "text"
+          }]
+        }
+      }]
+    }]
+  }
 
-class AccountFlow < FlowChat::Flow
-  # Handle account management
+  # No signature required when validation is skipped
+  post "/whatsapp/webhook", 
+    params: webhook_payload.to_json,
+    headers: { "Content-Type" => "application/json" }
+
+  assert_response :success
 end
 ```
 
-### 2. Use Descriptive Screen Names
+### Security Testing
 
-Screen names should clearly indicate their purpose:
+Test webhook signature validation when security is enabled:
 
-```ruby
-# Good
-app.screen(:customer_phone_number) { |p| p.ask "Phone:" }
-app.screen(:payment_confirmation) { |p| p.yes? "Confirm payment?" }
-
-# Avoid
-app.screen(:input1) { |p| p.ask "Phone:" }
-app.screen(:confirm) { |p| p.yes? "Confirm payment?" }
-```
-
-### 3. Validate Early and Often
-
-Always validate user input to provide clear feedback:
+#### Valid Signature Testing
 
 ```ruby
-app.screen(:amount) do |prompt|
-  prompt.ask "Enter amount:",
-    convert: ->(input) { input.to_f },
-    validate: ->(amount) {
-      return "Amount must be positive" if amount <= 0
-      return "Maximum amount is $1000" if amount > 1000
-      nil
+test "webhook accepts valid signature" do
+  webhook_payload = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{
+            from: "1234567890",
+            text: { body: "Hello from webhook" },
+            type: "text",
+            id: "wamid.real_webhook_123"
+          }]
+        }
+      }]
+    }]
+  }
+  
+  # Convert to JSON for signature calculation
+  payload_json = webhook_payload.to_json
+  
+  # Generate valid HMAC-SHA256 signature using helper
+  signature = generate_webhook_signature(payload_json)
+
+  post "/whatsapp/webhook",
+    params: payload_json,
+    headers: { 
+      "Content-Type" => "application/json",
+      "X-Hub-Signature-256" => "sha256=#{signature}"
     }
+
+  assert_response :success
 end
 ```
 
-### 4. Handle Edge Cases
-
-Consider error scenarios and provide helpful messages:
+#### Invalid Signature Testing
 
 ```ruby
-def main_page
-  begin
-    process_user_request
-  rescue PaymentError => e
-    app.say "Payment failed: #{e.message}. Please try again."
-  rescue SystemError
-    app.say "System temporarily unavailable. Please try again later."
-  end
+test "webhook rejects invalid signature" do
+  webhook_payload = {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{
+            from: "1234567890",
+            text: { body: "Hello" },
+            type: "text"
+          }]
+        }
+      }]
+    }]
+  }
+
+  post "/whatsapp/webhook", 
+    params: webhook_payload.to_json,
+    headers: { 
+      "Content-Type" => "application/json",
+      "X-Hub-Signature-256" => "sha256=invalid_signature_here" 
+    }
+
+  assert_response :unauthorized
+end
+
+test "webhook rejects missing signature" do
+  webhook_payload = create_valid_webhook_payload("Test message")
+
+  post "/whatsapp/webhook", 
+    params: webhook_payload.to_json,
+    headers: { "Content-Type" => "application/json" }
+    # No X-Hub-Signature-256 header
+
+  assert_response :unauthorized
 end
 ```
 
-### 5. Choose the Right WhatsApp Mode
+### Test Configuration Examples
 
-Configure the appropriate mode in your initializer:
+#### Simulator Mode Configuration
+
+```ruby
+# For testing only - enable simulator mode
+FlowChat::Config.whatsapp.message_handling_mode = :simulator
+FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_dev"
+
+# In controller for testing
+processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.local?) do |config|
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+  config.use_session_store FlowChat::Session::CacheSessionStore
+end
+```
+
+#### Skip Validation Configuration
+
+```ruby
+# For testing only - skip webhook signature validation
+config = FlowChat::Whatsapp::Configuration.new
+config.access_token = "test_token"
+config.phone_number_id = "test_phone_id"
+config.verify_token = "test_verify_token"
+config.skip_signature_validation = Rails.env.test?  # Skip validation for testing
+
+processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
+  config.use_session_store FlowChat::Session::CacheSessionStore
+end
+```
+
+### Test Helper Methods
+
+Useful helper methods for creating test data:
+
+```ruby
+private
+
+def create_valid_webhook_payload(message_text = "Test message")
+  {
+    entry: [{
+      changes: [{
+        value: {
+          messages: [{
+            from: "1234567890",
+            text: { body: message_text },
+            type: "text",
+            id: "wamid.test_#{SecureRandom.hex(8)}"
+          }]
+        }
+      }]
+    }]
+  }
+end
+
+def generate_webhook_signature(payload_json, secret = @app_secret)
+  OpenSSL::HMAC.hexdigest(
+    OpenSSL::Digest.new("sha256"),
+    secret,
+    payload_json
+  )
+end
+
+def generate_simulator_cookie(secret = FlowChat::Config.simulator_secret)
+  timestamp = Time.now.to_i
+  message = "simulator:#{timestamp}"
+  signature = OpenSSL::HMAC.hexdigest(
+    OpenSSL::Digest.new("sha256"), 
+    secret, 
+    message
+  )
+  "#{timestamp}:#{signature}"
+end
+```
+
+### Testing Best Practices
+
+**✅ DO:**
+- Use simulator mode for most testing scenarios
+- Test both valid and invalid webhook signatures
+- Use environment-specific test configurations
+- Create helper methods for common test data
+- Test error scenarios and edge cases
+
+**❌ DON'T:**
+- Skip validation in production environments
+- Hardcode secrets in test files
+- Use production credentials in tests
+- Forget to test security scenarios
+
+**Environment Guidelines:**
+- **Development/Test**: Use simulator mode with generated secrets
+- **Staging**: Option to skip validation for easier testing
+- **Production**: Always require full security validation
+
+This comprehensive testing approach ensures your FlowChat application works correctly across all scenarios while maintaining security best practices.
+
+## Configuration Reference
+
+### Framework Configuration
 
 ```ruby
 # config/initializers/flowchat.rb
 
-# Development/Testing - use simulator mode
-FlowChat::Config.whatsapp.message_handling_mode = :simulator
+# Core configuration
+FlowChat::Config.logger = Rails.logger
+FlowChat::Config.cache = Rails.cache
+FlowChat::Config.simulator_secret = "your_secure_secret_here"
 
-# Low-volume Applications - use inline mode  
-FlowChat::Config.whatsapp.message_handling_mode = :inline
+# USSD configuration
+FlowChat::Config.ussd.pagination_page_size = 140
+FlowChat::Config.ussd.pagination_next_option = "#"
+FlowChat::Config.ussd.pagination_next_text = "More"
+FlowChat::Config.ussd.pagination_back_option = "0"
+FlowChat::Config.ussd.pagination_back_text = "Back"
+FlowChat::Config.ussd.resumable_sessions_enabled = true
+FlowChat::Config.ussd.resumable_sessions_timeout_seconds = 300
 
-# High-volume Production - use background mode (sync processing + async sending)
-FlowChat::Config.whatsapp.message_handling_mode = :background
+# WhatsApp configuration
+FlowChat::Config.whatsapp.message_handling_mode = :inline  # :inline, :background, :simulator
 FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
 ```
+
+### WhatsApp Security Configuration
+
+```ruby
+# Per-configuration security settings
+config = FlowChat::Whatsapp::Configuration.new
+config.app_secret = "your_whatsapp_app_secret"          # Required for signature validation
+config.skip_signature_validation = false                # Default: false (enforce validation)
+
+# Security modes:
+# 1. Full security (production)
+config.app_secret = "secret"
+config.skip_signature_validation = false
+
+# 2. Development mode (disable validation)
+config.app_secret = nil
+config.skip_signature_validation = true
+```
+
+### Environment-Specific Configurations
+
+```ruby
+# config/initializers/flowchat.rb
+
+case Rails.env
+when 'development'
+  FlowChat::Config.whatsapp.message_handling_mode = :simulator
+  FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_dev"
+  
+when 'test'
+  FlowChat::Config.whatsapp.message_handling_mode = :simulator
+  FlowChat::Config.simulator_secret = "test_secret"
+  
+when 'staging'
+  FlowChat::Config.whatsapp.message_handling_mode = :inline
+  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+  
+when 'production'
+  FlowChat::Config.whatsapp.message_handling_mode = :background
+  FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+end
+```
+
+## Best Practices
+
+### 1. Security Best Practices
+
+**Production Security Checklist:**
+
+✅ **Always configure app_secret** for webhook validation
+```ruby
+config.app_secret = "your_whatsapp_app_secret"  # Never leave empty in production
+config.skip_signature_validation = false        # Never disable in production
+```
+
+✅ **Use secure simulator secrets**
+```ruby
+# Use Rails secret_key_base + suffix for uniqueness
+FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_simulator"
+
+# Or use environment variables
+FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+```
+
+✅ **Environment-specific configuration**
+```ruby
+# Different security levels per environment
+if Rails.env.production?
+  config.skip_signature_validation = false  # Enforce validation
+else
+  config.skip_signature_validation = true   # Allow for development
+end
+```
+
+✅ **Enable simulator only when needed**
+```ruby
+# Only enable simulator in development/staging (default)
+enable_simulator = Rails.env.development? || Rails.env.staging?
+processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator)
+```
+
+### 5. Choose the Right WhatsApp Mode
+
+Configure the appropriate mode based on your environment and requirements:
+
+```ruby
+# config/initializers/flowchat.rb
+
+# Development/Testing - use simulator mode with security
+if Rails.env.development? || Rails.env.test?
+  FlowChat::Config.whatsapp.message_handling_mode = :simulator
+  FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_dev"
+end
+
+# Staging - use inline mode with full security
+if Rails.env.staging?
+  FlowChat::Config.whatsapp.message_handling_mode = :inline
+  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+end
+
+# Production - use background mode with full security
+if Rails.env.production?
+  FlowChat::Config.whatsapp.message_handling_mode = :background
+  FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+end
+```
+
+### 6. Error Handling Best Practices
+
+Handle security and configuration errors gracefully:
+
+```ruby
+def webhook
+  begin
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+    
+  rescue FlowChat::Whatsapp::ConfigurationError => e
+    Rails.logger.error "WhatsApp configuration error: #{e.message}"
+    head :internal_server_error
+    
+  rescue => e
+    Rails.logger.error "Unexpected error processing WhatsApp webhook: #{e.message}"
+    head :internal_server_error
+  end
+end
+```
+
+## Appendix
+
+### Context Variables Reference
+
+FlowChat provides a rich set of context variables that are available throughout your flows. These variables are automatically populated based on the gateway and message type.
+
+#### Core Context Variables
+
+**Request Variables**
+
+| Variable | Description |
+|----------|-------------|
+| `context.input` | Current user input |
+| `context["request.id"]` | Unique request ID |
+| `context["request.timestamp"]` | Request timestamp |
+| `context["request.msisdn"]` | User's phone number |
+| `context["request.gateway"]` | Current gateway (`:whatsapp_cloud_api`, `:ussd_nalo`) |
+| `context["enable_simulator"]` | Whether simulator mode is enabled for this request |
+| `context["simulator_mode"]` | Whether simulator mode is active |
+
+**Flow Variables**
+
+| Variable | Description |
+|----------|-------------|
+| `context["flow.name"]` | Current flow name |
+| `context["flow.class"]` | Current flow class |
+| `context["flow.action"]` | Current flow action/method |
+
+**Session Variables**
+
+| Variable | Description |
+|----------|-------------|
+| `context["session.id"]` | Current session ID |
+| `context["session.store"]` | Session data store |
+
+**Controller Variables**
+
+| Variable | Description |
+|----------|-------------|
+| `context.controller` | Current controller instance |
+
+#### WhatsApp-Specific Variables
+
+| Variable | Description |
+|----------|-------------|
+| `context["whatsapp.message_result"]` | Result of last message send |
+| `context["whatsapp.message_id"]` | WhatsApp message ID |
+| `context["whatsapp.contact_name"]` | WhatsApp contact name |
+| `context["whatsapp.location"]` | Location data if shared |
+| `context["whatsapp.media"]` | Media data if attached |
+
+#### USSD-Specific Variables
+
+| Variable | Description |
+|----------|-------------|
+| `context["ussd.request"]` | Original USSD request |
+| `context["ussd.response"]` | USSD response object |
+| `context["ussd.pagination"]` | Pagination data for long messages |
+
+#### Session Data Variables
+
+| Variable | Description |
+|----------|-------------|
+| `context["$started_at$"]` | When the conversation started |
+
+#### Usage Notes
+
+1. **Access Methods:**
+   ```ruby
+   # Direct access
+   context.input
+   context["request.msisdn"]
+   
+   # Through app object in flows
+   app.phone_number
+   app.contact_name
+   app.message_id
+   ```
+
+2. **Gateway-Specific Variables:**
+   - WhatsApp variables are only available when using WhatsApp gateway
+   - USSD variables are only available when using USSD gateway
+   - Core variables are available across all gateways
+
+3. **Session Persistence:**
+   - Session data persists across requests
+   - WhatsApp sessions expire after 7 days
+   - USSD sessions expire after 1 hour
+   - Default session TTL is 1 day
+
+4. **Security:**
+   - Webhook signatures are validated for WhatsApp requests
+   - Simulator mode requires valid simulator cookie
+   - Session data is encrypted at rest
+
+5. **Flow Control:**
+   - Context variables can be used to control flow logic
+   - Session data can be used to maintain state
+   - Request data can be used for validation

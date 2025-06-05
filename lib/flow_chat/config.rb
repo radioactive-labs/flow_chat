@@ -3,6 +3,7 @@ module FlowChat
     # General framework configuration
     mattr_accessor :logger, default: Logger.new($stdout)
     mattr_accessor :cache, default: nil
+    mattr_accessor :simulator_secret, default: nil
 
     # USSD-specific configuration object
     def self.ussd

@@ -2,7 +2,7 @@ module FlowChat
   module Whatsapp
     class Configuration
       attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
-        :webhook_verify_token, :business_account_id, :name
+        :webhook_verify_token, :business_account_id, :name, :skip_signature_validation
 
       # Class-level storage for named configurations
       @@configurations = {}
@@ -16,6 +16,7 @@ module FlowChat
         @app_secret = nil
         @webhook_verify_token = nil
         @business_account_id = nil
+        @skip_signature_validation = false
 
         register_as(name) if name.present?
       end
@@ -32,6 +33,7 @@ module FlowChat
           config.app_id = credentials[:app_id]
           config.app_secret = credentials[:app_secret]
           config.business_account_id = credentials[:business_account_id]
+          config.skip_signature_validation = credentials[:skip_signature_validation] || false
         else
           # Fallback to environment variables
           config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
@@ -40,6 +42,7 @@ module FlowChat
           config.app_id = ENV["WHATSAPP_APP_ID"]
           config.app_secret = ENV["WHATSAPP_APP_SECRET"]
           config.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
+          config.skip_signature_validation = ENV["WHATSAPP_SKIP_SIGNATURE_VALIDATION"] == "true"
         end
 
         config

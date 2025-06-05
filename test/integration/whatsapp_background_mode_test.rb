@@ -36,6 +36,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
     @mock_config.verify_token = "test_verify_token"
     @mock_config.phone_number_id = "test_phone_id"
     @mock_config.access_token = "test_access_token"
+    @mock_config.app_secret = "test_app_secret"
 
     # Clear any previous jobs
     BaseTestJob.clear_performed_jobs
@@ -210,13 +211,26 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
     # Test that simulator_mode parameter overrides global background mode
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
       FlowChat::Config.whatsapp.stub(:background_job_class, "WhatsappBackgroundModeIntegrationTest::TestWhatsappSendJob") do
+        # Set up global simulator secret for cookie validation
+        FlowChat::Config.simulator_secret = "test_simulator_secret_123"
+        
+        # Generate valid simulator cookie
+        timestamp = Time.now.to_i
+        message = "simulator:#{timestamp}"
+        signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), "test_simulator_secret_123", message)
+        valid_cookie = "#{timestamp}:#{signature}"
+
         # Include simulator_mode in request body
         context = create_context_with_request(
           method: :post,
-          body: create_text_message_payload("", "wamid.sim_test").merge("simulator_mode" => true)
+          body: create_text_message_payload("", "wamid.sim_test").merge("simulator_mode" => true),
+          cookies: {
+            "flowchat_simulator" => valid_cookie
+          }
         )
 
-        processor = FlowChat::Whatsapp::Processor.new(context["controller"]) do |config|
+        # Enable simulator mode for this processor
+        processor = FlowChat::Whatsapp::Processor.new(context["controller"], enable_simulator: true) do |config|
           config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
           config.use_session_store FlowChat::Session::CacheSessionStore
         end
@@ -226,19 +240,38 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
         # Should use simulator mode, not background mode
         assert_equal 0, TestWhatsappSendJob.performed_jobs.length
 
-        # Should render simulator response (this test may need adjustment based on actual behavior)
-        # For now, just verify no background jobs were created
+        # Should render simulator response
+        controller = context["controller"]
+        refute_nil controller.last_render
+        assert_equal "simulator", controller.last_render[:json][:mode]
+        assert_equal true, controller.last_render[:json][:webhook_processed]
+        refute_nil controller.last_render[:json][:would_send]
       end
     end
+  ensure
+    # Clean up
+    FlowChat::Config.simulator_secret = nil
   end
 
   private
 
-  def create_context_with_request(method:, params: {}, body: nil)
+  def create_context_with_request(method:, params: {}, body: nil, cookies: {})
     context = FlowChat::Context.new
 
+    # Calculate webhook signature if body is provided and app_secret is configured
+    headers = {}
+    if body && @mock_config.app_secret
+      body_string = body.is_a?(String) ? body : body.to_json
+      signature = OpenSSL::HMAC.hexdigest(
+        OpenSSL::Digest.new("sha256"),
+        @mock_config.app_secret,
+        body_string
+      )
+      headers["X-Hub-Signature-256"] = "sha256=#{signature}"
+    end
+
     # Create mock request
-    request = OpenStruct.new(params: params)
+    request = OpenStruct.new(params: params, headers: headers, cookies: cookies)
     request.define_singleton_method(:get?) { method == :get }
     request.define_singleton_method(:post?) { method == :post }
 

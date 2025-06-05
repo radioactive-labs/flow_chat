@@ -1,9 +1,13 @@
 require "net/http"
 require "json"
 require "phonelib"
+require "openssl"
 
 module FlowChat
   module Whatsapp
+    # Configuration-related errors
+    class ConfigurationError < StandardError; end
+
     module Gateway
       class CloudApi
         def initialize(app, config = nil)
@@ -35,8 +39,8 @@ module FlowChat
         private
 
         def determine_message_handler(context)
-          # Check for simulator parameter in request (highest priority)
-          if context["simulator_mode"] || context.controller.request.params["simulator_mode"]
+          # Check if simulator mode was already detected and set in context
+          if context["simulator_mode"]
             return :simulator
           end
 
@@ -59,15 +63,30 @@ module FlowChat
 
         def handle_webhook(context)
           controller = context.controller
-          body = JSON.parse(controller.request.body.read)
-
-          # Check for simulator mode parameter in request
-          if body.dig("simulator_mode") || controller.request.params["simulator_mode"]
+          
+          # Parse body
+          begin
+            parse_request_body(controller.request)
+          rescue JSON::ParserError => e
+            Rails.logger.warn "Failed to parse webhook body: #{e.message}"
+            return controller.head :bad_request
+          end
+          
+          # Check for simulator mode parameter in request (before validation)
+          # But only enable if valid simulator token is provided
+          is_simulator_mode = simulate?(context)
+          if is_simulator_mode
             context["simulator_mode"] = true
           end
 
+          # Validate webhook signature for security (skip for simulator mode)
+          unless is_simulator_mode || valid_webhook_signature?(controller.request)
+            Rails.logger.warn "Invalid webhook signature received"
+            return controller.head :unauthorized
+          end
+
           # Extract message data from WhatsApp webhook
-          entry = body.dig("entry", 0)
+          entry = @body.dig("entry", 0)
           return controller.head :ok unless entry
 
           changes = entry.dig("changes", 0)
@@ -112,6 +131,57 @@ module FlowChat
           end
 
           controller.head :ok
+        end
+
+        # Validate webhook signature to ensure request comes from WhatsApp
+        def valid_webhook_signature?(request)
+          # Check if signature validation is explicitly disabled
+          if @config.skip_signature_validation
+            return true
+          end
+
+          # Require app_secret for signature validation
+          unless @config.app_secret && !@config.app_secret.empty?
+            raise FlowChat::Whatsapp::ConfigurationError, 
+              "WhatsApp app_secret is required for webhook signature validation. " \
+              "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
+          end
+
+          signature_header = request.headers["X-Hub-Signature-256"]
+          return false unless signature_header
+
+          # Extract signature from header (format: "sha256=<signature>")
+          expected_signature = signature_header.sub("sha256=", "")
+
+          # Get raw request body
+          request.body.rewind
+          body = request.body.read
+          request.body.rewind
+
+          # Calculate HMAC signature
+          calculated_signature = OpenSSL::HMAC.hexdigest(
+            OpenSSL::Digest.new("sha256"),
+            @config.app_secret,
+            body
+          )
+
+          # Compare signatures using secure comparison to prevent timing attacks
+          secure_compare(expected_signature, calculated_signature)
+        rescue FlowChat::Whatsapp::ConfigurationError
+          raise
+        rescue => e
+          Rails.logger.error "Error validating webhook signature: #{e.message}"
+          false
+        end
+
+        # Secure string comparison to prevent timing attacks
+        def secure_compare(a, b)
+          return false unless a.bytesize == b.bytesize
+
+          l = a.unpack("C*")
+          res = 0
+          b.each_byte { |byte| res |= byte ^ l.shift }
+          res == 0
         end
 
         def extract_message_content(message, context)
@@ -202,6 +272,50 @@ module FlowChat
             controller.render json: simulator_response
             nil
           end
+        end
+
+        def simulate?(context)
+          # Check if simulator mode is enabled for this processor
+          return false unless context["enable_simulator"]
+          
+          # Then check if simulator mode is requested and valid
+          @body.dig("simulator_mode") && valid_simulator_cookie?(context)
+        end
+
+        def valid_simulator_cookie?(context)
+          simulator_secret = FlowChat::Config.simulator_secret
+          return false unless simulator_secret && !simulator_secret.empty?
+          
+          # Check for simulator cookie
+          request = context.controller.request
+          simulator_cookie = request.cookies["flowchat_simulator"]
+          return false unless simulator_cookie
+          
+          # Verify the cookie is a valid HMAC signature
+          # Cookie format: "timestamp:signature" where signature = HMAC(simulator_secret, "simulator:timestamp")
+          begin
+            timestamp_str, signature = simulator_cookie.split(":", 2)
+            return false unless timestamp_str && signature
+            
+            # Check timestamp is recent (within 24 hours for reasonable session duration)
+            timestamp = timestamp_str.to_i
+            return false if timestamp <= 0
+            return false if (Time.now.to_i - timestamp).abs > 86400 # 24 hours
+            
+            # Calculate expected signature
+            message = "simulator:#{timestamp_str}"
+            expected_signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
+            
+            # Use secure comparison
+            secure_compare(signature, expected_signature)
+          rescue => e
+            Rails.logger.warn "Invalid simulator cookie format: #{e.message}"
+            false
+          end
+        end
+
+        def parse_request_body(request)
+          @body ||= JSON.parse(request.body.read)
         end
       end
     end

@@ -5,17 +5,23 @@ class WhatsappController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
       # Use cache-based session store for longer WhatsApp conversations
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page
+  rescue FlowChat::Whatsapp::ConfigurationError => e
+    Rails.logger.error "WhatsApp configuration error: #{e.message}"
+    head :internal_server_error
+  rescue => e
+    Rails.logger.error "Unexpected error processing WhatsApp webhook: #{e.message}"
+    head :internal_server_error
   end
 end
 
-# Example with Custom Configuration
+# Example with Custom Configuration and Security
 class CustomWhatsappController < ApplicationController
   skip_forgery_protection
 
@@ -28,13 +34,94 @@ class CustomWhatsappController < ApplicationController
     custom_config.app_id = ENV["MY_WHATSAPP_APP_ID"]
     custom_config.app_secret = ENV["MY_WHATSAPP_APP_SECRET"]
     custom_config.business_account_id = ENV["MY_WHATSAPP_BUSINESS_ACCOUNT_ID"]
+    
+    # Security configuration
+    custom_config.skip_signature_validation = !Rails.env.production? # Only skip in non-production
 
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page
+  rescue FlowChat::Whatsapp::ConfigurationError => e
+    Rails.logger.error "WhatsApp configuration error: #{e.message}"
+    head :internal_server_error
+  rescue => e
+    Rails.logger.error "Unexpected error processing WhatsApp webhook: #{e.message}"
+    head :internal_server_error
+  end
+end
+
+# Example with Environment-Specific Security
+class EnvironmentAwareWhatsappController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    # Configure security based on environment
+    custom_config = build_whatsapp_config
+    
+    # Enable simulator only in development/staging
+    enable_simulator = Rails.env.development? || Rails.env.staging?
+
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  rescue FlowChat::Whatsapp::ConfigurationError => e
+    Rails.logger.error "WhatsApp configuration error: #{e.message}"
+    head :internal_server_error
+  rescue => e
+    Rails.logger.error "Unexpected error processing WhatsApp webhook: #{e.message}"
+    head :internal_server_error
+  end
+
+  private
+
+  def build_whatsapp_config
+    config = FlowChat::Whatsapp::Configuration.new
+    
+    case Rails.env
+    when 'development'
+      # Development: More relaxed security for easier testing
+      config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
+      config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
+      config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
+      config.app_id = ENV["WHATSAPP_APP_ID"]
+      config.app_secret = ENV["WHATSAPP_APP_SECRET"]  # Optional in development
+      config.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
+      config.skip_signature_validation = true  # Skip validation for easier development
+      
+    when 'test'
+      # Test: Use test credentials
+      config.access_token = "test_token"
+      config.phone_number_id = "test_phone_id"
+      config.verify_token = "test_verify_token"
+      config.app_id = "test_app_id"
+      config.app_secret = "test_app_secret"
+      config.business_account_id = "test_business_id"
+      config.skip_signature_validation = true  # Skip validation in tests
+      
+    when 'staging', 'production'
+      # Production: Full security enabled
+      config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
+      config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
+      config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
+      config.app_id = ENV["WHATSAPP_APP_ID"]
+      config.app_secret = ENV["WHATSAPP_APP_SECRET"]  # Required for security
+      config.business_account_id = ENV["WHATSAPP_BUSINESS_ACCOUNT_ID"]
+      config.skip_signature_validation = false  # Always validate in production
+      
+      # Ensure required security configuration is present
+      if config.app_secret.blank?
+        raise FlowChat::Whatsapp::ConfigurationError, 
+          "WHATSAPP_APP_SECRET is required for webhook signature validation in #{Rails.env}"
+      end
+    end
+    
+    config
   end
 end
 
