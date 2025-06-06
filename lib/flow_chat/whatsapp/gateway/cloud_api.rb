@@ -14,22 +14,30 @@ module FlowChat
           @app = app
           @config = config || FlowChat::Whatsapp::Configuration.from_credentials
           @client = FlowChat::Whatsapp::Client.new(@config)
+          
+          FlowChat.logger.info { "CloudApi: Initialized WhatsApp Cloud API gateway with phone_number_id: #{@config.phone_number_id}" }
+          FlowChat.logger.debug { "CloudApi: Gateway configuration - API base URL: #{FlowChat::Config.whatsapp.api_base_url}" }
         end
 
         def call(context)
           controller = context.controller
           request = controller.request
 
+          FlowChat.logger.debug { "CloudApi: Processing #{request.request_method} request to #{request.path}" }
+
           # Handle webhook verification
           if request.get? && request.params["hub.mode"] == "subscribe"
+            FlowChat.logger.info { "CloudApi: Handling webhook verification request" }
             return handle_verification(context)
           end
 
           # Handle webhook messages
           if request.post?
+            FlowChat.logger.info { "CloudApi: Handling webhook message" }
             return handle_webhook(context)
           end
 
+          FlowChat.logger.warn { "CloudApi: Invalid request method or parameters - returning bad request" }
           controller.head :bad_request
         end
 
@@ -41,11 +49,14 @@ module FlowChat
         def determine_message_handler(context)
           # Check if simulator mode was already detected and set in context
           if context["simulator_mode"]
+            FlowChat.logger.debug { "CloudApi: Using simulator message handler" }
             return :simulator
           end
 
           # Use global WhatsApp configuration
-          FlowChat::Config.whatsapp.message_handling_mode
+          mode = FlowChat::Config.whatsapp.message_handling_mode
+          FlowChat.logger.debug { "CloudApi: Using #{mode} message handling mode" }
+          mode
         end
 
         def handle_verification(context)
@@ -53,10 +64,16 @@ module FlowChat
           params = controller.request.params
 
           verify_token = @config.verify_token
+          provided_token = params["hub.verify_token"]
+          challenge = params["hub.challenge"]
 
-          if params["hub.verify_token"] == verify_token
-            controller.render plain: params["hub.challenge"]
+          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{provided_token == verify_token}" }
+
+          if provided_token == verify_token
+            FlowChat.logger.info { "CloudApi: Webhook verification successful - returning challenge: #{challenge}" }
+            controller.render plain: challenge
           else
+            FlowChat.logger.warn { "CloudApi: Webhook verification failed - invalid verify token" }
             controller.head :forbidden
           end
         end
@@ -67,8 +84,9 @@ module FlowChat
           # Parse body
           begin
             parse_request_body(controller.request)
+            FlowChat.logger.debug { "CloudApi: Successfully parsed webhook request body" }
           rescue JSON::ParserError => e
-            Rails.logger.warn "Failed to parse webhook body: #{e.message}"
+            FlowChat.logger.error { "CloudApi: Failed to parse webhook body: #{e.message}" }
             return controller.head :bad_request
           end
           
@@ -76,39 +94,59 @@ module FlowChat
           # But only enable if valid simulator token is provided
           is_simulator_mode = simulate?(context)
           if is_simulator_mode
+            FlowChat.logger.info { "CloudApi: Simulator mode enabled for this request" }
             context["simulator_mode"] = true
           end
 
           # Validate webhook signature for security (skip for simulator mode)
           unless is_simulator_mode || valid_webhook_signature?(controller.request)
-            Rails.logger.warn "Invalid webhook signature received"
+            FlowChat.logger.warn { "CloudApi: Invalid webhook signature received - rejecting request" }
             return controller.head :unauthorized
           end
 
+          FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }
+
           # Extract message data from WhatsApp webhook
           entry = @body.dig("entry", 0)
-          return controller.head :ok unless entry
+          unless entry
+            FlowChat.logger.debug { "CloudApi: No entry found in webhook body - returning OK" }
+            return controller.head :ok
+          end
 
           changes = entry.dig("changes", 0)
-          return controller.head :ok unless changes
+          unless changes
+            FlowChat.logger.debug { "CloudApi: No changes found in webhook entry - returning OK" }
+            return controller.head :ok
+          end
 
           value = changes["value"]
-          return controller.head :ok unless value
+          unless value
+            FlowChat.logger.debug { "CloudApi: No value found in webhook changes - returning OK" }
+            return controller.head :ok
+          end
 
           # Handle incoming messages
           if value["messages"]&.any?
             message = value["messages"].first
             contact = value["contacts"]&.first
 
-            context["request.id"] = message["from"]
+            phone_number = message["from"]
+            message_id = message["id"]
+            contact_name = contact&.dig("profile", "name")
+
+            FlowChat.logger.info { "CloudApi: Processing message from #{phone_number} (#{contact_name || 'Unknown'}), message_id: #{message_id}" }
+
+            context["request.id"] = phone_number
             context["request.gateway"] = :whatsapp_cloud_api
-            context["request.message_id"] = message["id"]
-            context["request.msisdn"] = Phonelib.parse(message["from"]).e164
-            context["request.contact_name"] = contact&.dig("profile", "name")
+            context["request.message_id"] = message_id
+            context["request.msisdn"] = Phonelib.parse(phone_number).e164
+            context["request.contact_name"] = contact_name
             context["request.timestamp"] = message["timestamp"]
 
             # Extract message content based on type
             extract_message_content(message, context)
+
+            FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
 
             # Determine message handling mode
             handler_mode = determine_message_handler(context)
@@ -127,7 +165,9 @@ module FlowChat
 
           # Handle message status updates
           if value["statuses"]&.any?
-            Rails.logger.info "WhatsApp status update: #{value["statuses"]}"
+            statuses = value["statuses"]
+            FlowChat.logger.info { "CloudApi: Received #{statuses.size} status update(s)" }
+            FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
           end
 
           controller.head :ok
@@ -137,18 +177,23 @@ module FlowChat
         def valid_webhook_signature?(request)
           # Check if signature validation is explicitly disabled
           if @config.skip_signature_validation
+            FlowChat.logger.debug { "CloudApi: Webhook signature validation is disabled" }
             return true
           end
 
           # Require app_secret for signature validation
           unless @config.app_secret && !@config.app_secret.empty?
-            raise FlowChat::Whatsapp::ConfigurationError, 
-              "WhatsApp app_secret is required for webhook signature validation. " \
-              "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
+            error_msg = "WhatsApp app_secret is required for webhook signature validation. " \
+                       "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
+            FlowChat.logger.error { "CloudApi: #{error_msg}" }
+            raise FlowChat::Whatsapp::ConfigurationError, error_msg
           end
 
           signature_header = request.headers["X-Hub-Signature-256"]
-          return false unless signature_header
+          unless signature_header
+            FlowChat.logger.warn { "CloudApi: No X-Hub-Signature-256 header found in request" }
+            return false
+          end
 
           # Extract signature from header (format: "sha256=<signature>")
           expected_signature = signature_header.sub("sha256=", "")
@@ -166,11 +211,19 @@ module FlowChat
           )
 
           # Compare signatures using secure comparison to prevent timing attacks
-          secure_compare(expected_signature, calculated_signature)
+          signature_valid = secure_compare(expected_signature, calculated_signature)
+          
+          if signature_valid
+            FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
+          else
+            FlowChat.logger.warn { "CloudApi: Webhook signature validation failed - signatures do not match" }
+          end
+          
+          signature_valid
         rescue FlowChat::Whatsapp::ConfigurationError
           raise
         rescue => e
-          Rails.logger.error "Error validating webhook signature: #{e.message}"
+          FlowChat.logger.error { "CloudApi: Error validating webhook signature: #{e.class.name}: #{e.message}" }
           false
         end
 
@@ -185,24 +238,34 @@ module FlowChat
         end
 
         def extract_message_content(message, context)
-          case message["type"]
+          message_type = message["type"]
+          FlowChat.logger.debug { "CloudApi: Extracting content from #{message_type} message" }
+          
+          case message_type
           when "text"
-            context.input = message.dig("text", "body")
+            content = message.dig("text", "body")
+            context.input = content
+            FlowChat.logger.debug { "CloudApi: Text message content: '#{content}'" }
           when "interactive"
             # Handle button/list replies
             if message.dig("interactive", "type") == "button_reply"
-              context.input = message.dig("interactive", "button_reply", "id")
+              content = message.dig("interactive", "button_reply", "id")
+              context.input = content
+              FlowChat.logger.debug { "CloudApi: Button reply ID: '#{content}'" }
             elsif message.dig("interactive", "type") == "list_reply"
-              context.input = message.dig("interactive", "list_reply", "id")
+              content = message.dig("interactive", "list_reply", "id")
+              context.input = content
+              FlowChat.logger.debug { "CloudApi: List reply ID: '#{content}'" }
             end
           when "location"
-            context["request.location"] = {
+            location = {
               latitude: message.dig("location", "latitude"),
               longitude: message.dig("location", "longitude"),
               name: message.dig("location", "name"),
               address: message.dig("location", "address")
             }
-            context.input = "$location$"
+            context["request.location"] = location
+            FlowChat.logger.debug { "CloudApi: Location received - Lat: #{location[:latitude]}, Lng: #{location[:longitude]}" }
           when "image", "document", "audio", "video"
             context["request.media"] = {
               type: message["type"],

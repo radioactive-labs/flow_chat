@@ -9,6 +9,8 @@ module FlowChat
     class Client
       def initialize(config)
         @config = config
+        FlowChat.logger.info { "WhatsApp::Client: Initialized WhatsApp client for phone_number_id: #{@config.phone_number_id}" }
+        FlowChat.logger.debug { "WhatsApp::Client: API base URL: #{FlowChat::Config.whatsapp.api_base_url}" }
       end
 
       # Send a message to a WhatsApp number
@@ -16,8 +18,20 @@ module FlowChat
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
       def send_message(to, response)
+        type, content, options = response
+        FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
+        FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
+        
         message_data = build_message_payload(response, to)
-        send_message_payload(message_data)
+        result = send_message_payload(message_data)
+        
+        if result
+          FlowChat.logger.info { "WhatsApp::Client: Message sent successfully to #{to}, message_id: #{result.dig('messages', 0, 'id')}" }
+        else
+          FlowChat.logger.error { "WhatsApp::Client: Failed to send message to #{to}" }
+        end
+        
+        result
       end
 
       # Send a text message
@@ -25,6 +39,7 @@ module FlowChat
       # @param text [String] Message text
       # @return [Hash] API response or nil on error
       def send_text(to, text)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending text message to #{to}" }
         send_message(to, [:text, text, {}])
       end
 
@@ -34,6 +49,7 @@ module FlowChat
       # @param buttons [Array] Array of button hashes with :id and :title
       # @return [Hash] API response or nil on error
       def send_buttons(to, text, buttons)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending interactive buttons to #{to} with #{buttons.size} buttons" }
         send_message(to, [:interactive_buttons, text, {buttons: buttons}])
       end
 
@@ -44,6 +60,8 @@ module FlowChat
       # @param button_text [String] Button text (default: "Choose")
       # @return [Hash] API response or nil on error
       def send_list(to, text, sections, button_text = "Choose")
+        total_items = sections.sum { |section| section[:rows]&.size || 0 }
+        FlowChat.logger.debug { "WhatsApp::Client: Sending interactive list to #{to} with #{sections.size} sections, #{total_items} total items" }
         send_message(to, [:interactive_list, text, {sections: sections, button_text: button_text}])
       end
 
@@ -54,6 +72,7 @@ module FlowChat
       # @param language [String] Language code (default: "en_US")
       # @return [Hash] API response or nil on error
       def send_template(to, template_name, components = [], language = "en_US")
+        FlowChat.logger.debug { "WhatsApp::Client: Sending template '#{template_name}' to #{to} in #{language}" }
         send_message(to, [:template, "", {
           template_name: template_name,
           components: components,
@@ -68,6 +87,7 @@ module FlowChat
       # @param mime_type [String] Optional MIME type for URLs (e.g., 'image/jpeg')
       # @return [Hash] API response
       def send_image(to, image_url_or_id, caption = nil, mime_type = nil)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? 'URL' : 'Media ID'}" }
         send_media_message(to, :image, image_url_or_id, caption: caption, mime_type: mime_type)
       end
 
@@ -80,6 +100,7 @@ module FlowChat
       # @return [Hash] API response
       def send_document(to, document_url_or_id, caption = nil, filename = nil, mime_type = nil)
         filename ||= extract_filename_from_url(document_url_or_id) if url?(document_url_or_id)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending document to #{to} - filename: #{filename}" }
         send_media_message(to, :document, document_url_or_id, caption: caption, filename: filename, mime_type: mime_type)
       end
 
@@ -90,6 +111,7 @@ module FlowChat
       # @param mime_type [String] Optional MIME type for URLs (e.g., 'video/mp4')
       # @return [Hash] API response
       def send_video(to, video_url_or_id, caption = nil, mime_type = nil)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending video to #{to}" }
         send_media_message(to, :video, video_url_or_id, caption: caption, mime_type: mime_type)
       end
 
@@ -99,6 +121,7 @@ module FlowChat
       # @param mime_type [String] Optional MIME type for URLs (e.g., 'audio/mpeg')
       # @return [Hash] API response
       def send_audio(to, audio_url_or_id, mime_type = nil)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending audio to #{to}" }
         send_media_message(to, :audio, audio_url_or_id, mime_type: mime_type)
       end
 
@@ -108,6 +131,7 @@ module FlowChat
       # @param mime_type [String] Optional MIME type for URLs (e.g., 'image/webp')
       # @return [Hash] API response
       def send_sticker(to, sticker_url_or_id, mime_type = nil)
+        FlowChat.logger.debug { "WhatsApp::Client: Sending sticker to #{to}" }
         send_media_message(to, :sticker, sticker_url_or_id, mime_type: mime_type)
       end
 
@@ -118,23 +142,30 @@ module FlowChat
       # @return [String] Media ID
       # @raise [StandardError] If upload fails
       def upload_media(file_path_or_io, mime_type, filename = nil)
+        FlowChat.logger.info { "WhatsApp::Client: Uploading media file - type: #{mime_type}, filename: #{filename}" }
+        
         raise ArgumentError, "mime_type is required" if mime_type.nil? || mime_type.empty?
 
         if file_path_or_io.is_a?(String)
           # File path
           raise ArgumentError, "File not found: #{file_path_or_io}" unless File.exist?(file_path_or_io)
           filename ||= File.basename(file_path_or_io)
+          file_size = File.size(file_path_or_io)
+          FlowChat.logger.debug { "WhatsApp::Client: Uploading file from path: #{file_path_or_io} (#{file_size} bytes)" }
           file = File.open(file_path_or_io, "rb")
         else
           # IO object
           file = file_path_or_io
           filename ||= "upload"
+          FlowChat.logger.debug { "WhatsApp::Client: Uploading file from IO object" }
         end
 
         # Upload directly via HTTP
         uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/media")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
+
+        FlowChat.logger.debug { "WhatsApp::Client: Uploading to #{uri}" }
 
         # Prepare multipart form data
         boundary = "----WebKitFormBoundary#{SecureRandom.hex(16)}"
@@ -169,11 +200,21 @@ module FlowChat
 
         if response.is_a?(Net::HTTPSuccess)
           data = JSON.parse(response.body)
-          data["id"] || raise(StandardError, "Failed to upload media: #{data}")
+          media_id = data["id"]
+          if media_id
+            FlowChat.logger.info { "WhatsApp::Client: Media upload successful - media_id: #{media_id}" }
+            media_id
+          else
+            FlowChat.logger.error { "WhatsApp::Client: Media upload failed - no media_id in response: #{data}" }
+            raise StandardError, "Failed to upload media: #{data}"
+          end
         else
-          Rails.logger.error "WhatsApp Media Upload error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: Media upload error - #{response.code}: #{response.body}" }
           raise StandardError, "Media upload failed: #{response.body}"
         end
+      rescue => error
+        FlowChat.logger.error { "WhatsApp::Client: Media upload exception: #{error.class.name}: #{error.message}" }
+        raise
       ensure
         file&.close if file_path_or_io.is_a?(String)
       end
@@ -394,6 +435,11 @@ module FlowChat
       # @param message_data [Hash] Message payload
       # @return [Hash] API response or nil on error
       def send_message_payload(message_data)
+        to = message_data[:to]
+        message_type = message_data[:type]
+        
+        FlowChat.logger.debug { "WhatsApp::Client: Sending API request to #{to} - type: #{message_type}" }
+        
         uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
@@ -403,14 +449,20 @@ module FlowChat
         request["Content-Type"] = "application/json"
         request.body = message_data.to_json
 
+        FlowChat.logger.debug { "WhatsApp::Client: Making HTTP request to WhatsApp API" }
         response = http.request(request)
 
         if response.is_a?(Net::HTTPSuccess)
-          JSON.parse(response.body)
+          result = JSON.parse(response.body)
+          FlowChat.logger.debug { "WhatsApp::Client: API request successful - response: #{result}" }
+          result
         else
-          Rails.logger.error "WhatsApp API error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: API request failed - #{response.code}: #{response.body}" }
           nil
         end
+      rescue => error
+        FlowChat.logger.error { "WhatsApp::Client: API request exception: #{error.class.name}: #{error.message}" }
+        nil
       end
 
       def send_media_message(to, media_type, url_or_id, caption: nil, filename: nil, mime_type: nil)

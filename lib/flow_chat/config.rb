@@ -68,4 +68,9 @@ module FlowChat
       end
     end
   end
+
+  # Shorthand for accessing the logger throughout the application
+  def self.logger
+    Config.logger
+  end
 end

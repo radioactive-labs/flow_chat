@@ -18,14 +18,19 @@ module FlowChat
         @business_account_id = nil
         @skip_signature_validation = false
 
+        FlowChat.logger.debug { "WhatsApp::Configuration: Initialized configuration with name: #{name || 'anonymous'}" }
+
         register_as(name) if name.present?
       end
 
       # Load configuration from Rails credentials or environment variables
       def self.from_credentials
+        FlowChat.logger.info { "WhatsApp::Configuration: Loading configuration from credentials/environment" }
+        
         config = new(nil)
 
         if defined?(Rails) && Rails.application.credentials.whatsapp
+          FlowChat.logger.debug { "WhatsApp::Configuration: Loading from Rails credentials" }
           credentials = Rails.application.credentials.whatsapp
           config.access_token = credentials[:access_token]
           config.phone_number_id = credentials[:phone_number_id]
@@ -35,6 +40,7 @@ module FlowChat
           config.business_account_id = credentials[:business_account_id]
           config.skip_signature_validation = credentials[:skip_signature_validation] || false
         else
+          FlowChat.logger.debug { "WhatsApp::Configuration: Loading from environment variables" }
           # Fallback to environment variables
           config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
           config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
@@ -45,43 +51,68 @@ module FlowChat
           config.skip_signature_validation = ENV["WHATSAPP_SKIP_SIGNATURE_VALIDATION"] == "true"
         end
 
+        if config.valid?
+          FlowChat.logger.info { "WhatsApp::Configuration: Configuration loaded successfully - phone_number_id: #{config.phone_number_id}" }
+        else
+          FlowChat.logger.warn { "WhatsApp::Configuration: Incomplete configuration loaded - missing required fields" }
+        end
+
         config
       end
 
       # Register a named configuration
       def self.register(name, config)
+        FlowChat.logger.debug { "WhatsApp::Configuration: Registering configuration '#{name}'" }
         @@configurations[name.to_sym] = config
       end
 
       # Get a named configuration
       def self.get(name)
-        @@configurations[name.to_sym] || raise(ArgumentError, "WhatsApp configuration '#{name}' not found")
+        config = @@configurations[name.to_sym]
+        if config
+          FlowChat.logger.debug { "WhatsApp::Configuration: Retrieved configuration '#{name}'" }
+          config
+        else
+          FlowChat.logger.error { "WhatsApp::Configuration: Configuration '#{name}' not found" }
+          raise ArgumentError, "WhatsApp configuration '#{name}' not found"
+        end
       end
 
       # Check if a named configuration exists
       def self.exists?(name)
-        @@configurations.key?(name.to_sym)
+        exists = @@configurations.key?(name.to_sym)
+        FlowChat.logger.debug { "WhatsApp::Configuration: Configuration '#{name}' exists: #{exists}" }
+        exists
       end
 
       # Get all configuration names
       def self.configuration_names
-        @@configurations.keys
+        names = @@configurations.keys
+        FlowChat.logger.debug { "WhatsApp::Configuration: Available configurations: #{names}" }
+        names
       end
 
       # Clear all registered configurations (useful for testing)
       def self.clear_all!
+        FlowChat.logger.debug { "WhatsApp::Configuration: Clearing all registered configurations" }
         @@configurations.clear
       end
 
       # Register this configuration with a name
       def register_as(name)
+        FlowChat.logger.debug { "WhatsApp::Configuration: Registering configuration as '#{name}'" }
         @name = name.to_sym
         self.class.register(@name, self)
         self
       end
 
       def valid?
-        access_token && !access_token.to_s.empty? && phone_number_id && !phone_number_id.to_s.empty? && verify_token && !verify_token.to_s.empty?
+        is_valid = access_token && !access_token.to_s.empty? && 
+                   phone_number_id && !phone_number_id.to_s.empty? && 
+                   verify_token && !verify_token.to_s.empty?
+        
+        FlowChat.logger.debug { "WhatsApp::Configuration: Configuration valid: #{is_valid}" }
+        is_valid
       end
 
       # API endpoints
