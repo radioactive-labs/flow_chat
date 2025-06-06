@@ -25,17 +25,17 @@ class WelcomeFlow < FlowChat::Flow
   def main_page
     # Welcome the user
     name = app.screen(:name) do |prompt|
-      prompt.ask "Welcome to our service! What's your name?",
+      prompt.ask "Welcome! What's your name?",
         transform: ->(input) { input.strip.titleize }
     end
 
     # Show main menu with numbered options (USSD style)
     choice = app.screen(:main_menu) do |prompt|
-      prompt.select "Hi #{name}! Choose an option:", {
+      prompt.select "Hi #{name}! Choose:", {
         "1" => "Account Info",
         "2" => "Make Payment",
         "3" => "Get Balance",
-        "4" => "Customer Support"
+        "4" => "Support"
       }
     end
 
@@ -55,55 +55,55 @@ class WelcomeFlow < FlowChat::Flow
 
   def show_account_info
     info_choice = app.screen(:account_info) do |prompt|
-      prompt.select "Account Information:", {
+      prompt.select "Account Info:", {
         "1" => "Personal Details",
-        "2" => "Account Balance",
+        "2" => "Balance",
         "3" => "Transaction History",
-        "0" => "Back to Main Menu"
+        "0" => "Main Menu"
       }
     end
 
     case info_choice
     when "1"
-      app.say "Name: John Doe\\nPhone: #{app.phone_number}\\nAccount: Active"
+      app.say "Name: John Doe\nPhone: #{app.phone_number}\nStatus: Active"
     when "2"
-      app.say "Current Balance: $150.75\\nAvailable Credit: $1,000.00"
+      app.say "Balance: $150.75\nCredit: $1,000.00"
     when "3"
-      app.say "Last 3 Transactions:\\n1. +$50.00 - Deposit\\n2. -$25.50 - Purchase\\n3. -$15.00 - Transfer"
+      app.say "Recent:\n+$50.00 Deposit\n-$25.50 Purchase\n-$15.00 Transfer"
     when "0"
-      main_page  # Go back to main menu
+      main_page
     end
   end
 
   def make_payment
     amount = app.screen(:payment_amount) do |prompt|
-      prompt.ask "Enter amount to pay:",
+      prompt.ask "Enter amount:",
         validate: ->(input) {
-          amount_float = input.to_f
-          return "Amount must be a valid number" unless amount_float > 0
-          return "Maximum payment is $500" unless amount_float <= 500
+          amt = input.to_f
+          return "Invalid amount" unless amt > 0
+          return "Max $500" unless amt <= 500
           nil
         },
         transform: ->(input) { input.to_f }
     end
 
     recipient = app.screen(:payment_recipient) do |prompt|
-      prompt.ask "Enter recipient phone number:",
+      prompt.ask "Recipient phone:",
         validate: ->(input) {
-          return "Phone number must be 10 digits" unless input.match?(/\\A\\d{10}\\z/)
+          return "10 digits required" unless input.match?(/\A\d{10}\z/)
           nil
         }
     end
 
     # Confirmation screen
     confirmed = app.screen(:payment_confirmation) do |prompt|
-      prompt.yes? "Pay $#{amount} to #{recipient}?\\nConfirm payment?"
+      prompt.yes? "Pay $#{amount} to #{recipient}?"
     end
 
     if confirmed
       # Process payment (your business logic here)
       transaction_id = process_payment(amount, recipient)
-      app.say "Payment successful!\\nTransaction ID: #{transaction_id}\\nAmount: $#{amount}\\nTo: #{recipient}"
+      app.say "Payment successful!\nID: #{transaction_id}\nAmount: $#{amount}"
     else
       app.say "Payment cancelled"
     end
@@ -112,16 +112,14 @@ class WelcomeFlow < FlowChat::Flow
   def get_balance
     # Simulate balance check
     balance = check_account_balance(app.phone_number)
-    app.say "Account Balance\\n\\nAvailable: $#{balance[:available]}\\nPending: $#{balance[:pending]}\\nTotal: $#{balance[:total]}"
+    app.say "Balance\n\nAvailable: $#{balance[:available]}\nPending: $#{balance[:pending]}"
   end
 
   def customer_support
     support_choice = app.screen(:support_menu) do |prompt|
-      prompt.select "Customer Support:", {
-        "1" => "Report an Issue",
-        "2" => "Account Questions",
-        "3" => "Technical Support",
-        "4" => "Speak to Agent",
+      prompt.select "Support:", {
+        "1" => "Report Issue",
+        "2" => "Contact Info",
         "0" => "Main Menu"
       }
     end
@@ -130,11 +128,7 @@ class WelcomeFlow < FlowChat::Flow
     when "1"
       report_issue
     when "2"
-      app.say "For account questions:\\nCall: 123-456-7890\\nEmail: support@company.com\\nHours: 9AM-5PM Mon-Fri"
-    when "3"
-      app.say "Technical Support:\\nCall: 123-456-7891\\nEmail: tech@company.com\\n24/7 Support Available"
-    when "4"
-      app.say "Connecting you to an agent...\\nPlease call 123-456-7890\\nOr visit our nearest branch"
+      app.say "Support:\nCall: 123-456-7890\nEmail: support@company.com\nHours: 9AM-5PM"
     when "0"
       main_page
     end
@@ -142,7 +136,7 @@ class WelcomeFlow < FlowChat::Flow
 
   def report_issue
     issue_type = app.screen(:issue_type) do |prompt|
-      prompt.select "Select issue type:", {
+      prompt.select "Issue type:", {
         "1" => "Payment Problem",
         "2" => "Account Access",
         "3" => "Service Error",
@@ -151,9 +145,9 @@ class WelcomeFlow < FlowChat::Flow
     end
 
     description = app.screen(:issue_description) do |prompt|
-      prompt.ask "Briefly describe the issue:",
+      prompt.ask "Describe issue:",
         validate: ->(input) {
-          return "Description must be at least 10 characters" unless input.length >= 10
+          return "Min 10 characters" if input.length < 10
           nil
         }
     end
@@ -161,7 +155,7 @@ class WelcomeFlow < FlowChat::Flow
     # Save the issue (your business logic here)
     ticket_id = create_support_ticket(issue_type, description, app.phone_number)
 
-    app.say "Issue reported successfully!\\n\\nTicket ID: #{ticket_id}\\nWe'll contact you within 24 hours.\\n\\nThank you!"
+    app.say "Issue reported!\n\nTicket: #{ticket_id}\nWe'll contact you within 24hrs"
   end
 
   # Helper methods (implement your business logic)
@@ -176,14 +170,13 @@ class WelcomeFlow < FlowChat::Flow
     # Your balance checking logic here
     {
       available: "150.75",
-      pending: "25.00",
-      total: "175.75"
+      pending: "25.00"
     }
   end
 
   def create_support_ticket(issue_type, description, phone_number)
     # Your ticket creation logic here
-    Rails.logger.info "Support ticket created: #{issue_type} - #{description} from #{phone_number}"
+    Rails.logger.info "Ticket: #{issue_type} - #{description} from #{phone_number}"
     "TICKET#{rand(10000..99999)}"
   end
 end

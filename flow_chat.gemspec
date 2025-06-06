@@ -6,8 +6,12 @@ Gem::Specification.new do |spec|
   spec.authors = ["Stefan Froelich"]
   spec.email = ["sfroelich01@gmail.com"]
 
-  spec.summary = "Framework for building Menu based conversations (e.g. USSD) in Rails."
-  spec.description = "Framework for building Menu based conversations (e.g. USSD) in Rails."
+  spec.summary = "Build conversational interfaces for USSD and WhatsApp with Rails"
+  spec.description = <<~DESC
+    FlowChat is a Rails framework for building sophisticated conversational interfaces across USSD and WhatsApp platforms. 
+    Create interactive flows with menus, prompts, validation, media support, and session management. Features include 
+    multi-tenancy, background job processing, built-in simulator for testing, and comprehensive middleware support.
+  DESC
   spec.homepage = "https://github.com/radioactive-labs/flow_chat"
   spec.license = "MIT"
   spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")

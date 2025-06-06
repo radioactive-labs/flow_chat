@@ -12,3 +12,4 @@
 
 # Ignore Gemfile.lock for our gem
 /Gemfile.lock
+.DS_Store

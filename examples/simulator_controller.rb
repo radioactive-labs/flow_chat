@@ -10,12 +10,12 @@ class SimulatorController < ApplicationController
 
   protected
 
-  # Define different local endpoints to test on the same server
+  # Define different endpoints to test
   def configurations
     {
       ussd_main: {
         name: "Main USSD Endpoint",
-        description: "Primary USSD integration endpoint",
+        description: "Primary USSD integration",
         processor_type: "ussd",
         provider: "nalo",
         endpoint: "/ussd",
@@ -24,25 +24,16 @@ class SimulatorController < ApplicationController
       },
       whatsapp_main: {
         name: "Main WhatsApp Endpoint", 
-        description: "Primary WhatsApp webhook endpoint",
+        description: "Primary WhatsApp webhook",
         processor_type: "whatsapp",
         provider: "cloud_api",
         endpoint: "/whatsapp/webhook",
         icon: "💬",
         color: "#25D366"
       },
-      whatsapp_v2: {
-        name: "WhatsApp API v2",
-        description: "Alternative WhatsApp endpoint (v2 API)",
-        processor_type: "whatsapp",
-        provider: "cloud_api", 
-        endpoint: "/api/v2/whatsapp/webhook",
-        icon: "🔄",
-        color: "#17a2b8"
-      },
       whatsapp_tenant_a: {
         name: "Tenant A WhatsApp",
-        description: "Multi-tenant WhatsApp endpoint for Tenant A",
+        description: "Multi-tenant endpoint for Tenant A",
         processor_type: "whatsapp",
         provider: "cloud_api",
         endpoint: "/tenants/a/whatsapp/webhook",
@@ -51,8 +42,8 @@ class SimulatorController < ApplicationController
       },
       whatsapp_legacy: {
         name: "Legacy WhatsApp",
-        description: "Legacy WhatsApp endpoint for backward compatibility",
-        processor_type: "whatsapp",
+        description: "Legacy endpoint for compatibility",
+        processor_type: "whatsapp", 
         provider: "cloud_api",
         endpoint: "/legacy/whatsapp",
         icon: "📦",

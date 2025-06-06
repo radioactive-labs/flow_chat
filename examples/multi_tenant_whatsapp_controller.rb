@@ -1,26 +1,19 @@
 # Example Multi-Tenant WhatsApp Controller
 # This shows how to configure different WhatsApp accounts per tenant/client
 
+# Controller supporting multiple WhatsApp accounts per tenant
 class MultiTenantWhatsappController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    # Determine tenant from subdomain, path, or other logic
     tenant = determine_tenant(request)
-
-    # Get tenant-specific WhatsApp configuration
     whatsapp_config = get_whatsapp_config_for_tenant(tenant)
 
-    # Enable simulator for local endpoint testing during development
-    # This allows testing different tenant endpoints via the simulator interface
-    enable_simulator = Rails.env.development? || Rails.env.staging?
-
-    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator) do |config|
+    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
-    # Use tenant-specific flow
     flow_class = get_flow_for_tenant(tenant)
     processor.run flow_class, :main_page
   end
@@ -31,14 +24,13 @@ class MultiTenantWhatsappController < ApplicationController
     # Option 1: From subdomain
     return request.subdomain if request.subdomain.present?
 
-    # Option 2: From path
+    # Option 2: From path (e.g., /whatsapp/acme/webhook)
     tenant_from_path = request.path.match(%r{^/whatsapp/(\w+)/})&.captures&.first
     return tenant_from_path if tenant_from_path
 
-    # Option 3: From custom header
+    # Option 3: From header
     return request.headers["X-Tenant-ID"] if request.headers["X-Tenant-ID"]
 
-    # Fallback to default
     "default"
   end
 
@@ -49,9 +41,7 @@ class MultiTenantWhatsappController < ApplicationController
         config.access_token = ENV["ACME_WHATSAPP_ACCESS_TOKEN"]
         config.phone_number_id = ENV["ACME_WHATSAPP_PHONE_NUMBER_ID"]
         config.verify_token = ENV["ACME_WHATSAPP_VERIFY_TOKEN"]
-        config.app_id = ENV["ACME_WHATSAPP_APP_ID"]
         config.app_secret = ENV["ACME_WHATSAPP_APP_SECRET"]
-        config.business_account_id = ENV["ACME_WHATSAPP_BUSINESS_ACCOUNT_ID"]
       end
 
     when "tech_startup"
@@ -59,9 +49,7 @@ class MultiTenantWhatsappController < ApplicationController
         config.access_token = ENV["TECHSTARTUP_WHATSAPP_ACCESS_TOKEN"]
         config.phone_number_id = ENV["TECHSTARTUP_WHATSAPP_PHONE_NUMBER_ID"]
         config.verify_token = ENV["TECHSTARTUP_WHATSAPP_VERIFY_TOKEN"]
-        config.app_id = ENV["TECHSTARTUP_WHATSAPP_APP_ID"]
         config.app_secret = ENV["TECHSTARTUP_WHATSAPP_APP_SECRET"]
-        config.business_account_id = ENV["TECHSTARTUP_WHATSAPP_BUSINESS_ACCOUNT_ID"]
       end
 
     when "retail_store"
@@ -71,13 +59,10 @@ class MultiTenantWhatsappController < ApplicationController
         config.access_token = tenant_config.access_token
         config.phone_number_id = tenant_config.phone_number_id
         config.verify_token = tenant_config.verify_token
-        config.app_id = tenant_config.app_id
         config.app_secret = tenant_config.app_secret
-        config.business_account_id = tenant_config.business_account_id
       end
 
     else
-      # Use default/global configuration
       FlowChat::Whatsapp::Configuration.from_credentials
     end
   end
@@ -91,7 +76,7 @@ class MultiTenantWhatsappController < ApplicationController
     when "retail_store"
       RetailStoreFlow
     else
-      WelcomeFlow  # Default flow
+      WelcomeFlow
     end
   end
 end
@@ -101,21 +86,14 @@ class DatabaseWhatsappController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    # Get account from business phone number or other identifier
     business_account = find_business_account(params)
+    return head :not_found if business_account.nil?
 
-    if business_account.nil?
-      return head :not_found
-    end
-
-    # Create configuration from database record
     whatsapp_config = FlowChat::Whatsapp::Configuration.new.tap do |config|
       config.access_token = business_account.whatsapp_access_token
       config.phone_number_id = business_account.whatsapp_phone_number_id
       config.verify_token = business_account.whatsapp_verify_token
-      config.app_id = business_account.whatsapp_app_id
       config.app_secret = business_account.whatsapp_app_secret
-      config.business_account_id = business_account.whatsapp_business_account_id
     end
 
     processor = FlowChat::Whatsapp::Processor.new(self) do |config|
@@ -129,20 +107,14 @@ class DatabaseWhatsappController < ApplicationController
   private
 
   def find_business_account(params)
-    # You could identify the account by:
-    # 1. Phone number ID from webhook
-    # 2. Business account ID from webhook
-    # 3. Custom routing parameter
-
-    # Example: Find by phone number ID in webhook
+    # Find by phone number ID from webhook
     phone_number_id = extract_phone_number_id_from_webhook(params)
     BusinessAccount.find_by(whatsapp_phone_number_id: phone_number_id)
   end
 
   def extract_phone_number_id_from_webhook(params)
-    # Extract from webhook payload structure
-    # This would need to be implemented based on your webhook structure
-    nil
+    # Extract from webhook payload - implement based on your structure
+    params.dig(:entry, 0, :changes, 0, :value, :metadata, :phone_number_id)
   end
 end
 

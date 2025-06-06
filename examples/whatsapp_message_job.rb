@@ -15,6 +15,9 @@ end
 class AdvancedWhatsappMessageJob < ApplicationJob
   include FlowChat::Whatsapp::SendJobSupport
 
+  queue_as :whatsapp_priority
+  retry_on StandardError, wait: 2.seconds, attempts: 3
+
   def perform(send_data)
     perform_whatsapp_send(send_data)
   end
@@ -72,18 +75,17 @@ class MultiTenantWhatsappSendJob < ApplicationJob
 
   # Override config resolution for tenant-specific configs
   def resolve_whatsapp_config(send_data)
-    # Try tenant-specific config first
+    # Use tenant-specific config if available
     tenant_name = extract_tenant_from_phone(send_data[:msisdn])
     if tenant_name && FlowChat::Whatsapp::Configuration.exists?(tenant_name)
       return FlowChat::Whatsapp::Configuration.get(tenant_name)
     end
 
-    # Fallback to default resolution
+    # Fallback to default
     super
   end
 
   def extract_tenant_from_phone(phone)
-    # Extract tenant from phone number prefix or other identifier
     case phone
     when /^\+1800/
       :enterprise
