@@ -23,10 +23,10 @@ class PromptTest < Minitest::Test
     assert_equal "John", result
   end
 
-  def test_ask_with_convert_transforms_input
+  def test_ask_with_transform_transforms_input
     prompt = FlowChat::Prompt.new("25")
 
-    result = prompt.ask("What is your age?", convert: ->(input) { input.to_i })
+    result = prompt.ask("What is your age?", transform: ->(input) { input.to_i })
     assert_equal 25, result
     assert_kind_of Integer, result
   end
@@ -36,8 +36,8 @@ class PromptTest < Minitest::Test
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("What is your age?",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be at least 18" unless input >= 18 })
+        validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_includes error.prompt, "Must be at least 18"
@@ -48,8 +48,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new("25")
 
     result = prompt.ask("What is your age?",
-      convert: ->(input) { input.to_i },
-      validate: ->(input) { "Must be at least 18" unless input >= 18 })
+      validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+      transform: ->(input) { input.to_i })
 
     assert_equal 25, result
   end
@@ -62,14 +62,14 @@ class PromptTest < Minitest::Test
   end
 
   def test_select_with_array_choices
-    prompt = FlowChat::Prompt.new("2")
+    prompt = FlowChat::Prompt.new("Female")
 
     result = prompt.select("Choose gender", ["Male", "Female"])
     assert_equal "Female", result
   end
 
   def test_select_with_hash_choices
-    prompt = FlowChat::Prompt.new("1")
+    prompt = FlowChat::Prompt.new("m")
     choices = {"m" => "Male", "f" => "Female"}
 
     result = prompt.select("Choose gender", choices)
@@ -77,7 +77,7 @@ class PromptTest < Minitest::Test
   end
 
   def test_select_with_invalid_choice
-    prompt = FlowChat::Prompt.new("5")
+    prompt = FlowChat::Prompt.new("Other")
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.select("Choose gender", ["Male", "Female"])
@@ -94,19 +94,20 @@ class PromptTest < Minitest::Test
     end
 
     assert_includes error.prompt, "Choose gender"
-    expected_choices = {1 => "Male", 2 => "Female"}
+    # New Prompt implementation normalizes array choices to hash format
+    expected_choices = {"Male" => "Male", "Female" => "Female"}
     assert_equal expected_choices, error.choices
   end
 
   def test_yes_question_with_yes_answer
-    prompt = FlowChat::Prompt.new("1")  # "Yes" is first option
+    prompt = FlowChat::Prompt.new("Yes")
 
     result = prompt.yes?("Do you agree?")
     assert_equal true, result
   end
 
   def test_yes_question_with_no_answer
-    prompt = FlowChat::Prompt.new("2")  # "No" is second option
+    prompt = FlowChat::Prompt.new("No")
 
     result = prompt.yes?("Do you agree?")
     assert_equal false, result
@@ -122,33 +123,9 @@ class PromptTest < Minitest::Test
     assert_equal "Thank you!", error.prompt
   end
 
-  def test_build_select_choices_with_array
-    prompt = FlowChat::Prompt.new(nil)
-    choices = ["Option A", "Option B", "Option C"]
-
-    result_choices, choices_prompt = prompt.send(:build_select_choices, choices)
-
-    assert_equal choices, result_choices
-    assert_equal({1 => "Option A", 2 => "Option B", 3 => "Option C"}, choices_prompt)
-  end
-
-  def test_build_select_choices_with_hash
-    prompt = FlowChat::Prompt.new(nil)
-    choices = {"a" => "Option A", "b" => "Option B"}
-
-    result_choices, choices_prompt = prompt.send(:build_select_choices, choices)
-
-    assert_equal ["a", "b"], result_choices
-    assert_equal({1 => "Option A", 2 => "Option B"}, choices_prompt)
-  end
-
-  def test_build_select_choices_with_invalid_type
-    prompt = FlowChat::Prompt.new(nil)
-
-    assert_raises(ArgumentError) do
-      prompt.send(:build_select_choices, "invalid")
-    end
-  end
+  # NOTE: build_select_choices method was removed in the new Prompt implementation.
+  # Choice normalization now happens automatically in the normalize_choices method.
+  # These tests are no longer relevant as the behavior is tested via select() method tests.
 
   # ============================================================================
   # MEDIA SUPPORT TESTS
@@ -341,7 +318,8 @@ class PromptTest < Minitest::Test
     end
 
     assert_includes error.prompt, "Choose gender"
-    expected_choices = {1 => "Male", 2 => "Female"}
+    # New Prompt implementation normalizes array choices to hash format
+    expected_choices = {"Male" => "Male", "Female" => "Female"}
     assert_equal expected_choices, error.choices
   end
 
@@ -362,8 +340,8 @@ class PromptTest < Minitest::Test
 
     result = prompt.ask("Enter your age:",
       media: {type: :image, url: "https://example.com/age_help.jpg"},
-      convert: ->(input) { input.to_i },
-      validate: ->(input) { "Must be at least 18" unless input >= 18 })
+      validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+      transform: ->(input) { input.to_i })
 
     assert_equal 25, result
   end
@@ -374,8 +352,8 @@ class PromptTest < Minitest::Test
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
         media: {type: :image, url: "https://example.com/age_help.jpg"},
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be at least 18" unless input >= 18 })
+        validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     # Validation error should include both error message and original prompt
@@ -392,8 +370,8 @@ class PromptTest < Minitest::Test
     # Default behavior should combine error with original message
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be at least 18" unless input >= 18 })
+        validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_includes error.prompt, "Must be at least 18"
@@ -408,8 +386,8 @@ class PromptTest < Minitest::Test
     
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be at least 18" unless input >= 18 })
+        validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_includes error.prompt, "Must be at least 18"
@@ -426,8 +404,8 @@ class PromptTest < Minitest::Test
     
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be at least 18" unless input >= 18 })
+        validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_equal "Must be at least 18\n\nEnter your age:", error.prompt
@@ -449,7 +427,8 @@ class PromptTest < Minitest::Test
     end
 
     assert_equal "Choose size:", error.prompt
-    assert_equal(["Small", "Medium", "Large"], error.choices)
+    # New Prompt implementation normalizes array choices to hash format
+    assert_equal({"Small" => "Small", "Medium" => "Medium", "Large" => "Large"}, error.choices)
     assert_equal({type: :image, url: "https://example.com/sizes.jpg"}, error.media)
   end
 
@@ -564,7 +543,8 @@ class PromptTest < Minitest::Test
     end
 
     assert_includes error.prompt, "Do you like this image?"
-    assert_equal({1 => "Yes", 2 => "No"}, error.choices)
+    # New Prompt implementation normalizes choices to hash format
+    assert_equal({"Yes" => "Yes", "No" => "No"}, error.choices)
   end
 
   def test_validation_occurs_for_both_ask_and_select_methods

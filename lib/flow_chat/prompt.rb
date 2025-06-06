@@ -6,13 +6,9 @@ module FlowChat
       @user_input = input
     end
 
-    def ask(msg, choices: nil, convert: nil, validate: nil, transform: nil, media: nil)
-      # Validate media and choices compatibility
-      validate_media_choices_compatibility(media, choices)
-
+    def ask(msg, choices: nil, transform: nil, validate: nil, media: nil)
       if user_input.present?
         input = user_input
-        input = convert.call(input) if convert.present?
         validation_error = validate.call(input) if validate.present?
 
         if validation_error.present?
@@ -38,17 +34,18 @@ module FlowChat
       terminate! message, media: media
     end
 
-    def select(msg, choices, media: nil)
-      # Validate media and choices compatibility
-      validate_media_choices_compatibility(media, choices)
+    def select(msg, choices, media: nil, error_message: "Invalid selection:")
+      raise ArgumentError, "choices must be an array or hash" unless choices.is_a?(Array) || choices.is_a?(Hash)
 
-      choices, choices_prompt = build_select_choices choices
+      normalized_choices = normalize_choices(choices)
       ask(
         msg,
-        choices: choices_prompt,
-        convert: lambda { |choice| choice.to_i },
-        validate: lambda { |choice| "Invalid selection:" unless (1..choices.size).cover?(choice) },
-        transform: lambda { |choice| choices[choice - 1] },
+        choices: choices,
+        validate: lambda { |choice| error_message unless normalized_choices.key?(choice.to_s) },
+        transform: lambda do |choice|
+          choices = choices.keys if choices.is_a?(Hash)
+          choices.index_by { |choice| choice.to_s }[choice.to_s]
+        end,
         media: media
       )
     end
@@ -67,20 +64,23 @@ module FlowChat
       end
     end
 
-    def build_select_choices(choices)
+    def normalize_choices(choices)
       case choices
-      when Array
-        choices_prompt = choices.map.with_index { |c, i| [i + 1, c] }.to_h
+      when nil
+        nil
       when Hash
-        choices_prompt = choices.values.map.with_index { |c, i| [i + 1, c] }.to_h
-        choices = choices.keys
+        choices.map { |k, v| [k.to_s, v] }.to_h
+      when Array
+        choices.map { |c| [c.to_s, c] }.to_h
       else
         raise ArgumentError, "choices must be an array or hash"
       end
-      [choices, choices_prompt]
     end
 
     def prompt!(msg, choices: nil, media: nil)
+      validate_media_choices_compatibility(media, choices)
+
+      choices = normalize_choices(choices)
       raise FlowChat::Interrupt::Prompt.new(msg, choices: choices, media: media)
     end
 

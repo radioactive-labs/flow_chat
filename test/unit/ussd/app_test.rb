@@ -91,8 +91,8 @@ class UssdAppTest < Minitest::Test
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       @app.screen(:validation_screen) do |prompt|
         prompt.ask("Enter age:",
-          convert: ->(input) { input.to_i },
-          validate: ->(input) { "Must be 18+" unless input >= 18 })
+          validate: ->(input) { "Must be 18+" unless input.to_i >= 18 },
+          transform: ->(input) { input.to_i })
       end
     end
 
@@ -106,8 +106,8 @@ class UssdAppTest < Minitest::Test
 
     result = app_with_input.screen(:success_screen) do |prompt|
       prompt.ask("Enter age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be 18+" unless input >= 18 })
+        validate: ->(input) { "Must be 18+" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_equal 25, result
@@ -133,7 +133,7 @@ class UssdAppTest < Minitest::Test
     # Second request - user provides age (new app instance)
     @context.input = "25"
     app2 = FlowChat::Ussd::App.new(@context)
-    age = app2.screen(:age) { |prompt| prompt.ask("Age?", convert: ->(i) { i.to_i }) }
+    age = app2.screen(:age) { |prompt| prompt.ask("Age?", transform: ->(i) { i.to_i }) }
 
     assert_equal "John", name
     assert_equal 25, age
@@ -185,8 +185,8 @@ class UssdAppTest < Minitest::Test
   end
 
   def test_screen_with_select_prompt
-    # Create app with selection input
-    @context.input = "2"
+    # Create app with selection input (raw app expects choice values, not numbers)
+    @context.input = "Female"
     app_with_input = FlowChat::Ussd::App.new(@context)
 
     result = app_with_input.screen(:gender) do |prompt|
@@ -198,8 +198,8 @@ class UssdAppTest < Minitest::Test
   end
 
   def test_screen_with_yes_no_prompt
-    # Create app with yes input
-    @context.input = "1"  # Yes
+    # Create app with yes input (raw app expects choice values, not numbers)
+    @context.input = "Yes"
     app_with_input = FlowChat::Ussd::App.new(@context)
 
     result = app_with_input.screen(:confirmation) do |prompt|

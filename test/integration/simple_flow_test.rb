@@ -23,8 +23,8 @@ class SimpleFlowTest < Minitest::Test
 
       age = app.screen(:age) do |prompt|
         prompt.ask "How old are you?",
-          convert: ->(input) { input.to_i },
-          validate: ->(input) { "You must be at least 13 years old" unless input >= 13 }
+          validate: ->(input) { "You must be at least 13 years old" unless input.to_i >= 13 },
+          transform: ->(input) { input.to_i }
       end
 
       gender = app.screen(:gender) { |prompt| prompt.select "What is your gender?", ["Male", "Female"] }
@@ -138,7 +138,7 @@ class SimpleFlowTest < Minitest::Test
     assert_equal 25, @session_store.get(:age)
 
     # Step 5: Choose gender, ask for confirmation
-    context.input = "1"  # Male
+    context.input = "Male"  # Choose Male from the options
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app = FlowChat::Ussd::App.new(context)
@@ -153,7 +153,7 @@ class SimpleFlowTest < Minitest::Test
     assert_equal "Male", @session_store.get(:gender)
 
     # Step 6: Confirm and complete
-    context.input = "1"  # Yes
+    context.input = "Yes"  # Confirm the details
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       app = FlowChat::Ussd::App.new(context)
@@ -174,7 +174,7 @@ class SimpleFlowTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = @controller
     context.session = @session_store
-    context.input = "2"  # No - reject confirmation
+    context.input = "No"  # Reject confirmation
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       app = FlowChat::Ussd::App.new(context)

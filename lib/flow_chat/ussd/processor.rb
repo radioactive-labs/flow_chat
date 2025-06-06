@@ -29,6 +29,9 @@ module FlowChat
         
         builder.use middleware
         FlowChat.logger.debug { "Ussd::Processor: Added custom middleware" }
+
+        builder.use FlowChat::Ussd::Middleware::ChoiceMapper
+        FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::ChoiceMapper" }
         
         builder.use FlowChat::Ussd::Middleware::Executor
         FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::Executor" }

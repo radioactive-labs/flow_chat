@@ -479,7 +479,7 @@ class UssdPaginationTest < Minitest::Test
     # Should contain pagination marker since total content exceeds page size
     if prompt.include?("# More")
       # First page should contain start of message
-      assert_includes prompt, "🧪 Welcome"
+      assert_includes prompt, "📷 Image:"
     end
   end
 

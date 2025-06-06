@@ -168,14 +168,15 @@ class WhatsappAppTest < Minitest::Test
     @context.input = nil
     app_no_input = FlowChat::Whatsapp::App.new(@context)
 
+    items = ["Yes", "No", "Maybe"]
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       app_no_input.screen(:select_screen) do |prompt|
-        prompt.select("Choose an option:", ["Yes", "No", "Maybe"])
+        prompt.select("Choose an option:", items)
       end
     end
 
     assert_equal "Choose an option:", error.prompt
-    expected_choices = {1 => "Yes", 2 => "No", 3 => "Maybe"}
+    expected_choices = items.index_by { |item| item }
     assert_equal expected_choices, error.choices
     assert_nil error.media
   end
@@ -192,8 +193,7 @@ class WhatsappAppTest < Minitest::Test
     end
 
     assert_equal "Choose from list:", error.prompt
-    expected_choices = {}
-    items.each_with_index { |item, index| expected_choices[index + 1] = item }
+    expected_choices = items.index_by { |item| item }
     assert_equal expected_choices, error.choices
     assert_nil error.media
   end
@@ -218,7 +218,7 @@ class WhatsappAppTest < Minitest::Test
     context2.session = session_store  # Same session
 
     app2 = FlowChat::Whatsapp::App.new(context2)
-    age = app2.screen(:age) { |prompt| prompt.ask("Age?", convert: ->(i) { i.to_i }) }
+    age = app2.screen(:age) { |prompt| prompt.ask("Age?", transform: ->(i) { i.to_i }) }
 
     assert_equal "John", name
     assert_equal 25, age
@@ -233,8 +233,8 @@ class WhatsappAppTest < Minitest::Test
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       @app.screen(:validation_screen) do |prompt|
         prompt.ask("Enter age:",
-          convert: ->(input) { input.to_i },
-          validate: ->(input) { "Must be 18+" unless input >= 18 })
+          validate: ->(input) { "Must be 18+" unless input.to_i >= 18 },
+          transform: ->(input) { input.to_i })
       end
     end
 
@@ -248,8 +248,8 @@ class WhatsappAppTest < Minitest::Test
 
     result = app_with_input.screen(:success_screen) do |prompt|
       prompt.ask("Enter age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be 18+" unless input >= 18 })
+        validate: ->(input) { "Must be 18+" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i })
     end
 
     assert_equal 25, result

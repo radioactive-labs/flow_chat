@@ -460,6 +460,10 @@ module FlowChat
           FlowChat.logger.error { "WhatsApp::Client: API request failed - #{response.code}: #{response.body}" }
           nil
         end
+      rescue Net::OpenTimeout, Net::ReadTimeout => network_error
+        # Let network timeouts bubble up for proper error handling
+        FlowChat.logger.error { "WhatsApp::Client: Network timeout: #{network_error.class.name}: #{network_error.message}" }
+        raise network_error
       rescue => error
         FlowChat.logger.error { "WhatsApp::Client: API request exception: #{error.class.name}: #{error.message}" }
         nil

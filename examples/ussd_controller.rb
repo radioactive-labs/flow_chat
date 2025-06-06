@@ -78,12 +78,13 @@ class WelcomeFlow < FlowChat::Flow
   def make_payment
     amount = app.screen(:payment_amount) do |prompt|
       prompt.ask "Enter amount to pay:",
-        convert: ->(input) { input.to_f },
-        validate: ->(amount) {
-          return "Amount must be greater than 0" unless amount > 0
-          return "Maximum payment is $500" unless amount <= 500
+        validate: ->(input) {
+          amount_float = input.to_f
+          return "Amount must be a valid number" unless amount_float > 0
+          return "Maximum payment is $500" unless amount_float <= 500
           nil
-        }
+        },
+        transform: ->(input) { input.to_f }
     end
 
     recipient = app.screen(:payment_recipient) do |prompt|

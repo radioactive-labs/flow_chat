@@ -78,6 +78,8 @@ module FlowChat
       private
 
       def session_key
+        return "flow_chat:session:nil_context" unless @context
+
         gateway = @context["request.gateway"]
         msisdn = @context["request.msisdn"]
 

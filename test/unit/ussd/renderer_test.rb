@@ -22,7 +22,7 @@ class UssdRendererTest < Minitest::Test
     renderer = FlowChat::Ussd::Renderer.new("Check this out:", media: media)
     result = renderer.render
 
-    expected = "Check this out:\n\n📷 Image: https://example.com/image.jpg"
+    expected = "📷 Image: https://example.com/image.jpg\n\nCheck this out:"
     assert_equal expected, result
   end
 
@@ -37,7 +37,7 @@ class UssdRendererTest < Minitest::Test
     )
     result = renderer.render
 
-    expected = "What do you think?\n\n📷 Image: https://example.com/photo.jpg\n\n1. Like it\n2. Don't like it"
+    expected = "📷 Image: https://example.com/photo.jpg\n\nWhat do you think?\n\n1. Like it\n2. Don't like it"
     assert_equal expected, result
   end
 
@@ -55,7 +55,7 @@ class UssdRendererTest < Minitest::Test
       renderer = FlowChat::Ussd::Renderer.new("Test:", media: test_case)
       result = renderer.render
 
-      expected = "Test:\n\n#{test_case[:expected]}"
+      expected = "#{test_case[:expected]}\n\nTest:"
       assert_equal expected, result, "Failed for media type: #{test_case[:type]}"
     end
   end
@@ -65,7 +65,7 @@ class UssdRendererTest < Minitest::Test
     renderer = FlowChat::Ussd::Renderer.new("Local file:", media: media)
     result = renderer.render
 
-    expected = "Local file:\n\n📷 Image: /local/image.jpg"
+    expected = "📷 Image: /local/image.jpg\n\nLocal file:"
     assert_equal expected, result
   end
 
@@ -74,7 +74,7 @@ class UssdRendererTest < Minitest::Test
     renderer = FlowChat::Ussd::Renderer.new("Unknown type:", media: media)
     result = renderer.render
 
-    expected = "Unknown type:\n\n📷 Image: https://example.com/unknown"
+    expected = "📷 Image: https://example.com/unknown\n\nUnknown type:"
     assert_equal expected, result
   end
 
@@ -106,10 +106,10 @@ class UssdRendererTest < Minitest::Test
     # Verify structure: message, media, choices (in that order)
     lines = result.split("\n")
     
-    assert_equal "Select from menu:", lines[0]
+    assert_equal "📄 Document: https://example.com/menu.pdf", lines[0]
     assert_equal "", lines[1] # blank line
-    assert_equal "📄 Document: https://example.com/menu.pdf", lines[2]
     assert_equal "", lines[3] # blank line
+    assert_equal "Select from menu:", lines[2]
     assert_equal "1. Option 1", lines[4]
     assert_equal "2. Option 2", lines[5]
     assert_equal "3. Option 3", lines[6]

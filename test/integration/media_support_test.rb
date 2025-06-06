@@ -311,8 +311,8 @@ class MediaTestFlow < FlowChat::Flow
     app.screen(:age_verification) do |prompt|
       prompt.ask "Enter your age:",
         media: {type: :image, url: "https://example.com/age_verification.jpg"},
-        convert: ->(input) { input.to_i },
-        validate: ->(age) { "Must be 18 or older" unless age >= 18 }
+        validate: ->(input) { "Must be 18 or older" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i }
     end
   end
 

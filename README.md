@@ -490,8 +490,8 @@ FlowChat provides a unified API that works across both USSD and WhatsApp platfor
 ### Shared Features (Both USSD & WhatsApp)
 - ✅ `app.screen()` - Interactive screens with prompts
 - ✅ `app.say()` - Send messages to users  
-- ✅ `prompt.ask()` - Text input collection
-- ✅ `prompt.select()` - Menu selection (renders as numbered list in USSD, interactive buttons/lists in WhatsApp)
+- ✅ `prompt.ask()` - Flexible text input with optional validation and choices as suggestions
+- ✅ `prompt.select()` - Forced selection from predefined options (numbered lists in USSD, interactive buttons in WhatsApp)
 - ✅ `prompt.yes?()` - Yes/no questions
 - ✅ `app.phone_number` - User's phone number
 - ✅ `app.message_id` - Unique message identifier  
@@ -651,8 +651,8 @@ class RegistrationFlow < FlowChat::Flow
 
     age = app.screen(:age) do |prompt|
       prompt.ask "Enter your age:",
-        convert: ->(input) { input.to_i },
-        validate: ->(input) { "Must be 18 or older" unless input >= 18 }
+        validate: ->(input) { "Must be 18 or older" unless input.to_i >= 18 },
+        transform: ->(input) { input.to_i },
     end
 
     # Process the collected data
@@ -679,18 +679,114 @@ FlowChat provides powerful input processing capabilities:
 ```ruby
 app.screen(:email) do |prompt|
   prompt.ask "Enter your email:",
-    # Transform input before validation
-    transform: ->(input) { input.strip.downcase },
-    
-    # Validate the input
+    # Validate the raw input first
     validate: ->(input) { 
-      "Invalid email format" unless input.match?(/\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i)
+      "Invalid email format" unless input.strip.downcase.match?(/\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i)
     },
     
-    # Convert to final format
-    convert: ->(input) { input }
+    # Transform input after validation passes
+    transform: ->(input) { input.strip.downcase }
 end
 ```
+
+### Prompt Methods: `ask` vs `select`
+
+FlowChat provides two distinct methods for collecting user input, each designed for different use cases:
+
+#### `prompt.ask()` - Flexible Input Collection
+
+Use `ask()` when you want to collect **flexible user input** with optional validation and transformation. The user can type anything, and you can optionally provide choices as **suggestions** to guide them.
+
+```ruby
+# Free-form text input
+name = app.screen(:name) do |prompt|
+  prompt.ask "What's your name?",
+    transform: ->(input) { input.strip.titleize }
+end
+
+# Input with validation but no restrictions
+email = app.screen(:email) do |prompt|
+  prompt.ask "Enter your email address:",
+    validate: ->(input) { "Invalid email format" unless input.match?(/\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i) }
+end
+
+# Suggestions with flexible validation
+color = app.screen(:color) do |prompt|
+  prompt.ask "What's your favorite color?",
+    choices: {"red" => "Red", "blue" => "Blue", "green" => "Green"},  # Optional suggestions
+    validate: ->(input) { "Please enter a valid color" unless %w[red blue green yellow purple].include?(input.downcase) }
+end
+# User can type "red", "blue", "purple", "yellow" - not limited to suggestions
+```
+
+**Key characteristics of `ask()`:**
+- ✅ **Flexible input** - Users can type anything
+- ✅ **Optional choices** - Choices are suggestions, not restrictions
+- ✅ **Custom validation** - You define what's valid
+- ✅ **Returns raw input** - Exactly what the user typed as string (possibly transformed)
+
+#### `prompt.select()` - Forced Choice Selection
+
+Use `select()` when you want to **force users to pick from predefined options**. This ensures users can only select valid choices and provides automatic validation.
+
+```ruby
+# Array choices - users select by position (1, 2, 3 for USSD)
+language = app.screen(:language) do |prompt|
+  prompt.select "Choose your language:", ["English", "French", "Spanish"]
+end
+# Returns: "English", "French", or "Spanish"
+
+# Hash choices - users select by key, get key back
+plan = app.screen(:plan) do |prompt|
+  prompt.select "Choose a plan:", {
+    "basic" => "Basic Plan ($10/month)",
+    "premium" => "Premium Plan ($25/month)", 
+    "enterprise" => "Enterprise Plan ($100/month)"
+  }
+end
+# User sees "Basic Plan ($10/month)" etc but you get back: "basic", "premium", or "enterprise"
+
+# Forced yes/no decision
+confirmed = app.screen(:confirm) do |prompt|
+  prompt.select "Proceed with payment?", ["Yes", "No"]
+end
+# Returns: "Yes" or "No"
+```
+
+**Key characteristics of `select()`:**
+- ✅ **Restricted input** - Users must pick from provided options
+- ✅ **Automatic validation** - No invalid choices possible
+- ✅ **Platform optimization** - Numbers for USSD, buttons for WhatsApp
+- ✅ **Returns choice value** - Array item or hash key (the array value/hash type is preserved)
+
+#### Platform-Specific Behavior
+
+**USSD Experience:**
+```ruby
+prompt.select "Choose color:", ["Red", "Blue", "Green"]
+```
+**Displays:**
+```
+Choose color:
+1. Red
+2. Blue  
+3. Green
+```
+**User types:** `2` **→ Returns:** `"Blue"`
+
+**WhatsApp Experience:**
+- Interactive buttons or list messages
+- User taps choice directly
+- Same return values as USSD
+
+#### When to Use Which?
+
+| Use `ask()` when: | Use `select()` when: |
+|------------------|---------------------|
+| ✅ Collecting names, emails, descriptions | ✅ Choosing from fixed options |
+| ✅ Numeric input with validation | ✅ Navigation menus |
+| ✅ You want to allow "other" responses | ✅ Yes/no decisions |
+| ✅ Flexible user expression needed | ✅ Ensuring data consistency |
 
 ### Menu Selection
 
@@ -740,7 +836,7 @@ class OrderFlow < FlowChat::Flow
   def main_page
     # These values persist across requests
     product = app.screen(:product) { |p| p.select "Choose product:", products }
-    quantity = app.screen(:quantity) { |p| p.ask "Quantity:", convert: :to_i }
+    quantity = app.screen(:quantity) { |p| p.ask "Quantity:", transform: ->(input) { input.to_i } }
     
     # Show summary
     total = calculate_total(product, quantity)
@@ -800,8 +896,8 @@ FlowChat::Config.combine_validation_error_with_message = false
 # This validation code works the same way regardless of config
 age = app.screen(:age) do |prompt|
   prompt.ask "How old are you?",
-    convert: ->(input) { input.to_i },
-    validate: ->(input) { "You must be at least 18 years old" unless input >= 18 }
+    validate: ->(input) { "You must be at least 18 years old" unless input.to_i >= 18 },
+    transform: ->(input) { input.to_i },
 end
 
 # With combine_validation_error_with_message = true (default):

@@ -265,6 +265,7 @@ module FlowChat
               address: message.dig("location", "address")
             }
             context["request.location"] = location
+            context.input = "$location$"
             FlowChat.logger.debug { "CloudApi: Location received - Lat: #{location[:latitude]}, Lng: #{location[:longitude]}" }
           when "image", "document", "audio", "video"
             context["request.media"] = {
