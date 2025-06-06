@@ -1200,7 +1200,75 @@ enable_simulator = Rails.env.development? || Rails.env.staging?
 processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: enable_simulator)
 ```
 
-### 5. Choose the Right WhatsApp Mode
+### 2. Flow Interaction Best Practices
+
+**⚠️ Important: Flow Methods Must Always Interact With Users**
+
+Every flow method execution **must** result in user interaction. FlowChat expects each request to either:
+
+✅ **Prompt the user** (using `app.screen`, `prompt.ask`, `prompt.select`, etc.)
+```ruby
+# ✅ GOOD: Always results in user interaction
+def main_page
+  name = app.screen(:name) do |prompt|
+    prompt.ask "What's your name?"
+  end
+  
+  app.say "Hello, #{name}!"  # This terminates with a message
+end
+```
+
+✅ **Terminate with a message** (using `app.say`)
+```ruby
+# ✅ GOOD: Terminates with user feedback
+def complete_registration
+  User.create(name: app.session.get(:name))
+  app.say "Registration complete!"
+end
+```
+
+❌ **Never leave methods without interaction**
+```ruby
+# ❌ BAD: Flow ends without user interaction
+def main_page
+  choice = app.screen(:menu) { |p| p.select "Choose:", ["A", "B"] }
+  
+  case choice
+  when "option_a"
+    handle_option_a  # If this doesn't interact with user
+  when "option_b" 
+    handle_option_b  # If this doesn't interact with user
+  end
+  # Missing interaction - will cause "Unexpected end of flow" error
+end
+```
+
+**Platform-Specific Behavior:**
+- **USSD**: Shows "Unexpected end of flow" error and terminates session
+- **WhatsApp**: Silently completes (more permissive)
+
+**Common Fixes:**
+```ruby
+# ✅ Add explicit termination
+case choice
+when "option_a"
+  handle_option_a
+  app.say "Option A completed!"
+when "option_b"
+  handle_option_b  
+  app.say "Option B completed!"
+else
+  app.say "Invalid choice, please try again."
+end
+
+# ✅ Or ensure all called methods interact with user
+def handle_option_a
+  # Process data...
+  app.say "Processing complete!"  # Always end with interaction
+end
+```
+
+### 3. Choose the Right WhatsApp Mode
 
 Configure the appropriate mode based on your environment and requirements:
 
@@ -1227,7 +1295,7 @@ if Rails.env.production?
 end
 ```
 
-### 6. Error Handling Best Practices
+### 4. Error Handling Best Practices
 
 Handle security and configuration errors gracefully:
 

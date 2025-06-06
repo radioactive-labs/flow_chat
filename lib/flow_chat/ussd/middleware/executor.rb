@@ -20,9 +20,9 @@ module FlowChat
           flow = flow_class.new ussd_app
           FlowChat.logger.debug { "Ussd::Executor: Flow instance created, invoking #{action} method" }
           
-          result = flow.send action
-          FlowChat.logger.info { "Ussd::Executor: Flow execution completed successfully for #{flow_class.name}##{action}" }
-          result
+          flow.send action
+          FlowChat.logger.warn { "Ussd::Executor: Flow execution failed to interact with user for #{flow_class.name}##{action}" }
+          raise FlowChat::Interrupt::Terminate,"Unexpected end of flow."
         rescue FlowChat::Interrupt::Prompt => e
           FlowChat.logger.info { "Ussd::Executor: Flow prompted user - Session: #{session_id}, Prompt: '#{e.prompt.truncate(100)}'" }
           FlowChat.logger.debug { "Ussd::Executor: Prompt details - Choices: #{e.choices&.size || 0}, Has media: #{!e.media.nil?}" }
