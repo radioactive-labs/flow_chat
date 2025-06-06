@@ -2,6 +2,8 @@ require "middleware"
 
 module FlowChat
   class BaseProcessor
+    include FlowChat::Instrumentation
+    
     attr_reader :middleware
 
     def initialize(controller, enable_simulator: nil)
@@ -16,7 +18,7 @@ module FlowChat
 
       yield self if block_given?
       
-      FlowChat.logger.info { "BaseProcessor: Initialized #{self.class.name} successfully" }
+      FlowChat.logger.debug { "BaseProcessor: Initialized #{self.class.name} successfully" }
     end
 
     def use_gateway(gateway_class, *args)
@@ -39,8 +41,13 @@ module FlowChat
     end
 
     def run(flow_class, action)
-      FlowChat.logger.info { "BaseProcessor: Starting flow execution - Flow: #{flow_class.name}, Action: #{action}" }
-      
+      # Instrument flow execution (this will log via LogSubscriber)
+      instrument(Events::FLOW_EXECUTION_START, {
+        flow_name: flow_class.name.underscore,
+        action: action.to_s,
+        processor_type: self.class.name
+      })
+
       @context["flow.name"] = flow_class.name.underscore
       @context["flow.class"] = flow_class
       @context["flow.action"] = action
@@ -51,13 +58,31 @@ module FlowChat
       yield stack if block_given?
 
       FlowChat.logger.debug { "BaseProcessor: Executing middleware stack for #{flow_class.name}##{action}" }
-      result = stack.call(@context)
       
-      FlowChat.logger.info { "BaseProcessor: Flow execution completed - Flow: #{flow_class.name}, Action: #{action}" }
+      # Instrument flow execution with timing (this will log completion via LogSubscriber)
+      result = instrument(Events::FLOW_EXECUTION_END, {
+        flow_name: flow_class.name.underscore,
+        action: action.to_s,
+        processor_type: self.class.name
+      }) do
+        stack.call(@context)
+      end
+      
       result
     rescue => error
-      FlowChat.logger.error { "BaseProcessor: Flow execution failed - Flow: #{flow_class.name}, Action: #{action}, Error: #{error.class.name}: #{error.message}" }
+      FlowChat.logger.error { "BaseProcessor: Flow execution failed - #{flow_class.name}##{action}, Error: #{error.class.name}: #{error.message}" }
       FlowChat.logger.debug { "BaseProcessor: Stack trace: #{error.backtrace.join("\n")}" }
+      
+      # Instrument flow execution error (this will log error via LogSubscriber)
+      instrument(Events::FLOW_EXECUTION_ERROR, {
+        flow_name: flow_class.name.underscore,
+        action: action.to_s,
+        processor_type: self.class.name,
+        error_class: error.class.name,
+        error_message: error.message,
+        backtrace: error.backtrace&.first(10)
+      })
+      
       raise
     end
 
@@ -85,5 +110,9 @@ module FlowChat
     def configure_middleware_stack(builder)
       raise NotImplementedError, "Subclasses must implement configure_middleware_stack"
     end
+
+    private
+
+    attr_reader :context
   end
 end

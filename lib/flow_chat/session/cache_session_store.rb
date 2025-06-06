@@ -1,6 +1,8 @@
 module FlowChat
   module Session
     class CacheSessionStore
+      include FlowChat::Instrumentation
+      
       def initialize(context, cache = nil)
         @context = context
         @cache = cache || FlowChat::Config.cache
@@ -17,13 +19,31 @@ module FlowChat
         FlowChat.logger.debug { "CacheSessionStore: Getting key '#{key}' from session #{session_key}" }
         
         data = @cache.read(session_key)
+        session_id = @context["session.id"]
+        
         unless data
-          FlowChat.logger.debug { "CacheSessionStore: Cache miss for session #{session_key}" }
+          # Use instrumentation for cache miss
+          instrument(Events::SESSION_CACHE_MISS, {
+            session_id: session_id,
+            key: key.to_s
+          })
           return nil
         end
 
         value = data[key.to_s]
-        FlowChat.logger.debug { "CacheSessionStore: Cache hit for session #{session_key}, key '#{key}' = #{value.inspect}" }
+        
+        # Use instrumentation for cache hit and data get
+        instrument(Events::SESSION_CACHE_HIT, {
+          session_id: session_id,
+          key: key.to_s
+        })
+        
+        instrument(Events::SESSION_DATA_GET, {
+          session_id: session_id,
+          key: key.to_s,
+          value: value
+        })
+        
         value
       end
 
@@ -37,6 +57,12 @@ module FlowChat
 
         ttl = session_ttl
         @cache.write(session_key, data, expires_in: ttl)
+        
+        # Use instrumentation for data set
+        instrument(Events::SESSION_DATA_SET, {
+          session_id: @context["session.id"],
+          key: key.to_s
+        })
         
         FlowChat.logger.debug { "CacheSessionStore: Session data saved with TTL #{ttl.inspect}" }
         value
@@ -62,7 +88,11 @@ module FlowChat
       def clear
         return unless @context
 
-        FlowChat.logger.info { "CacheSessionStore: Clearing/destroying session #{session_key}" }
+        # Use instrumentation for session destruction
+        instrument(Events::SESSION_DESTROYED, {
+          session_id: @context["session.id"],
+        })
+        
         @cache.delete(session_key)
       end
 

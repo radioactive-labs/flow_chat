@@ -7,6 +7,8 @@ require "securerandom"
 module FlowChat
   module Whatsapp
     class Client
+      include FlowChat::Instrumentation
+      
       def initialize(config)
         @config = config
         FlowChat.logger.info { "WhatsApp::Client: Initialized WhatsApp client for phone_number_id: #{@config.phone_number_id}" }
@@ -22,13 +24,20 @@ module FlowChat
         FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
         FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
         
-        message_data = build_message_payload(response, to)
-        result = send_message_payload(message_data)
+        result = instrument(Events::WHATSAPP_MESSAGE_SENT, {
+          to: to,
+          message_type: type.to_s,
+          content_length: content.to_s.length
+        }) do
+          message_data = build_message_payload(response, to)
+          send_message_payload(message_data)
+        end
         
-        if result
-          FlowChat.logger.info { "WhatsApp::Client: Message sent successfully to #{to}, message_id: #{result.dig('messages', 0, 'id')}" }
-        else
-          FlowChat.logger.error { "WhatsApp::Client: Failed to send message to #{to}" }
+                if result
+          message_id = result.dig('messages', 0, 'id')
+          FlowChat.logger.debug { "WhatsApp::Client: Message sent successfully to #{to}, message_id: #{message_id}" }
+      else
+        FlowChat.logger.error { "WhatsApp::Client: Failed to send message to #{to}" }
         end
         
         result
@@ -146,6 +155,7 @@ module FlowChat
         
         raise ArgumentError, "mime_type is required" if mime_type.nil? || mime_type.empty?
 
+        file_size = nil
         if file_path_or_io.is_a?(String)
           # File path
           raise ArgumentError, "File not found: #{file_path_or_io}" unless File.exist?(file_path_or_io)
@@ -196,24 +206,42 @@ module FlowChat
         request["Content-Type"] = "multipart/form-data; boundary=#{boundary}"
         request.body = body
 
-        response = http.request(request)
+        result = instrument(Events::WHATSAPP_MEDIA_UPLOAD, {
+          filename: filename,
+          mime_type: mime_type,
+          size: file_size
+        }) do
+          response = http.request(request)
 
-        if response.is_a?(Net::HTTPSuccess)
-          data = JSON.parse(response.body)
-          media_id = data["id"]
-          if media_id
-            FlowChat.logger.info { "WhatsApp::Client: Media upload successful - media_id: #{media_id}" }
-            media_id
+          if response.is_a?(Net::HTTPSuccess)
+            data = JSON.parse(response.body)
+            media_id = data["id"]
+            if media_id
+              FlowChat.logger.info { "WhatsApp::Client: Media upload successful - media_id: #{media_id}" }
+              { success: true, media_id: media_id }
+            else
+              FlowChat.logger.error { "WhatsApp::Client: Media upload failed - no media_id in response: #{data}" }
+              raise StandardError, "Failed to upload media: #{data}"
+            end
           else
-            FlowChat.logger.error { "WhatsApp::Client: Media upload failed - no media_id in response: #{data}" }
-            raise StandardError, "Failed to upload media: #{data}"
+            FlowChat.logger.error { "WhatsApp::Client: Media upload error - #{response.code}: #{response.body}" }
+            raise StandardError, "Media upload failed: #{response.body}"
           end
-        else
-          FlowChat.logger.error { "WhatsApp::Client: Media upload error - #{response.code}: #{response.body}" }
-          raise StandardError, "Media upload failed: #{response.body}"
         end
+        
+        result[:media_id]
       rescue => error
         FlowChat.logger.error { "WhatsApp::Client: Media upload exception: #{error.class.name}: #{error.message}" }
+        
+        # Instrument the error
+        instrument(Events::WHATSAPP_MEDIA_UPLOAD, {
+          filename: filename,
+          mime_type: mime_type,
+          size: file_size,
+          success: false,
+          error: error.message
+        })
+        
         raise
       ensure
         file&.close if file_path_or_io.is_a?(String)

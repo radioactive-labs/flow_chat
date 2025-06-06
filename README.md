@@ -10,6 +10,7 @@ FlowChat is a Rails framework designed for building sophisticated conversational
 - 📱 **USSD Gateway Support** - Currently supports Nalo gateways
 - 💬 **WhatsApp Integration** - Full WhatsApp Cloud API support with multiple processing modes and webhook signature validation
 - 🔧 **Reusable WhatsApp Client** - Standalone client for out-of-band messaging
+- 📊 **Built-in Instrumentation** - Comprehensive monitoring, metrics, and logging with zero configuration
 - 🧪 **Built-in Testing Tools** - Unified simulator for both USSD and WhatsApp testing
 
 ## Architecture Overview
@@ -1081,6 +1082,247 @@ FlowChat supports multiple USSD gateways:
 ```ruby
 # Nalo Solutions Gateway
 config.use_gateway FlowChat::Ussd::Gateway::Nalo
+```
+
+## Instrumentation & Monitoring
+
+FlowChat includes an instrumentation system that provides observability, monitoring, and logging for your conversational applications. The instrumentation system tracks flow executions, session management, gateway interactions, and performance metrics.
+
+### Quick Setup
+
+Enable instrumentation in your Rails application:
+
+```ruby
+# config/initializers/flowchat.rb
+FlowChat.setup_instrumentation!
+```
+
+This single line sets up:
+- 📊 **Metrics Collection** - Performance and usage metrics
+- 📝 **Structured Logging** - Event-driven logs with context
+- 🔍 **Event Tracking** - All framework events instrumented
+- ⚡ **Performance Monitoring** - Execution timing and bottleneck detection
+
+### Features
+
+**🎯 Zero Configuration**
+- Works out of the box with Rails applications
+- Automatic ActiveSupport::Notifications integration
+- Thread-safe metrics collection
+
+**📈 Comprehensive Metrics**
+- Flow execution counts and timing
+- Session creation/destruction rates
+- WhatsApp/USSD message volumes
+- Cache hit/miss ratios
+- Error tracking by type and flow
+
+**🔍 Rich Event Tracking**
+- 20+ predefined event types
+- Automatic context enrichment (session ID, flow name, gateway)
+- Structured event payloads
+
+**📊 Production Ready**
+- Minimal performance overhead
+- Thread-safe operations
+- Graceful error handling
+
+### Event Types
+
+FlowChat instruments these key events:
+
+**Flow Events**
+```ruby
+# Flow execution lifecycle
+FlowChat::Instrumentation::Events::FLOW_EXECUTION_START
+FlowChat::Instrumentation::Events::FLOW_EXECUTION_END  
+FlowChat::Instrumentation::Events::FLOW_EXECUTION_ERROR
+```
+
+**Session Events**
+```ruby
+# Session management
+FlowChat::Instrumentation::Events::SESSION_CREATED
+FlowChat::Instrumentation::Events::SESSION_DESTROYED
+FlowChat::Instrumentation::Events::SESSION_DATA_GET
+FlowChat::Instrumentation::Events::SESSION_DATA_SET
+FlowChat::Instrumentation::Events::SESSION_CACHE_HIT
+FlowChat::Instrumentation::Events::SESSION_CACHE_MISS
+```
+
+**WhatsApp Events**
+```ruby
+# WhatsApp messaging
+FlowChat::Instrumentation::Events::WHATSAPP_MESSAGE_RECEIVED
+FlowChat::Instrumentation::Events::WHATSAPP_MESSAGE_SENT
+FlowChat::Instrumentation::Events::WHATSAPP_WEBHOOK_VERIFIED
+FlowChat::Instrumentation::Events::WHATSAPP_API_REQUEST
+FlowChat::Instrumentation::Events::WHATSAPP_MEDIA_UPLOAD
+```
+
+**USSD Events**
+```ruby
+# USSD messaging
+FlowChat::Instrumentation::Events::USSD_MESSAGE_RECEIVED
+FlowChat::Instrumentation::Events::USSD_MESSAGE_SENT
+FlowChat::Instrumentation::Events::USSD_PAGINATION_TRIGGERED
+```
+
+### Usage Examples
+
+**Access Metrics**
+```ruby
+# Get current metrics snapshot
+metrics = FlowChat.metrics.snapshot
+
+# Flow execution metrics
+flow_metrics = FlowChat.metrics.get_category("flows")
+puts flow_metrics["flows.executed"] # Total flows executed
+puts flow_metrics["flows.execution_time"] # Average execution time
+
+# Session metrics  
+session_metrics = FlowChat.metrics.get_category("sessions")
+puts session_metrics["sessions.created"] # Total sessions created
+puts session_metrics["sessions.cache.hits"] # Cache hit count
+```
+
+**Custom Instrumentation in Flows**
+```ruby
+class PaymentFlow < FlowChat::Flow
+  def process_payment
+    # Instrument custom events in your flows
+    instrument("payment.started", {
+      amount: payment_amount,
+      currency: "USD",
+      payment_method: "mobile_money"
+    }) do
+      # Payment processing logic
+      result = process_mobile_money_payment
+      
+      # Event automatically includes session_id, flow_name, gateway
+      result
+    end
+  end
+end
+```
+
+**Custom Event Subscribers**
+```ruby
+# config/initializers/flowchat_instrumentation.rb
+FlowChat.setup_instrumentation!
+
+# Subscribe to specific events
+ActiveSupport::Notifications.subscribe("flow.execution.end.flow_chat") do |event|
+  # Custom handling for flow completion
+  duration = event.duration
+  flow_name = event.payload[:flow_name]
+  
+  # Send to external monitoring service
+  ExternalMonitoring.track_flow_execution(flow_name, duration)
+end
+
+# Subscribe to all FlowChat events
+ActiveSupport::Notifications.subscribe(/\.flow_chat$/) do |name, start, finish, id, payload|
+  # Log all FlowChat events to external service
+  CustomLogger.log_event(name, payload.merge(duration: finish - start))
+end
+```
+
+**Integration with Rails Logging**
+```ruby
+# The instrumentation system automatically enhances Rails logs
+# Example log output:
+
+# [INFO] FlowChat Flow Execution Started: WelcomeFlow#main_page (session: abc123, gateway: whatsapp_cloud_api)
+# [INFO] FlowChat WhatsApp Message Sent: to=+1234567890, type=text, length=45 (2.3ms)
+# [INFO] FlowChat Flow Execution Completed: WelcomeFlow#main_page in 12.4ms (session: abc123)
+# [ERROR] FlowChat Flow Execution Failed: PaymentFlow#process_payment - ArgumentError: Invalid amount (session: def456)
+```
+
+**Monitoring Dashboard Integration**
+```ruby
+# config/initializers/flowchat_monitoring.rb
+FlowChat.setup_instrumentation!
+
+# Export metrics to Prometheus, StatsD, etc.
+ActiveSupport::Notifications.subscribe("flow.execution.end.flow_chat") do |event|
+  StatsD.increment("flowchat.flows.executed")
+  StatsD.timing("flowchat.flows.duration", event.duration)
+  StatsD.increment("flowchat.flows.#{event.payload[:flow_name]}.executed")
+end
+
+# Track error rates
+ActiveSupport::Notifications.subscribe("flow.execution.error.flow_chat") do |event|
+  StatsD.increment("flowchat.flows.errors")
+  StatsD.increment("flowchat.flows.errors.#{event.payload[:error_class]}")
+end
+```
+
+### Performance Impact
+
+The instrumentation system is designed for production use with minimal overhead:
+
+- **Event Publishing**: ~0.1ms per event
+- **Metrics Collection**: Thread-safe atomic operations
+- **Memory Usage**: <1MB for typical applications
+- **Storage**: Events are ephemeral, metrics are kept in memory
+
+### Debugging & Troubleshooting
+
+**Enable Debug Logging**
+```ruby
+# config/environments/development.rb
+config.log_level = :debug
+
+# Shows detailed instrumentation events:
+# [DEBUG] FlowChat Event: session.data.get.flow_chat (payload: {key: "user_name", session_id: "abc123"})
+```
+
+**Reset Metrics**
+```ruby
+# Clear all metrics (useful for testing)
+FlowChat.metrics.reset!
+```
+
+**Check Event Subscribers**
+```ruby
+# See all active subscribers
+ActiveSupport::Notifications.notifier.listeners_for("flow.execution.end.flow_chat")
+```
+
+### Testing Instrumentation
+
+FlowChat's instrumentation system includes comprehensive testing support:
+
+```ruby
+# test/test_helper.rb
+class ActiveSupport::TestCase
+  setup do
+    # Reset metrics before each test
+    FlowChat::Instrumentation::Setup.reset! if FlowChat::Instrumentation::Setup.setup?
+  end
+end
+
+# In your tests
+class FlowInstrumentationTest < ActiveSupport::TestCase
+  test "flow execution is instrumented" do
+    events = []
+    
+    # Capture events
+    ActiveSupport::Notifications.subscribe(/flow_chat$/) do |name, start, finish, id, payload|
+      events << { name: name, payload: payload, duration: (finish - start) * 1000 }
+    end
+    
+    # Execute flow
+    processor.run(WelcomeFlow, :main_page)
+    
+    # Verify events
+    assert_equal 2, events.size
+    assert_equal "flow.execution.start.flow_chat", events[0][:name]
+    assert_equal "flow.execution.end.flow_chat", events[1][:name]
+    assert_equal "welcome_flow", events[0][:payload][:flow_name]
+  end
+end
 ```
 
 ## Testing

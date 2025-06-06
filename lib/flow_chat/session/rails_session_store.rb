@@ -1,6 +1,8 @@
 module FlowChat
   module Session
     class RailsSessionStore
+      include FlowChat::Instrumentation
+      
       def initialize(context)
         @session_id = context["session.id"]
         @session_store = context.controller.session
@@ -12,7 +14,14 @@ module FlowChat
 
       def get(key)
         value = session_data[key]
-        FlowChat.logger.debug { "RailsSessionStore: Getting key '#{key}' from session #{session_id} = #{value.inspect}" }
+        
+        # Use instrumentation for data get
+        instrument(Events::SESSION_DATA_GET, {
+          session_id: session_id,
+          key: key.to_s,
+          value: value
+        })
+        
         value
       end
 
@@ -21,6 +30,12 @@ module FlowChat
         
         session_data[key] = value
         session_store[session_id] = session_data
+        
+        # Use instrumentation for data set
+        instrument(Events::SESSION_DATA_SET, {
+          session_id: session_id,
+          key: key.to_s
+        })
         
         FlowChat.logger.debug { "RailsSessionStore: Session data saved to Rails session store" }
         value
@@ -32,7 +47,12 @@ module FlowChat
       end
 
       def destroy
-        FlowChat.logger.info { "RailsSessionStore: Destroying session #{session_id}" }
+        # Use instrumentation for session destruction
+        instrument(Events::SESSION_DESTROYED, {
+          session_id: session_id,
+          gateway: "rails" # Rails doesn't have a specific gateway context
+        })
+        
         session_store[session_id] = nil
       end
 

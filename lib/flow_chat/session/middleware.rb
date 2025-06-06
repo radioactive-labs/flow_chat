@@ -1,6 +1,8 @@
 module FlowChat
   module Session
     class Middleware
+      include FlowChat::Instrumentation
+      
       def initialize(app)
         @app = app
         FlowChat.logger.debug { "Session::Middleware: Initialized session middleware" }
@@ -13,7 +15,13 @@ module FlowChat
         context["session.id"] = session_id
         context.session = context["session.store"].new(context)
         
-        FlowChat.logger.info { "Session::Middleware: Session initialized for #{session_id}" }
+        # Use instrumentation instead of direct logging for session creation
+        instrument(Events::SESSION_CREATED, {
+          session_id: session_id,
+          store_type: context["session.store"].name,
+          gateway: context["request.gateway"]
+        })
+        
         FlowChat.logger.debug { "Session::Middleware: Session store: #{context["session.store"].class.name}" }
         
         result = @app.call(context)
