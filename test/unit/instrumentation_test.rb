@@ -29,8 +29,9 @@ class InstrumentationTest < Minitest::Test
   def test_instrumentation_module_constants_exist
     assert_includes FlowChat::Instrumentation::Events.constants, :FLOW_EXECUTION_START
     assert_includes FlowChat::Instrumentation::Events.constants, :SESSION_CREATED
-    assert_includes FlowChat::Instrumentation::Events.constants, :WHATSAPP_MESSAGE_SENT
-    assert_includes FlowChat::Instrumentation::Events.constants, :USSD_MESSAGE_RECEIVED
+    assert_includes FlowChat::Instrumentation::Events.constants, :MESSAGE_SENT
+    assert_includes FlowChat::Instrumentation::Events.constants, :MESSAGE_RECEIVED
+    assert_includes FlowChat::Instrumentation::Events.constants, :PAGINATION_TRIGGERED
   end
 
   def test_instrumentation_module_included_properly
@@ -161,12 +162,12 @@ class InstrumentationTest < Minitest::Test
     assert_equal "session.created", events::SESSION_CREATED
     assert_equal "session.destroyed", events::SESSION_DESTROYED
     
-    # WhatsApp events
-    assert_equal "whatsapp.message.received", events::WHATSAPP_MESSAGE_RECEIVED
-    assert_equal "whatsapp.message.sent", events::WHATSAPP_MESSAGE_SENT
-    
-    # USSD events
-    assert_equal "ussd.message.received", events::USSD_MESSAGE_RECEIVED
-    assert_equal "ussd.pagination.triggered", events::USSD_PAGINATION_TRIGGERED
+    # New platform-agnostic events
+    assert_equal "message.received", events::MESSAGE_RECEIVED
+    assert_equal "message.sent", events::MESSAGE_SENT
+    assert_equal "pagination.triggered", events::PAGINATION_TRIGGERED
+    assert_equal "webhook.verified", events::WEBHOOK_VERIFIED
+    assert_equal "webhook.failed", events::WEBHOOK_FAILED
+    assert_equal "media.upload", events::MEDIA_UPLOAD
   end
 end 

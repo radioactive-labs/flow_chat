@@ -3,12 +3,16 @@ module FlowChat
     class Middleware
       include FlowChat::Instrumentation
       
+      
+      attr_reader :context
+      
       def initialize(app)
         @app = app
         FlowChat.logger.debug { "Session::Middleware: Initialized session middleware" }
       end
 
       def call(context)
+        @context = context
         session_id = session_id(context)
         FlowChat.logger.debug { "Session::Middleware: Generated session ID: #{session_id}" }
         

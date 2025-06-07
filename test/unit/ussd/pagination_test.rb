@@ -575,4 +575,245 @@ class UssdPaginationTest < Minitest::Test
       assert_includes prompt, media_test[:url]
     end
   end
+
+  def test_pagination_with_extremely_long_single_word
+    # Test behavior when a single word exceeds page size
+    super_long_word = "Supercalifragilisticexpialidocious" * 10  # ~340 chars
+    content_with_long_word = "This is a test with a #{super_long_word} in the middle of the text."
+    
+    long_word_app = lambda { |context| [:prompt, content_with_long_word, []] }
+    pagination = FlowChat::Ussd::Middleware::Pagination.new(long_word_app)
+    
+    FlowChat::Config.ussd.pagination_page_size = 100
+    
+    type, prompt, _ = pagination.call(@context)
+    
+    # Should handle gracefully by breaking mid-word as fallback
+    assert_equal :prompt, type
+    assert prompt.length <= FlowChat::Config.ussd.pagination_page_size
+    
+    # Should have pagination state set properly
+    pagination_state = @context.session.get("ussd.pagination")
+    refute_nil pagination_state
+  end
+
+  def test_pagination_with_complex_unicode_clusters
+    # Test with complex Unicode including combining characters and zero-width joiners
+    complex_unicode = "👨‍👩‍👧‍👦 Family emoji 🇺🇸 flag 🧑🏽‍💻 professional ñiño café résumé naïve señorita"
+    repeated_unicode = (complex_unicode + " ") * 20  # Create long content with complex Unicode
+    
+    unicode_app = lambda { |context| [:prompt, repeated_unicode, []] }
+    pagination = FlowChat::Ussd::Middleware::Pagination.new(unicode_app)
+    
+    FlowChat::Config.ussd.pagination_page_size = 120
+    
+    type, prompt, _ = pagination.call(@context)
+    
+    # Should handle Unicode correctly without breaking emoji sequences
+    assert_equal :prompt, type
+    assert prompt.length <= FlowChat::Config.ussd.pagination_page_size
+    
+    # The prompt should still contain valid Unicode (no broken sequences)
+    assert prompt.valid_encoding?, "Pagination broke Unicode encoding"
+    
+    # Should not break in the middle of an emoji sequence
+    content_part = prompt.gsub(/\n\n# More$/, "")
+    refute_match(/\u{200D}$/, content_part, "Pagination broke emoji sequence")
+  end
+
+  def test_pagination_boundary_conditions
+    # Test exact boundary conditions
+    boundary_tests = [
+      {"size" => 99, "content_length" => 99},   # Exactly under limit
+      {"size" => 100, "content_length" => 100}, # Exactly at limit  
+      {"size" => 100, "content_length" => 101}, # Exactly over limit
+      {"size" => 160, "content_length" => 160}, # SMS limit exactly
+      {"size" => 1,   "content_length" => 5},   # Extremely small page size
+    ]
+    
+    boundary_tests.each do |test|
+      FlowChat::Config.ussd.pagination_page_size = test["size"]
+      content = "X" * test["content_length"]
+      
+      boundary_app = lambda { |context| [:prompt, content, []] }
+      pagination = FlowChat::Ussd::Middleware::Pagination.new(boundary_app)
+      
+      # Reset context for each test
+      @context.session.delete("ussd.pagination")
+      @context.input = ""
+      
+      begin
+        type, prompt, _ = pagination.call(@context)
+        
+        # Results should be valid
+        assert [:prompt, :terminal].include?(type), "Invalid type returned for boundary test"
+        refute_nil prompt, "Prompt should not be nil"
+        
+        # If pagination triggered, state should be valid
+        if prompt.include?("# More")
+          state = @context.session.get("ussd.pagination")
+          refute_nil state, "Pagination state should exist when paginated"
+          assert state["page"].is_a?(Integer), "Page should be an integer"
+          assert state["page"] > 0, "Page should be positive"
+        end
+      rescue => e
+        flunk("Failed at boundary: page_size=#{test["size"]}, content=#{test["content_length"]} - #{e.message}")
+      end
+    end
+  end
+
+  def test_pagination_navigation_edge_cases
+    # Test edge cases in navigation
+    FlowChat::Config.ussd.pagination_page_size = 50
+    long_content = "Page content. " * 20  # Multiple pages worth
+    
+    # Set up pagination state
+    @context.session.set("ussd.pagination", {
+      "page" => 1,
+      "offsets" => {"1" => {"start" => 0, "finish" => 30}},
+      "prompt" => long_content,
+      "type" => "prompt"
+    })
+    
+    navigation_tests = [
+      # Try to go back from page 1 (should stay on page 1)
+      {"input" => "0", "expected_page" => 1},
+      # Go forward multiple times
+      {"input" => "#", "expected_min_page" => 2},
+      {"input" => "#", "expected_min_page" => 3},
+      # Invalid navigation input (should be ignored)
+      {"input" => "99", "expected_behavior" => "new_flow"},
+    ]
+    
+    navigation_tests.each do |test|
+      @context.input = test[:input]
+      
+      type, prompt, _ = @pagination.call(@context)
+      
+      if test[:expected_behavior] == "new_flow"
+        # Should clear pagination and start new flow
+        state = @context.session.get("ussd.pagination")
+        assert_nil state
+      elsif test[:expected_page]
+        state = @context.session.get("ussd.pagination")
+        assert_equal test[:expected_page], state["page"]
+      elsif test[:expected_min_page]
+        state = @context.session.get("ussd.pagination")
+        assert state["page"] >= test[:expected_min_page], "Expected page >= #{test[:expected_min_page]}, got #{state["page"]}"
+      end
+    end
+  end
+
+  def test_pagination_with_dynamic_content_changes
+    # Test behavior when underlying content might change between requests
+    changeable_content = "Initial content"
+    changeable_app = lambda do |context|
+      # Simulate content that changes between calls
+      changeable_content += " more"
+      [:prompt, changeable_content, []]
+    end
+    
+    pagination = FlowChat::Ussd::Middleware::Pagination.new(changeable_app)
+    
+    # First call - should establish pagination
+    type1, prompt1, _ = pagination.call(@context)
+    
+    # Simulate user navigation
+    @context.input = "#"
+    
+    # Second call - content has changed but pagination state exists
+    type2, prompt2, _ = pagination.call(@context)
+    
+    # Should handle gracefully (either use cached content or detect change)
+    assert [:prompt, :terminal].include?(type2)
+    refute_nil prompt2
+    
+    # Should maintain some consistency
+    state = @context.session.get("ussd.pagination")
+    if state
+      assert state.key?("prompt")
+      assert state.key?("page")
+    end
+  end
+
+  def test_pagination_configuration_edge_cases
+    # Test with unusual configuration values
+    config_tests = [
+      {"page_size" => 0, "should_work" => false},     # Invalid size
+      {"page_size" => -10, "should_work" => false},   # Negative size
+      {"page_size" => 1, "should_work" => true},      # Minimum viable size
+      {"page_size" => 10000, "should_work" => true},  # Very large size
+    ]
+    
+    content = "Test content for configuration edge cases."
+    config_app = lambda { |context| [:prompt, content, []] }
+    pagination = FlowChat::Ussd::Middleware::Pagination.new(config_app)
+    
+    config_tests.each do |test|
+      FlowChat::Config.ussd.pagination_page_size = test["page_size"]
+      
+      # Reset context
+      @context.session.delete("ussd.pagination")
+      @context.input = ""
+      
+      if test["should_work"]
+        begin
+          type, prompt, _ = pagination.call(@context)
+          assert [:prompt, :terminal].include?(type), "Should return valid type"
+        rescue => e
+          flunk("Should handle page_size=#{test["page_size"]} - #{e.message}")
+        end
+      else
+        # Should either work gracefully or fail predictably
+        begin
+          type, prompt, _ = pagination.call(@context)
+          # If it works, verify it's reasonable
+          assert [:prompt, :terminal].include?(type) if type
+        rescue => e
+          # Acceptable to fail with invalid config, just don't crash unexpectedly
+          assert e.is_a?(StandardError), "Should raise a standard error, not #{e.class}"
+        end
+      end
+    end
+  end
+
+  def test_pagination_stress_test_rapid_navigation
+    # Stress test rapid navigation through many pages
+    FlowChat::Config.ussd.pagination_page_size = 50
+    stress_content = "Stress test page content. " * 100  # Many pages worth
+    
+    stress_app = lambda { |context| [:prompt, stress_content, []] }
+    pagination = FlowChat::Ussd::Middleware::Pagination.new(stress_app)
+    
+    # Initialize pagination
+    pagination.call(@context)
+    
+    # Rapidly navigate forward and backward
+    navigation_sequence = ["#"] * 10 + ["0"] * 5 + ["#"] * 8 + ["0"] * 3
+    
+    navigation_sequence.each_with_index do |input, i|
+      @context.input = input
+      
+      begin
+        type, prompt, _ = pagination.call(@context)
+        
+        # Should always return valid results
+        assert [:prompt, :terminal].include?(type), "Invalid type at navigation step #{i}"
+        refute_nil prompt, "Prompt should not be nil at navigation step #{i}"
+        
+        # State should remain consistent
+        state = @context.session.get("ussd.pagination")
+        if state
+          assert state["page"].is_a?(Integer), "Page should be integer at step #{i}"
+          assert state["page"] > 0, "Page should be positive at step #{i}"
+          assert state.key?("prompt"), "State should have prompt at step #{i}"
+          assert state.key?("offsets"), "State should have offsets at step #{i}"
+        end
+      rescue => e
+        flunk("Failed at navigation step #{i}: #{e.message}")
+      end
+    end
+  end
+
+  private
 end

@@ -68,56 +68,69 @@ module FlowChat
           increment_counter("sessions.data.set")
         end
 
-        # WhatsApp metrics
-        ActiveSupport::Notifications.subscribe("whatsapp.message.received.flow_chat") do |event|
-          increment_counter("whatsapp.messages.received")
-          increment_counter("whatsapp.messages.received.by_type.#{event.payload[:message_type]}")
-        end
 
-        ActiveSupport::Notifications.subscribe("whatsapp.message.sent.flow_chat") do |event|
-          increment_counter("whatsapp.messages.sent")
-          increment_counter("whatsapp.messages.sent.by_type.#{event.payload[:message_type]}")
-          track_timing("whatsapp.api.response_time", event.duration)
-        end
-
-        ActiveSupport::Notifications.subscribe("whatsapp.webhook.failed.flow_chat") do |event|
-          increment_counter("whatsapp.webhook.failures")
-          increment_counter("whatsapp.webhook.failures.by_reason.#{event.payload[:reason]}")
-        end
-
-        ActiveSupport::Notifications.subscribe("whatsapp.api.request.flow_chat") do |event|
-          if event.payload[:success]
-            increment_counter("whatsapp.api.requests.success")
-          else
-            increment_counter("whatsapp.api.requests.failure")
-            increment_counter("whatsapp.api.requests.failure.by_status.#{event.payload[:status]}")
+        ActiveSupport::Notifications.subscribe("message.received.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          increment_counter("#{platform}.messages.received")
+          if event.payload[:message_type]
+            increment_counter("#{platform}.messages.received.by_type.#{event.payload[:message_type]}")
           end
-          track_timing("whatsapp.api.request_time", event.duration)
         end
 
-        ActiveSupport::Notifications.subscribe("whatsapp.media.upload.flow_chat") do |event|
-          if event.payload[:success]
-            increment_counter("whatsapp.media.uploads.success")
-            track_histogram("whatsapp.media.upload_size", event.payload[:size])
-          else
-            increment_counter("whatsapp.media.uploads.failure")
+        ActiveSupport::Notifications.subscribe("message.sent.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          increment_counter("#{platform}.messages.sent")
+          if event.payload[:message_type]
+            increment_counter("#{platform}.messages.sent.by_type.#{event.payload[:message_type]}")
           end
-          track_timing("whatsapp.media.upload_time", event.duration)
+          track_timing("#{platform}.api.response_time", event.duration)
         end
 
-        # USSD metrics
-        ActiveSupport::Notifications.subscribe("ussd.message.received.flow_chat") do |event|
-          increment_counter("ussd.messages.received")
+        ActiveSupport::Notifications.subscribe("webhook.verified.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          increment_counter("#{platform}.webhook.verified")
         end
 
-        ActiveSupport::Notifications.subscribe("ussd.message.sent.flow_chat") do |event|
-          increment_counter("ussd.messages.sent")
-          increment_counter("ussd.messages.sent.by_type.#{event.payload[:message_type]}")
+        ActiveSupport::Notifications.subscribe("webhook.failed.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          increment_counter("#{platform}.webhook.failures")
+          if event.payload[:reason]
+            increment_counter("#{platform}.webhook.failures.by_reason.#{event.payload[:reason]}")
+          end
         end
 
-        ActiveSupport::Notifications.subscribe("ussd.pagination.triggered.flow_chat") do |event|
-          increment_counter("ussd.pagination.triggered")
-          track_histogram("ussd.pagination.content_length", event.payload[:content_length])
+        ActiveSupport::Notifications.subscribe("media.upload.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          if event.payload[:success] != false
+            increment_counter("#{platform}.media.uploads.success")
+            if event.payload[:size]
+              track_histogram("#{platform}.media.upload_size", event.payload[:size])
+            end
+          else
+            increment_counter("#{platform}.media.uploads.failure")
+          end
+          track_timing("#{platform}.media.upload_time", event.duration)
+        end
+
+        ActiveSupport::Notifications.subscribe("pagination.triggered.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          increment_counter("#{platform}.pagination.triggered")
+          if event.payload[:content_length]
+            track_histogram("#{platform}.pagination.content_length", event.payload[:content_length])
+          end
+        end
+
+        ActiveSupport::Notifications.subscribe("api.request.flow_chat") do |event|
+          platform = event.payload[:platform] || 'unknown'
+          if event.payload[:success]
+            increment_counter("#{platform}.api.requests.success")
+          else
+            increment_counter("#{platform}.api.requests.failure")
+            if event.payload[:status]
+              increment_counter("#{platform}.api.requests.failure.by_status.#{event.payload[:status]}")
+            end
+          end
+          track_timing("#{platform}.api.request_time", event.duration)
         end
       end
 

@@ -12,6 +12,9 @@ module FlowChat
       class CloudApi
         include FlowChat::Instrumentation
         
+        
+        attr_reader :context
+        
         def initialize(app, config = nil)
           @app = app
           @config = config || FlowChat::Whatsapp::Configuration.from_credentials
@@ -22,6 +25,7 @@ module FlowChat
         end
 
         def call(context)
+          @context = context
           controller = context.controller
           request = controller.request
 
@@ -73,15 +77,17 @@ module FlowChat
 
           if provided_token == verify_token
             # Use instrumentation for webhook verification success
-            instrument(Events::WHATSAPP_WEBHOOK_VERIFIED, {
-              challenge: challenge
+            instrument(Events::WEBHOOK_VERIFIED, {
+              challenge: challenge,
+              platform: :whatsapp
             })
             
             controller.render plain: challenge
           else
             # Use instrumentation for webhook verification failure
-            instrument(Events::WHATSAPP_WEBHOOK_FAILED, {
-              reason: "Invalid verify token"
+            instrument(Events::WEBHOOK_FAILED, {
+              reason: "Invalid verify token",
+              platform: :whatsapp
             })
             
             controller.head :forbidden
@@ -145,11 +151,12 @@ module FlowChat
             contact_name = contact&.dig("profile", "name")
 
             # Use instrumentation for message received
-            instrument(Events::WHATSAPP_MESSAGE_RECEIVED, {
+            instrument(Events::MESSAGE_RECEIVED, {
               from: phone_number,
+              message: context.input,
               message_type: message["type"],
               message_id: message_id,
-              contact_name: contact_name
+              platform: :whatsapp
             })
 
             context["request.id"] = phone_number

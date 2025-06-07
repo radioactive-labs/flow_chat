@@ -92,19 +92,22 @@ class InstrumentationIntegrationTest < Minitest::Test
       include FlowChat::Instrumentation
       
       def process_webhook(challenge)
-        instrument(FlowChat::Instrumentation::Events::WHATSAPP_WEBHOOK_VERIFIED, {
-          challenge: challenge
+        instrument(FlowChat::Instrumentation::Events::WEBHOOK_VERIFIED, {
+          challenge: challenge,
+          platform: :whatsapp
         })
         
         "webhook_verified"
       end
       
       def process_message(from, message_type, message_id)
-        instrument(FlowChat::Instrumentation::Events::WHATSAPP_MESSAGE_RECEIVED, {
+        instrument(FlowChat::Instrumentation::Events::MESSAGE_RECEIVED, {
           from: from,
+          message: "test message",
           message_type: message_type,
           message_id: message_id,
-          contact_name: "Test User"
+          contact_name: "Test User",
+          platform: :whatsapp
         })
         
         "message_processed"
@@ -224,21 +227,23 @@ class InstrumentationIntegrationTest < Minitest::Test
         pages = content.length / 160 + 1
         current_page = 2  # Simulate being on page 2
         
-        instrument(FlowChat::Instrumentation::Events::USSD_PAGINATION_TRIGGERED, {
+        instrument(FlowChat::Instrumentation::Events::PAGINATION_TRIGGERED, {
           current_page: current_page,
           total_pages: pages,
           content_length: content.length,
-          session_id: session_id
+          session_id: session_id,
+          platform: :ussd
         })
         
         "paginated_content"
       end
       
       def receive_message(from, input, session_id)
-        instrument(FlowChat::Instrumentation::Events::USSD_MESSAGE_RECEIVED, {
+        instrument(FlowChat::Instrumentation::Events::MESSAGE_RECEIVED, {
           from: from,
-          input: input,
-          session_id: session_id
+          message: input,
+          session_id: session_id,
+          platform: :ussd
         })
         
         "message_received"

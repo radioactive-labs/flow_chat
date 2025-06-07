@@ -3,7 +3,11 @@ module FlowChat
     class RailsSessionStore
       include FlowChat::Instrumentation
       
+      # Make context available for instrumentation enrichment
+      attr_reader :context
+      
       def initialize(context)
+        @context = context
         @session_id = context["session.id"]
         @session_store = context.controller.session
         @session_data = (session_store[session_id] || {}).with_indifferent_access

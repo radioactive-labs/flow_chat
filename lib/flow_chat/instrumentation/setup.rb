@@ -122,18 +122,14 @@ module FlowChat
           subscribe_event("session.cache.hit.flow_chat", :session_cache_hit)
           subscribe_event("session.cache.miss.flow_chat", :session_cache_miss)
           
-          # WhatsApp events
-          subscribe_event("whatsapp.message.received.flow_chat", :whatsapp_message_received)
-          subscribe_event("whatsapp.message.sent.flow_chat", :whatsapp_message_sent)
-          subscribe_event("whatsapp.webhook.verified.flow_chat", :whatsapp_webhook_verified)
-          subscribe_event("whatsapp.webhook.failed.flow_chat", :whatsapp_webhook_failed)
-          subscribe_event("whatsapp.api.request.flow_chat", :whatsapp_api_request)
-          subscribe_event("whatsapp.media.upload.flow_chat", :whatsapp_media_upload)
-          
-          # USSD events
-          subscribe_event("ussd.message.received.flow_chat", :ussd_message_received)
-          subscribe_event("ussd.message.sent.flow_chat", :ussd_message_sent)
-          subscribe_event("ussd.pagination.triggered.flow_chat", :ussd_pagination_triggered)
+          # Platform-agnostic events (new scalable approach)
+          subscribe_event("message.received.flow_chat", :message_received)
+          subscribe_event("message.sent.flow_chat", :message_sent)
+          subscribe_event("webhook.verified.flow_chat", :webhook_verified)
+          subscribe_event("webhook.failed.flow_chat", :webhook_failed)
+          subscribe_event("api.request.flow_chat", :api_request)
+          subscribe_event("media.upload.flow_chat", :media_upload)
+          subscribe_event("pagination.triggered.flow_chat", :pagination_triggered)
           
           # Middleware events
           subscribe_event("middleware.before.flow_chat", :middleware_before)

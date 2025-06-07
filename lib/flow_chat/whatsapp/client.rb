@@ -24,10 +24,11 @@ module FlowChat
         FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
         FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
         
-        result = instrument(Events::WHATSAPP_MESSAGE_SENT, {
+        result = instrument(Events::MESSAGE_SENT, {
           to: to,
           message_type: type.to_s,
-          content_length: content.to_s.length
+          content_length: content.to_s.length,
+          platform: :whatsapp
         }) do
           message_data = build_message_payload(response, to)
           send_message_payload(message_data)
@@ -206,10 +207,11 @@ module FlowChat
         request["Content-Type"] = "multipart/form-data; boundary=#{boundary}"
         request.body = body
 
-        result = instrument(Events::WHATSAPP_MEDIA_UPLOAD, {
+        result = instrument(Events::MEDIA_UPLOAD, {
           filename: filename,
           mime_type: mime_type,
-          size: file_size
+          size: file_size,
+          platform: :whatsapp
         }) do
           response = http.request(request)
 
@@ -234,12 +236,13 @@ module FlowChat
         FlowChat.logger.error { "WhatsApp::Client: Media upload exception: #{error.class.name}: #{error.message}" }
         
         # Instrument the error
-        instrument(Events::WHATSAPP_MEDIA_UPLOAD, {
+        instrument(Events::MEDIA_UPLOAD, {
           filename: filename,
           mime_type: mime_type,
           size: file_size,
           success: false,
-          error: error.message
+          error: error.message,
+          platform: :whatsapp
         })
         
         raise

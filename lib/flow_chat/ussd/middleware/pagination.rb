@@ -2,6 +2,11 @@ module FlowChat
   module Ussd
     module Middleware
       class Pagination
+        include FlowChat::Instrumentation
+        
+        
+        attr_reader :context
+        
         def initialize(app)
           @app = app
           FlowChat.logger.debug { "Ussd::Pagination: Initialized USSD pagination middleware" }
@@ -62,6 +67,16 @@ module FlowChat
           prompt = pagination_state["prompt"][start..finish] + build_pagination_options(type, has_more)
           set_pagination_state(current_page, start, finish)
 
+          # Instrument pagination navigation
+          instrument(Events::PAGINATION_TRIGGERED, {
+            session_id: @context["session.id"],
+            current_page: current_page,
+            total_pages: calculate_total_pages,
+            content_length: pagination_state["prompt"].length,
+            page_limit: FlowChat::Config.ussd.pagination_page_size,
+            navigation_action: @context.input == FlowChat::Config.ussd.pagination_next_option ? "next" : "back"
+          })
+
           FlowChat.logger.debug { "Ussd::Pagination: Serving page content - start: #{start}, finish: #{finish}, has_more: #{has_more}, type: #{type}" }
           [type, prompt]
         end
@@ -80,6 +95,17 @@ module FlowChat
             set_pagination_state(1, 0, current_pagebreak, original_prompt, type)
             prompt = original_prompt[0..current_pagebreak] + "\n\n" + next_option
             type = :prompt
+            
+            # Instrument initial pagination setup
+            total_pages = calculate_total_pages(original_prompt)
+            instrument(Events::PAGINATION_TRIGGERED, {
+              session_id: @context["session.id"],
+              current_page: 1,
+              total_pages: total_pages,
+              content_length: original_prompt.length,
+              page_limit: FlowChat::Config.ussd.pagination_page_size,
+              navigation_action: "initial"
+            })
             
             FlowChat.logger.debug { "Ussd::Pagination: First page prepared with #{prompt.length} characters" }
           end
@@ -213,6 +239,14 @@ module FlowChat
           
           FlowChat.logger.debug { "Ussd::Pagination: Saving pagination state - page: #{page}, total_content: #{prompt&.length || 0} chars" }
           @session.set "ussd.pagination", new_state
+        end
+
+        def calculate_total_pages(content = nil)
+          content ||= pagination_state["prompt"]
+          return 1 unless content&.length > FlowChat::Config.ussd.pagination_page_size
+          
+          # Rough estimation - actual pages may vary due to word boundaries
+          (content.length.to_f / single_option_slice_size).ceil
         end
       end
     end

@@ -84,14 +84,16 @@ class MetricsCollectorTest < Minitest::Test
   end
 
   def test_whatsapp_message_events_increment_counters
-    publish_event("whatsapp.message.received.flow_chat", {
+    publish_event("message.received.flow_chat", {
       from: "+1234567890",
-      message_type: "text"
+      message_type: "text",
+      platform: :whatsapp
     })
 
-    publish_event("whatsapp.message.sent.flow_chat", {
+    publish_event("message.sent.flow_chat", {
       to: "+1234567890",
-      message_type: "text"
+      message_type: "text",
+      platform: :whatsapp
     }, duration: 100.0)
 
     sleep 0.01
@@ -107,15 +109,17 @@ class MetricsCollectorTest < Minitest::Test
   end
 
   def test_whatsapp_api_request_success_and_failure
-    publish_event("whatsapp.api.request.flow_chat", {
+    publish_event("api.request.flow_chat", {
       success: true,
-      endpoint: "/messages"
+      endpoint: "/messages",
+      platform: :whatsapp
     }, duration: 250.0)
 
-    publish_event("whatsapp.api.request.flow_chat", {
+    publish_event("api.request.flow_chat", {
       success: false,
       endpoint: "/messages",
-      status: 400
+      status: 400,
+      platform: :whatsapp
     }, duration: 50.0)
 
     sleep 0.01
@@ -132,16 +136,18 @@ class MetricsCollectorTest < Minitest::Test
   end
 
   def test_whatsapp_media_upload_success_and_failure
-    publish_event("whatsapp.media.upload.flow_chat", {
+    publish_event("media.upload.flow_chat", {
       success: true,
       mime_type: "image/jpeg",
-      size: 1024000
+      size: 1024000,
+      platform: :whatsapp
     }, duration: 2000.0)
 
-    publish_event("whatsapp.media.upload.flow_chat", {
+    publish_event("media.upload.flow_chat", {
       success: false,
       mime_type: "video/mp4",
-      error: "File too large"
+      error: "File too large",
+      platform: :whatsapp
     }, duration: 100.0)
 
     sleep 0.01
@@ -157,14 +163,16 @@ class MetricsCollectorTest < Minitest::Test
   end
 
   def test_ussd_message_events
-    publish_event("ussd.message.received.flow_chat", {
+    publish_event("message.received.flow_chat", {
       from: "+256700000000",
-      input: "1"
+      message: "1",
+      platform: :ussd
     })
 
-    publish_event("ussd.message.sent.flow_chat", {
+    publish_event("message.sent.flow_chat", {
       to: "+256700000000",
-      message_type: "prompt"
+      message_type: "prompt",
+      platform: :ussd
     }, duration: 50.0)
 
     sleep 0.01
@@ -176,10 +184,11 @@ class MetricsCollectorTest < Minitest::Test
   end
 
   def test_ussd_pagination_events
-    publish_event("ussd.pagination.triggered.flow_chat", {
+    publish_event("pagination.triggered.flow_chat", {
       current_page: 2,
       total_pages: 5,
-      content_length: 250
+      content_length: 250,
+      platform: :ussd
     })
 
     sleep 0.01

@@ -105,8 +105,10 @@ class SetupTest < Minitest::Test
       "flow.execution.error.flow_chat",
       "session.created.flow_chat",
       "session.destroyed.flow_chat",
-      "whatsapp.message.received.flow_chat",
-      "whatsapp.message.sent.flow_chat"
+      "message.received.flow_chat",
+      "message.sent.flow_chat",
+      "webhook.verified.flow_chat",
+      "pagination.triggered.flow_chat"
     ]
     
     expected_events.each do |event|
@@ -159,9 +161,10 @@ class SetupTest < Minitest::Test
       :flow_execution_error,
       :session_created,
       :session_destroyed,
-      :whatsapp_message_received,
-      :whatsapp_message_sent,
-      :ussd_message_received,
+      :message_received,
+      :message_sent,
+      :webhook_verified,
+      :pagination_triggered,
       :context_created
     ]
     

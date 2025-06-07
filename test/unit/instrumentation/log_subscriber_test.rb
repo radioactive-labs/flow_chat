@@ -192,14 +192,16 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_message_received_event
-    event = create_event("whatsapp.message.received.flow_chat", {
+    event = create_event("message.received.flow_chat", {
       from: "+1234567890",
+      message: "Hello",
       message_type: "text",
       message_id: "msg_123",
-      contact_name: "John Doe"
+      contact_name: "John Doe",
+      platform: :whatsapp
     })
     
-    @subscriber.whatsapp_message_received(event)
+    @subscriber.message_received(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -210,13 +212,15 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_message_received_without_contact_name
-    event = create_event("whatsapp.message.received.flow_chat", {
+    event = create_event("message.received.flow_chat", {
       from: "+1234567890",
+      message: "Hello",
       message_type: "text",
-      message_id: "msg_123"
+      message_id: "msg_123",
+      platform: :whatsapp
     })
     
-    @subscriber.whatsapp_message_received(event)
+    @subscriber.message_received(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -228,13 +232,14 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_message_sent_event
-    event = create_event("whatsapp.message.sent.flow_chat", {
+    event = create_event("message.sent.flow_chat", {
       to: "+1234567890",
       message_type: "text",
-      content_length: 25
+      content_length: 25,
+      platform: :whatsapp
     }, duration: 150.0)
     
-    @subscriber.whatsapp_message_sent(event)
+    @subscriber.message_sent(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -246,11 +251,12 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_webhook_verified_event
-    event = create_event("whatsapp.webhook.verified.flow_chat", {
-      challenge: "challenge_123"
+    event = create_event("webhook.verified.flow_chat", {
+      challenge: "challenge_123",
+      platform: :whatsapp
     })
     
-    @subscriber.whatsapp_webhook_verified(event)
+    @subscriber.webhook_verified(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -261,11 +267,12 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_webhook_failed_event
-    event = create_event("whatsapp.webhook.failed.flow_chat", {
-      reason: "Invalid verify token"
+    event = create_event("webhook.failed.flow_chat", {
+      reason: "Invalid verify token",
+      platform: :whatsapp
     })
     
-    @subscriber.whatsapp_webhook_failed(event)
+    @subscriber.webhook_failed(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -275,12 +282,13 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_media_upload_success_event
-    event = create_event("whatsapp.media.upload.flow_chat", {
+    event = create_event("media.upload.flow_chat", {
       filename: "document.pdf",
-      size: 2048576  # 2MB
+      size: 2048576,  # 2MB
+      platform: :whatsapp
     }, duration: 500.0)
     
-    @subscriber.whatsapp_media_upload(event)
+    @subscriber.media_upload(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -292,13 +300,14 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_whatsapp_media_upload_failure_event
-    event = create_event("whatsapp.media.upload.flow_chat", {
+    event = create_event("media.upload.flow_chat", {
       filename: "document.pdf",
       success: false,
-      error: "File too large"
+      error: "File too large",
+      platform: :whatsapp
     }, duration: 100.0)
     
-    @subscriber.whatsapp_media_upload(event)
+    @subscriber.media_upload(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -310,13 +319,14 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_ussd_message_received_event
-    event = create_event("ussd.message.received.flow_chat", {
+    event = create_event("message.received.flow_chat", {
       from: "+256700000000",
-      input: "1",
-      session_id: "session_123"
+      message: "1",
+      session_id: "session_123",
+      platform: :ussd
     })
     
-    @subscriber.ussd_message_received(event)
+    @subscriber.message_received(event)
     
     messages = @test_logger.messages
     level, message = messages.first
@@ -328,14 +338,15 @@ class LogSubscriberTest < Minitest::Test
   end
 
   def test_ussd_pagination_triggered_event
-    event = create_event("ussd.pagination.triggered.flow_chat", {
+    event = create_event("pagination.triggered.flow_chat", {
       current_page: 2,
       total_pages: 5,
       content_length: 320,
-      session_id: "session_123"
+      session_id: "session_123",
+      platform: :ussd
     })
     
-    @subscriber.ussd_pagination_triggered(event)
+    @subscriber.pagination_triggered(event)
     
     messages = @test_logger.messages
     level, message = messages.first

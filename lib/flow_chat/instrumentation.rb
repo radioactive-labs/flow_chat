@@ -40,6 +40,9 @@ module FlowChat
       FLOW_EXECUTION_END = "flow.execution.end"
       FLOW_EXECUTION_ERROR = "flow.execution.error"
       
+      # Context events
+      CONTEXT_CREATED = "context.created"
+      
       # Session events
       SESSION_CREATED = "session.created"
       SESSION_DESTROYED = "session.destroyed"
@@ -48,25 +51,21 @@ module FlowChat
       SESSION_CACHE_HIT = "session.cache.hit"
       SESSION_CACHE_MISS = "session.cache.miss"
       
-      # WhatsApp events
-      WHATSAPP_MESSAGE_RECEIVED = "whatsapp.message.received"
-      WHATSAPP_MESSAGE_SENT = "whatsapp.message.sent"
-      WHATSAPP_WEBHOOK_VERIFIED = "whatsapp.webhook.verified"
-      WHATSAPP_WEBHOOK_FAILED = "whatsapp.webhook.failed"
-      WHATSAPP_API_REQUEST = "whatsapp.api.request"
-      WHATSAPP_MEDIA_UPLOAD = "whatsapp.media.upload"
+      # Platform-agnostic messaging events
+      # Gateway/platform information is included in the payload
+      MESSAGE_RECEIVED = "message.received"
+      MESSAGE_SENT = "message.sent"
+      WEBHOOK_VERIFIED = "webhook.verified"
+      WEBHOOK_FAILED = "webhook.failed"
+      API_REQUEST = "api.request"
+      MEDIA_UPLOAD = "media.upload"
       
-      # USSD events
-      USSD_MESSAGE_RECEIVED = "ussd.message.received"
-      USSD_MESSAGE_SENT = "ussd.message.sent"
-      USSD_PAGINATION_TRIGGERED = "ussd.pagination.triggered"
-      
+      PAGINATION_TRIGGERED = "pagination.triggered"
+
       # Middleware events
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
-      
-      # Context events
-      CONTEXT_CREATED = "context.created"
+
     end
   end
 end 

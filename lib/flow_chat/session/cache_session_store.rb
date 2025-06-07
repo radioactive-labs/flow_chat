@@ -3,6 +3,9 @@ module FlowChat
     class CacheSessionStore
       include FlowChat::Instrumentation
       
+      # Make context available for instrumentation enrichment
+      attr_reader :context
+      
       def initialize(context, cache = nil)
         @context = context
         @cache = cache || FlowChat::Config.cache

@@ -4,11 +4,17 @@ module FlowChat
   module Ussd
     module Gateway
       class Nsano
+        include FlowChat::Instrumentation
+        
+        
+        attr_reader :context
+        
         def initialize(app)
           @app = app
         end
 
         def call(context)
+          @context = context
           controller = context["controller"]
           controller.request
 
@@ -17,6 +23,34 @@ module FlowChat
 
           # Set a basic message_id (can be enhanced based on actual Nsano implementation)
           context["request.message_id"] = SecureRandom.uuid
+
+          # TODO: Implement Nsano-specific parameter parsing
+          # For now, add basic instrumentation structure for when this is implemented
+          
+          # Placeholder instrumentation - indicates Nsano implementation is needed
+          instrument(Events::MESSAGE_RECEIVED, {
+            from: "TODO",  # Would be parsed from Nsano params
+            message: "TODO",  # Would be actual user input
+            session_id: "TODO",  # Would be Nsano session ID
+            gateway: :nsano,
+            platform: :ussd,
+            timestamp: context["request.timestamp"]
+          })
+
+          # Process request with placeholder app call
+          type, prompt, choices, media = @app.call(context) if @app
+
+          # Placeholder response instrumentation
+          instrument(Events::MESSAGE_SENT, {
+            to: "TODO",  # Would be actual phone number
+            session_id: "TODO",  # Would be Nsano session ID  
+            message: "TODO",  # Would be actual response message
+            message_type: "prompt",  # Would depend on actual response type
+            gateway: :nsano,
+            platform: :ussd,
+            content_length: 0,  # Would be actual content length
+            timestamp: context["request.timestamp"]
+          })
 
           # input = context["rack.input"].read
           # context["rack.input"].rewind

@@ -111,8 +111,7 @@ module FlowChat
       raise NotImplementedError, "Subclasses must implement configure_middleware_stack"
     end
 
-    private
-
+    
     attr_reader :context
   end
 end
