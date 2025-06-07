@@ -29,7 +29,7 @@ class UssdRendererTest < Minitest::Test
   def test_render_with_media_and_choices_media_first
     choices = {"1" => "Like it", "2" => "Don't like it"}
     media = {type: :image, url: "https://example.com/photo.jpg"}
-    
+
     renderer = FlowChat::Ussd::Renderer.new(
       "What do you think?",
       choices: choices,
@@ -95,7 +95,7 @@ class UssdRendererTest < Minitest::Test
   def test_complex_scenario_with_multiple_choices_and_media
     choices = (1..5).to_h { |i| [i.to_s, "Option #{i}"] }
     media = {type: :document, url: "https://example.com/menu.pdf"}
-    
+
     renderer = FlowChat::Ussd::Renderer.new(
       "Select from menu:",
       choices: choices,
@@ -105,7 +105,7 @@ class UssdRendererTest < Minitest::Test
 
     # Verify structure: message, media, choices (in that order)
     lines = result.split("\n")
-    
+
     assert_equal "📄 Document: https://example.com/menu.pdf", lines[0]
     assert_equal "", lines[1] # blank line
     assert_equal "", lines[3] # blank line
@@ -116,4 +116,4 @@ class UssdRendererTest < Minitest::Test
     assert_equal "4. Option 4", lines[7]
     assert_equal "5. Option 5", lines[8]
   end
-end 
+end

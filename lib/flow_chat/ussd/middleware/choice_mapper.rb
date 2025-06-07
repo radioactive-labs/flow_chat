@@ -36,23 +36,23 @@ module FlowChat
         def intercept?
           # Intercept if we have choice mapping state and user input is a number that maps to a choice
           choice_mapping = get_choice_mapping
-          should_intercept = choice_mapping.present? && 
-                           @context.input.present? && 
-                           choice_mapping.key?(@context.input.to_s)
-          
+          should_intercept = choice_mapping.present? &&
+            @context.input.present? &&
+            choice_mapping.key?(@context.input.to_s)
+
           if should_intercept
             FlowChat.logger.debug { "Ussd::ChoiceMapper: Intercepting - input: #{@context.input}, mapped to: #{choice_mapping[@context.input.to_s]}" }
           end
-          
+
           should_intercept
         end
 
         def handle_choice_input
           choice_mapping = get_choice_mapping
           original_choice = choice_mapping[@context.input.to_s]
-          
+
           FlowChat.logger.info { "Ussd::ChoiceMapper: Resolving choice input #{@context.input} to #{original_choice}" }
-          
+
           # Replace the numeric input with the original choice
           @context.input = original_choice
         end
@@ -61,13 +61,13 @@ module FlowChat
           # Choices are always a hash after normalize_choices
           numbered_choices = {}
           choice_mapping = {}
-          
+
           choices.each_with_index do |(key, value), index|
             number = (index + 1).to_s
             numbered_choices[number] = value
             choice_mapping[number] = key.to_s
           end
-          
+
           store_choice_mapping(choice_mapping)
           FlowChat.logger.debug { "Ussd::ChoiceMapper: Created mapping: #{choice_mapping}" }
           numbered_choices
@@ -99,11 +99,11 @@ module FlowChat
           # This indicates we're in a new flow step
           choice_mapping = get_choice_mapping
           return false if choice_mapping.empty?
-          
+
           # If input is present but doesn't match any mapping, we're in a new flow
           @context.input.present? && !choice_mapping.key?(@context.input.to_s)
         end
       end
     end
   end
-end 
+end

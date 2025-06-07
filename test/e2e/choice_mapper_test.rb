@@ -26,14 +26,14 @@ class ChoiceMapperTest < Minitest::Test
 
   def test_ussd_choice_mapper_middleware_in_isolation
     # Test the ChoiceMapper middleware in isolation
-    
+
     # Create context with session
     context = FlowChat::Context.new
     context["controller"] = @controller
     context["session.store"] = @session_store.class
     context["session.id"] = "test_session_12345"
     context.session = @session_store
-    
+
     # Create the mock app that simulates the downstream middleware
     mock_app = lambda do |ctx|
       if ctx.input == "Good"
@@ -44,37 +44,37 @@ class ChoiceMapperTest < Minitest::Test
         [:prompt, "Rate our service:", {"Poor" => "Poor", "Good" => "Good", "Excellent" => "Excellent"}, nil]
       end
     end
-    
+
     # Create ChoiceMapper middleware
     choice_mapper = FlowChat::Ussd::Middleware::ChoiceMapper.new(mock_app)
-    
+
     # Step 1: First request (no input) - should create choice mapping
     context.input = nil
     result = choice_mapper.call(context)
-    
+
     assert_equal :prompt, result[0]
     assert_includes result[1], "Rate our service"
-    
+
     # ChoiceMapper should convert to numbered choices
     expected_numbered_choices = {"1" => "Poor", "2" => "Good", "3" => "Excellent"}
     assert_equal expected_numbered_choices, result[2]
-    
+
     # Verify mapping was stored in session
     stored_mapping = @session_store.get("ussd.choice_mapping")
     expected_mapping = {"1" => "Poor", "2" => "Good", "3" => "Excellent"}
     assert_equal expected_mapping, stored_mapping
-    
+
     # Step 2: User selects "2" - should intercept and convert to "Good"
     context.input = "2"
     result = choice_mapper.call(context)
-    
+
     assert_equal :prompt, result[0]
     assert_includes result[1], "Would you recommend"
-    
+
     # Should have Yes/No choices
     expected_yes_no = {"1" => "Yes", "2" => "No"}
     assert_equal expected_yes_no, result[2]
-    
+
     # Verify original mapping was cleared and new one created
     stored_mapping = @session_store.get("ussd.choice_mapping")
     expected_new_mapping = {"1" => "Yes", "2" => "No"}
@@ -83,13 +83,13 @@ class ChoiceMapperTest < Minitest::Test
 
   def test_ussd_choice_mapper_handles_invalid_choice
     # Test invalid choice handling
-    
+
     context = FlowChat::Context.new
     context["controller"] = @controller
     context["session.store"] = @session_store.class
     context["session.id"] = "test_session_12345"
     context.session = @session_store
-    
+
     # Mock app that shows invalid selection for unknown input
     mock_app = lambda do |ctx|
       if ctx.input == "5"  # Invalid choice
@@ -98,21 +98,21 @@ class ChoiceMapperTest < Minitest::Test
         [:prompt, "Rate our service:", {"Poor" => "Poor", "Good" => "Good", "Excellent" => "Excellent"}, nil]
       end
     end
-    
+
     choice_mapper = FlowChat::Ussd::Middleware::ChoiceMapper.new(mock_app)
-    
+
     # Step 1: Set up choices
     context.input = nil
-    result = choice_mapper.call(context)
-    
+    choice_mapper.call(context)
+
     # Step 2: Invalid choice "5"
     context.input = "5"
     result = choice_mapper.call(context)
-    
+
     assert_equal :prompt, result[0]
     assert_includes result[1], "Invalid selection"
     assert_includes result[1], "Rate our service"
-    
+
     # Should still have numbered choices
     expected_numbered_choices = {"1" => "Poor", "2" => "Good", "3" => "Excellent"}
     assert_equal expected_numbered_choices, result[2]
@@ -120,7 +120,7 @@ class ChoiceMapperTest < Minitest::Test
 
   def test_whatsapp_processor_without_choice_mapper
     # Test that processors without ChoiceMapper work with direct choice values
-    
+
     session_store_class = create_session_store_class
     mock_gateway = create_mock_gateway
 
@@ -135,18 +135,18 @@ class ChoiceMapperTest < Minitest::Test
     # Step 1: Get rating question
     context.input = nil
     result = processor.run(ChoiceTestFlow, :main_page)
-    
+
     assert_equal :prompt, result[0]
     assert_includes result[1], "Rate our service"
-    
+
     # WhatsApp should get original choice values (no ChoiceMapper)
-    expected_choices = {"Poor"=>"Poor", "Good"=>"Good", "Excellent"=>"Excellent"}
+    expected_choices = {"Poor" => "Poor", "Good" => "Good", "Excellent" => "Excellent"}
     assert_equal expected_choices, result[2]
 
     # Step 2: Select using actual choice value (WhatsApp style)
     context.input = "Good"  # Direct value, not number
-    result = processor.run(ChoiceTestFlow, :main_page)
-    
+    processor.run(ChoiceTestFlow, :main_page)
+
     # This won't work as expected due to session ID issue, but shows the concept
     # In real use, the session would persist correctly
   end
@@ -217,10 +217,10 @@ class ChoiceMapperTest < Minitest::Test
         context["request.gateway"] = :test_gateway
         context["request.network"] = nil
         context["request.msisdn"] = "+256700123456"
-        
+
         # Return the middleware result directly for testing
         @app.call(context)
       end
     end
   end
-end 
+end

@@ -5,10 +5,9 @@ module FlowChat
     module Gateway
       class Nsano
         include FlowChat::Instrumentation
-        
-        
+
         attr_reader :context
-        
+
         def initialize(app)
           @app = app
         end
@@ -26,7 +25,7 @@ module FlowChat
 
           # TODO: Implement Nsano-specific parameter parsing
           # For now, add basic instrumentation structure for when this is implemented
-          
+
           # Placeholder instrumentation - indicates Nsano implementation is needed
           instrument(Events::MESSAGE_RECEIVED, {
             from: "TODO",  # Would be parsed from Nsano params
@@ -38,12 +37,12 @@ module FlowChat
           })
 
           # Process request with placeholder app call
-          type, prompt, choices, media = @app.call(context) if @app
+          _, _, _, _ = @app.call(context) if @app
 
           # Placeholder response instrumentation
           instrument(Events::MESSAGE_SENT, {
             to: "TODO",  # Would be actual phone number
-            session_id: "TODO",  # Would be Nsano session ID  
+            session_id: "TODO",  # Would be Nsano session ID
             message: "TODO",  # Would be actual response message
             message_type: "prompt",  # Would depend on actual response type
             gateway: :nsano,

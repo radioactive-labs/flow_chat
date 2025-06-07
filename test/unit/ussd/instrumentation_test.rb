@@ -4,7 +4,7 @@ class UssdInstrumentationTest < Minitest::Test
   def setup
     @original_notifications = ActiveSupport::Notifications.notifier
     @test_events = []
-    
+
     # Create a test notifier that captures events
     @test_notifier = ActiveSupport::Notifications::Fanout.new
     @test_notifier.subscribe(/.*flow_chat$/) do |name, start, finish, id, payload|
@@ -17,9 +17,9 @@ class UssdInstrumentationTest < Minitest::Test
         duration: (finish - start) * 1000
       }
     end
-    
+
     ActiveSupport::Notifications.instance_variable_set(:@notifier, @test_notifier)
-    
+
     @context = FlowChat::Context.new
     @context["request.msisdn"] = "+256700123456"
     @context["request.id"] = "test_session_123"
@@ -44,10 +44,10 @@ class UssdInstrumentationTest < Minitest::Test
     request.define_singleton_method(:params) { params }
     controller.define_singleton_method(:request) { request }
     controller.define_singleton_method(:render) { |options| "rendered content" }
-    
+
     context = FlowChat::Context.new
     context["controller"] = controller
-    
+
     # Mock app to be called by gateway
     mock_app = lambda { |ctx| [:prompt, "Test response", []] }
     gateway = FlowChat::Ussd::Gateway::Nalo.new(mock_app)
@@ -56,7 +56,7 @@ class UssdInstrumentationTest < Minitest::Test
     # Check that message received event was triggered
     received_events = @test_events.select { |e| e[:name] == "message.received.flow_chat" }
     assert_equal 1, received_events.size
-    
+
     event = received_events.first
     assert_equal "+256700123456", event[:payload][:from]
     assert_equal "1", event[:payload][:message]
@@ -64,7 +64,7 @@ class UssdInstrumentationTest < Minitest::Test
   end
 
   def test_nalo_gateway_instruments_message_sent
-    # Mock controller and request  
+    # Mock controller and request
     controller = Object.new
     request = Object.new
     params = {
@@ -75,12 +75,12 @@ class UssdInstrumentationTest < Minitest::Test
     request.define_singleton_method(:params) { params }
     controller.define_singleton_method(:request) { request }
     controller.define_singleton_method(:render) { |options| "rendered content" }
-    
+
     context = FlowChat::Context.new
     context["controller"] = controller
     context["request.msisdn"] = "+256700123456"
     context["request.id"] = "test_session_123"
-    
+
     # Mock app to be called by gateway
     mock_app = lambda { |ctx| [:prompt, "Test response", []] }
     gateway = FlowChat::Ussd::Gateway::Nalo.new(mock_app)
@@ -89,7 +89,7 @@ class UssdInstrumentationTest < Minitest::Test
     # Check that message sent event was triggered (empty input case)
     sent_events = @test_events.select { |e| e[:name] == "message.sent.flow_chat" }
     assert_equal 1, sent_events.size
-    
+
     event = sent_events.first
     assert_equal "+256700123456", event[:payload][:to]
     assert_equal "", event[:payload][:message]
@@ -107,12 +107,12 @@ class UssdInstrumentationTest < Minitest::Test
     request.define_singleton_method(:params) { params }
     controller.define_singleton_method(:request) { request }
     controller.define_singleton_method(:render) { |options| "rendered content" }
-    
+
     context = FlowChat::Context.new
     context["controller"] = controller
     context["request.msisdn"] = "+256700123456"
     context["request.id"] = "test_session_123"
-    
+
     # Mock app to be called by gateway
     mock_app = lambda { |ctx| [:prompt, "Test response", []] }
     gateway = FlowChat::Ussd::Gateway::Nalo.new(mock_app)
@@ -121,7 +121,7 @@ class UssdInstrumentationTest < Minitest::Test
     # Should have both received and sent events
     received_events = @test_events.select { |e| e[:name] == "message.received.flow_chat" }
     sent_events = @test_events.select { |e| e[:name] == "message.sent.flow_chat" }
-    
+
     assert_equal 1, received_events.size
     assert_equal 1, sent_events.size
   end
@@ -132,10 +132,10 @@ class UssdInstrumentationTest < Minitest::Test
     request = Object.new
     request.define_singleton_method(:params) { {} }
     controller.define_singleton_method(:request) { request }
-    
+
     context = FlowChat::Context.new
     context["controller"] = controller
-    
+
     # Mock app to be called by gateway
     mock_app = lambda { |ctx| [:prompt, "Test response", []] }
     gateway = FlowChat::Ussd::Gateway::Nsano.new(mock_app)
@@ -144,12 +144,12 @@ class UssdInstrumentationTest < Minitest::Test
     # Check that events were triggered with placeholder data
     received_events = @test_events.select { |e| e[:name] == "message.received.flow_chat" }
     sent_events = @test_events.select { |e| e[:name] == "message.sent.flow_chat" }
-    
+
     # The Nsano gateway is just a stub, so it may not trigger events
     # We'll verify that it at least doesn't crash and completes execution
     assert_equal 1, received_events.size
     assert_equal 1, sent_events.size
-    
+
     # Should have basic placeholder data
     assert_equal "TODO", received_events.first[:payload][:message]
     assert_equal :nsano, received_events.first[:payload][:gateway]
@@ -164,9 +164,9 @@ class UssdInstrumentationTest < Minitest::Test
       # Create long content that will trigger pagination
       long_content = "A" * 80
       mock_app = lambda { |context| [:prompt, long_content, []] }
-      
+
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
+
       pagination.call(@context)
 
       # Verify pagination triggered event
@@ -180,7 +180,6 @@ class UssdInstrumentationTest < Minitest::Test
       assert_equal 50, event[:payload][:page_limit]
       assert_equal "initial", event[:payload][:navigation_action]
       assert_equal "ussd:test_session_123", event[:payload][:session_id]
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -204,7 +203,7 @@ class UssdInstrumentationTest < Minitest::Test
 
       mock_app = lambda { |context| [:prompt, "Should not be called", []] }
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
+
       pagination.call(@context)
 
       # Verify navigation pagination event
@@ -216,7 +215,6 @@ class UssdInstrumentationTest < Minitest::Test
       assert event[:payload][:current_page] >= 3  # Should be at least page 3 (navigation from page 2)
       assert_equal 100, event[:payload][:content_length]
       assert_equal "next", event[:payload][:navigation_action]
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -243,7 +241,7 @@ class UssdInstrumentationTest < Minitest::Test
 
       mock_app = lambda { |context| [:prompt, "Should not be called", []] }
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
+
       pagination.call(@context)
 
       # Verify back navigation pagination event
@@ -253,7 +251,6 @@ class UssdInstrumentationTest < Minitest::Test
       event = pagination_events.first
       assert_equal 1, event[:payload][:current_page]  # Should be back on page 1
       assert_equal "back", event[:payload][:navigation_action]
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -268,7 +265,7 @@ class UssdInstrumentationTest < Minitest::Test
       # Create terminal content that exceeds page size
       long_terminal_content = "Transaction completed successfully! " * 5
       mock_app = lambda { |context| [:terminal, long_terminal_content, []] }
-      
+
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
       pagination.call(@context)
 
@@ -280,7 +277,6 @@ class UssdInstrumentationTest < Minitest::Test
       assert_equal 1, event[:payload][:current_page]
       assert_equal "initial", event[:payload][:navigation_action]
       assert event[:payload][:content_length] > 30
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -306,17 +302,16 @@ class UssdInstrumentationTest < Minitest::Test
 
       mock_app = lambda { |context| [:terminal, "Should not be called", []] }
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
-      type, prompt, _ = pagination.call(@context)
+
+      type, _, _ = pagination.call(@context)
 
       # Should still be terminal type for final page
       assert_equal :terminal, type
-      
+
       # Should still instrument the navigation
       pagination_events = @test_events.select { |e| e[:name] == "pagination.triggered.flow_chat" }
       assert_equal 1, pagination_events.size
       assert_equal "next", pagination_events.first[:payload][:navigation_action]
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -340,7 +335,7 @@ class UssdInstrumentationTest < Minitest::Test
 
       mock_app = lambda { |context| [:prompt, "fallback", []] }
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
+
       # Should not crash and should handle gracefully
       begin
         result = pagination.call(@context)
@@ -351,7 +346,6 @@ class UssdInstrumentationTest < Minitest::Test
         # If an exception occurs, fail the test
         flunk "Pagination should handle edge cases gracefully, but raised: #{e.class}: #{e.message}"
       end
-      
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -366,15 +360,15 @@ class UssdInstrumentationTest < Minitest::Test
       message = "Welcome to FlowChat! " * 3  # Make it moderately long
       choices = {"1" => "Option A", "2" => "Option B", "3" => "Option C"}
       media = {type: :image, url: "https://example.com/large-image.jpg"}
-      
+
       mock_app = lambda { |context| [:prompt, message, choices, media] }
       pagination = FlowChat::Ussd::Middleware::Pagination.new(mock_app)
-      
+
       pagination.call(@context)
 
       # If content was long enough to paginate, should have instrumentation
       pagination_events = @test_events.select { |e| e[:name] == "pagination.triggered.flow_chat" }
-      
+
       if pagination_events.any?
         event = pagination_events.first
         assert_equal 1, event[:payload][:current_page]
@@ -382,7 +376,6 @@ class UssdInstrumentationTest < Minitest::Test
         # Content length should include rendered message + media + choices
         assert event[:payload][:content_length] > message.length
       end
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -391,7 +384,7 @@ class UssdInstrumentationTest < Minitest::Test
   def test_all_event_types_are_instrumented
     # Verify all platform-agnostic event constants exist and are properly formatted
     events = FlowChat::Instrumentation::Events
-    
+
     # New platform-agnostic events (scalable approach)
     assert_equal "message.received", events::MESSAGE_RECEIVED
     assert_equal "message.sent", events::MESSAGE_SENT
@@ -410,12 +403,12 @@ class UssdInstrumentationTest < Minitest::Test
     request.define_singleton_method(:params) { params }
     controller.define_singleton_method(:request) { request }
     controller.define_singleton_method(:render) { |options| "rendered content" }
-    
+
     context = FlowChat::Context.new
     context["controller"] = controller
     context["request.msisdn"] = "+256700123456"
     context["request.id"] = "test_session_123"
-    
+
     # Mock app to be called by gateway
     mock_app = lambda { |ctx| [:prompt, "Test response", []] }
     gateway = FlowChat::Ussd::Gateway::Nalo.new(mock_app)
@@ -448,15 +441,15 @@ class UssdInstrumentationTest < Minitest::Test
       request.define_singleton_method(:params) { params }
       controller.define_singleton_method(:request) { request }
       controller.define_singleton_method(:render) { |options| "rendered content" }
-      
+
       context = FlowChat::Context.new
       context["controller"] = controller
-      
+
       # Mock app to be called by gateway
       mock_app = lambda { |ctx| [:prompt, "Test response", []] }
       gateway = FlowChat::Ussd::Gateway::Nalo.new(mock_app)
       gateway.call(context)
-      
+
       # Also trigger pagination
       long_content = "A" * 50
       mock_pagination_app = lambda { |ctx| [:prompt, long_content, []] }
@@ -484,7 +477,6 @@ class UssdInstrumentationTest < Minitest::Test
         assert payload.key?(:page_limit), "Pagination events should have page_limit"
         assert payload.key?(:navigation_action), "Pagination events should have navigation_action"
       end
-
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
     end
@@ -505,4 +497,4 @@ class UssdInstrumentationTest < Minitest::Test
     controller.define_singleton_method(:render) { |options| "rendered content" }
     controller
   end
-end 
+end

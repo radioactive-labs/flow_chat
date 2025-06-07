@@ -8,7 +8,7 @@ module FlowChat
         def initialize!
           setup_log_subscriber if FlowChat::Config.logger
           setup_metrics_collector
-          
+
           FlowChat.logger&.info { "FlowChat::Instrumentation: Initialized with logging and metrics collection" }
         end
 
@@ -22,7 +22,7 @@ module FlowChat
         def setup_logging!(options = {})
           return if @log_subscriber_setup
 
-          require_relative 'log_subscriber'
+          require_relative "log_subscriber"
           setup_log_subscriber(options)
           @log_subscriber_setup = true
         end
@@ -31,7 +31,7 @@ module FlowChat
         def setup_metrics!(options = {})
           return if @metrics_collector_setup
 
-          require_relative 'metrics_collector'
+          require_relative "metrics_collector"
           setup_metrics_collector(options)
           @metrics_collector_setup = true
         end
@@ -40,8 +40,8 @@ module FlowChat
         def cleanup!
           @log_subscriber = nil
           @metrics_collector = nil
-          
-          # Note: ActiveSupport::Notifications doesn't provide an easy way to 
+
+          # Note: ActiveSupport::Notifications doesn't provide an easy way to
           # unsubscribe all subscribers, so this is mainly for reference cleanup
           FlowChat.logger&.info { "FlowChat::Instrumentation: Cleaned up instrumentation" }
         end
@@ -64,7 +64,7 @@ module FlowChat
         # Instrument a one-off event
         def instrument(event_name, payload = {}, &block)
           full_event_name = "#{event_name}.flow_chat"
-          
+
           enriched_payload = {
             timestamp: Time.current
           }.merge(payload).compact
@@ -103,7 +103,7 @@ module FlowChat
           return if @log_subscriber
 
           @log_subscriber = FlowChat::Instrumentation::LogSubscriber.new
-          
+
           # Manually subscribe to all FlowChat events
           subscribe_to_events
         end
@@ -113,7 +113,7 @@ module FlowChat
           subscribe_event("flow.execution.start.flow_chat", :flow_execution_start)
           subscribe_event("flow.execution.end.flow_chat", :flow_execution_end)
           subscribe_event("flow.execution.error.flow_chat", :flow_execution_error)
-          
+
           # Session events
           subscribe_event("session.created.flow_chat", :session_created)
           subscribe_event("session.destroyed.flow_chat", :session_destroyed)
@@ -121,7 +121,7 @@ module FlowChat
           subscribe_event("session.data.set.flow_chat", :session_data_set)
           subscribe_event("session.cache.hit.flow_chat", :session_cache_hit)
           subscribe_event("session.cache.miss.flow_chat", :session_cache_miss)
-          
+
           # Platform-agnostic events (new scalable approach)
           subscribe_event("message.received.flow_chat", :message_received)
           subscribe_event("message.sent.flow_chat", :message_sent)
@@ -130,11 +130,11 @@ module FlowChat
           subscribe_event("api.request.flow_chat", :api_request)
           subscribe_event("media.upload.flow_chat", :media_upload)
           subscribe_event("pagination.triggered.flow_chat", :pagination_triggered)
-          
+
           # Middleware events
           subscribe_event("middleware.before.flow_chat", :middleware_before)
           subscribe_event("middleware.after.flow_chat", :middleware_after)
-          
+
           # Context events
           subscribe_event("context.created.flow_chat", :context_created)
         end
@@ -152,4 +152,4 @@ module FlowChat
       end
     end
   end
-end 
+end

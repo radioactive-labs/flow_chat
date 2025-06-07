@@ -88,4 +88,4 @@ module FlowChat
       raise FlowChat::Interrupt::Terminate.new(msg, media: media)
     end
   end
-end 
+end

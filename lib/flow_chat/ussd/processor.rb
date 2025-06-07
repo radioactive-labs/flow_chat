@@ -20,19 +20,19 @@ module FlowChat
 
       def configure_middleware_stack(builder)
         FlowChat.logger.debug { "Ussd::Processor: Configuring USSD middleware stack" }
-        
+
         builder.use FlowChat::Session::Middleware
         FlowChat.logger.debug { "Ussd::Processor: Added Session::Middleware" }
-        
+
         builder.use FlowChat::Ussd::Middleware::Pagination
         FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::Pagination" }
-        
+
         builder.use middleware
         FlowChat.logger.debug { "Ussd::Processor: Added custom middleware" }
 
         builder.use FlowChat::Ussd::Middleware::ChoiceMapper
         FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::ChoiceMapper" }
-        
+
         builder.use FlowChat::Ussd::Middleware::Executor
         FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::Executor" }
       end

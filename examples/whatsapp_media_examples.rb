@@ -22,7 +22,7 @@ class MediaFlow < FlowChat::Flow
     end
 
     # Send media with prompts
-    feedback = app.screen(:feedback) do |prompt|
+    app.screen(:feedback) do |prompt|
       prompt.ask "What do you think?",
         media: {
           type: :image,
@@ -42,7 +42,7 @@ class MediaFlow < FlowChat::Flow
 
   def handle_user_media
     media_type = app.media["type"]
-    
+
     case media_type
     when "image"
       app.say "Thanks for the image! Processing..."
@@ -71,16 +71,16 @@ class MediaService
   def send_order_confirmation(phone_number, order_id, invoice_url)
     @client.send_document(phone_number, invoice_url, "Order ##{order_id} confirmed!", "invoice.pdf")
     @client.send_buttons(phone_number, "Order confirmed! 🛍️", [
-      { id: 'track', title: 'Track Order' },
-      { id: 'support', title: 'Contact Support' }
+      {id: "track", title: "Track Order"},
+      {id: "support", title: "Contact Support"}
     ])
   end
 
   def process_user_media(media_id, media_type, user_phone)
     # Download and process media
-    media_url = @client.get_media_url(media_id)
+    @client.get_media_url(media_id)
     media_content = @client.download_media(media_id)
-    
+
     # Process based on type
     case media_type
     when "image"
@@ -115,17 +115,17 @@ class NotificationController < ApplicationController
   def send_media_notification
     service = MediaService.new
     service.send_welcome_package(params[:phone], params[:name])
-    render json: { status: 'sent' }
+    render json: {status: "sent"}
   end
 
   def send_order_confirmation
     service = MediaService.new
     service.send_order_confirmation(
-      params[:phone], 
+      params[:phone],
       params[:order_id],
       generate_invoice_url(params[:order_id])
     )
-    render json: { status: 'sent' }
+    render json: {status: "sent"}
   end
 
   private

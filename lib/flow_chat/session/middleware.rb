@@ -2,10 +2,9 @@ module FlowChat
   module Session
     class Middleware
       include FlowChat::Instrumentation
-      
-      
+
       attr_reader :context
-      
+
       def initialize(app)
         @app = app
         FlowChat.logger.debug { "Session::Middleware: Initialized session middleware" }
@@ -15,21 +14,21 @@ module FlowChat
         @context = context
         session_id = session_id(context)
         FlowChat.logger.debug { "Session::Middleware: Generated session ID: #{session_id}" }
-        
+
         context["session.id"] = session_id
         context.session = context["session.store"].new(context)
-        
+
         # Use instrumentation instead of direct logging for session creation
         instrument(Events::SESSION_CREATED, {
           session_id: session_id,
           store_type: context["session.store"].name,
           gateway: context["request.gateway"]
         })
-        
+
         FlowChat.logger.debug { "Session::Middleware: Session store: #{context["session.store"].class.name}" }
-        
+
         result = @app.call(context)
-        
+
         FlowChat.logger.debug { "Session::Middleware: Session processing completed for #{session_id}" }
         result
       rescue => error
@@ -42,9 +41,9 @@ module FlowChat
       def session_id(context)
         gateway = context["request.gateway"]
         flow_name = context["flow.name"]
-        
+
         FlowChat.logger.debug { "Session::Middleware: Building session ID for gateway=#{gateway}, flow=#{flow_name}" }
-        
+
         case gateway
         when :whatsapp_cloud_api
           # For WhatsApp, use phone number + flow name for consistent sessions

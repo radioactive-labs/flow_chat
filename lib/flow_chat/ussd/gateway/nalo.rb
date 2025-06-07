@@ -5,10 +5,9 @@ module FlowChat
     module Gateway
       class Nalo
         include FlowChat::Instrumentation
-        
-        
+
         attr_reader :context
-        
+
         def initialize(app)
           @app = app
         end
@@ -40,13 +39,13 @@ module FlowChat
 
           # Process the request and instrument the response
           type, prompt, choices, media = @app.call(context)
-          
+
           # Instrument message sent using new scalable approach
           instrument(Events::MESSAGE_SENT, {
             to: context["request.msisdn"],
             session_id: context["request.id"],
             message: context.input || "",
-            message_type: type == :prompt ? "prompt" : "terminal",
+            message_type: (type == :prompt) ? "prompt" : "terminal",
             gateway: :nalo,
             platform: :ussd,
             content_length: prompt.to_s.length,

@@ -40,27 +40,27 @@ class CustomWhatsappController < ApplicationController
 
   def build_whatsapp_config
     config = FlowChat::Whatsapp::Configuration.new
-    
+
     case Rails.env
-    when 'development', 'test'
+    when "development", "test"
       config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
       config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
       config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
       config.app_secret = ENV["WHATSAPP_APP_SECRET"]
       config.skip_signature_validation = true  # Skip for easier development
-      
-    when 'staging', 'production'
+
+    when "staging", "production"
       config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
       config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
       config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
       config.app_secret = ENV["WHATSAPP_APP_SECRET"]
       config.skip_signature_validation = false  # Always validate in production
-      
+
       if config.app_secret.blank?
         raise "WHATSAPP_APP_SECRET required for signature validation in #{Rails.env}"
       end
     end
-    
+
     config
   end
 end

@@ -116,7 +116,7 @@ module FlowChat
           }
         when :video
           {
-            type: "video", 
+            type: "video",
             video: {link: url}
           }
         when :document
@@ -183,4 +183,4 @@ module FlowChat
       end
     end
   end
-end 
+end

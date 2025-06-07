@@ -68,9 +68,8 @@ module FlowChat
           increment_counter("sessions.data.set")
         end
 
-
         ActiveSupport::Notifications.subscribe("message.received.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           increment_counter("#{platform}.messages.received")
           if event.payload[:message_type]
             increment_counter("#{platform}.messages.received.by_type.#{event.payload[:message_type]}")
@@ -78,7 +77,7 @@ module FlowChat
         end
 
         ActiveSupport::Notifications.subscribe("message.sent.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           increment_counter("#{platform}.messages.sent")
           if event.payload[:message_type]
             increment_counter("#{platform}.messages.sent.by_type.#{event.payload[:message_type]}")
@@ -87,12 +86,12 @@ module FlowChat
         end
 
         ActiveSupport::Notifications.subscribe("webhook.verified.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           increment_counter("#{platform}.webhook.verified")
         end
 
         ActiveSupport::Notifications.subscribe("webhook.failed.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           increment_counter("#{platform}.webhook.failures")
           if event.payload[:reason]
             increment_counter("#{platform}.webhook.failures.by_reason.#{event.payload[:reason]}")
@@ -100,7 +99,7 @@ module FlowChat
         end
 
         ActiveSupport::Notifications.subscribe("media.upload.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           if event.payload[:success] != false
             increment_counter("#{platform}.media.uploads.success")
             if event.payload[:size]
@@ -113,7 +112,7 @@ module FlowChat
         end
 
         ActiveSupport::Notifications.subscribe("pagination.triggered.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           increment_counter("#{platform}.pagination.triggered")
           if event.payload[:content_length]
             track_histogram("#{platform}.pagination.content_length", event.payload[:content_length])
@@ -121,7 +120,7 @@ module FlowChat
         end
 
         ActiveSupport::Notifications.subscribe("api.request.flow_chat") do |event|
-          platform = event.payload[:platform] || 'unknown'
+          platform = event.payload[:platform] || "unknown"
           if event.payload[:success]
             increment_counter("#{platform}.api.requests.success")
           else
@@ -146,10 +145,10 @@ module FlowChat
         @mutex.synchronize do
           @metrics[timing_key] ||= []
           @metrics[timing_key] << duration_ms
-          
+
           # Keep only last 1000 measurements for memory efficiency
           @metrics[timing_key] = @metrics[timing_key].last(1000) if @metrics[timing_key].size > 1000
-          
+
           # Calculate and store aggregates
           timings = @metrics[timing_key]
           @metrics["#{key}.avg"] = timings.sum / timings.size
@@ -166,10 +165,10 @@ module FlowChat
         @mutex.synchronize do
           @metrics[histogram_key] ||= []
           @metrics[histogram_key] << value
-          
+
           # Keep only last 1000 measurements
           @metrics[histogram_key] = @metrics[histogram_key].last(1000) if @metrics[histogram_key].size > 1000
-          
+
           # Calculate aggregates
           values = @metrics[histogram_key]
           @metrics["#{key}.total"] = values.sum
@@ -181,18 +180,18 @@ module FlowChat
 
       def percentile(array, percentile)
         return nil if array.empty?
-        
+
         sorted = array.sort
         k = (percentile / 100.0) * (sorted.length - 1)
         f = k.floor
         c = k.ceil
-        
+
         return sorted[k] if f == c
-        
+
         d0 = sorted[f] * (c - k)
         d1 = sorted[c] * (k - f)
         d0 + d1
       end
     end
   end
-end 
+end

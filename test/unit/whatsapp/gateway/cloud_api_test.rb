@@ -323,13 +323,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_simulator_mode_via_request_parameter
     # Set up global simulator secret
     FlowChat::Config.simulator_secret = "test_simulator_secret_123"
-    
+
     # Generate valid simulator cookie
     timestamp = Time.now.to_i
     message = "simulator:#{timestamp}"
     signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), "test_simulator_secret_123", message)
     valid_cookie = "#{timestamp}:#{signature}"
-    
+
     # Even if global mode is inline, simulator parameter should override
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
       mock_client = Minitest::Mock.new
@@ -345,7 +345,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
             "flowchat_simulator" => valid_cookie
           }
         )
-        
+
         # Enable simulator mode for this test
         context["enable_simulator"] = true
 
@@ -429,13 +429,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Set up app_secret for signature validation and global simulator secret
     @mock_config.app_secret = "test_app_secret"
     FlowChat::Config.simulator_secret = "test_simulator_secret_123"
-    
+
     # Generate valid simulator cookie
     timestamp = Time.now.to_i
     message = "simulator:#{timestamp}"
     signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), "test_simulator_secret_123", message)
     valid_cookie = "#{timestamp}:#{signature}"
-    
+
     # Even if global mode is inline, simulator parameter should override and skip validation
     FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
       mock_client = Minitest::Mock.new
@@ -444,14 +444,14 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       FlowChat::Whatsapp::Client.stub(:new, mock_client) do
         # App returns new format: [type, message, choices, media]
         gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-        
+
         payload_hash = create_text_message_payload("Hello", "wamid.test123")
         payload_json = payload_hash.to_json
-        
-        # Add simulator_mode to body - no webhook signature provided, should be skipped  
+
+        # Add simulator_mode to body - no webhook signature provided, should be skipped
         payload_with_simulator = JSON.parse(payload_json)
         payload_with_simulator["simulator_mode"] = true
-        
+
         context = create_context_with_request(
           method: :post,
           body: payload_with_simulator.to_json,
@@ -459,7 +459,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
             "flowchat_simulator" => valid_cookie
           }
         )
-        
+
         # Enable simulator mode for this test
         context["enable_simulator"] = true
 
@@ -482,17 +482,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_valid_webhook_signature
     # Set up app_secret for signature validation
     @mock_config.app_secret = "test_app_secret"
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
     payload_json = payload_hash.to_json
-    
+
     # Calculate valid HMAC-SHA256 signature
     signature = OpenSSL::HMAC.hexdigest(
       OpenSSL::Digest.new("sha256"),
       "test_app_secret",
       payload_json
     )
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_json,
@@ -500,10 +500,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "X-Hub-Signature-256" => "sha256=#{signature}"
       }
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should process successfully with valid signature
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
@@ -513,10 +513,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_invalid_webhook_signature
     # Set up app_secret for signature validation
     @mock_config.app_secret = "test_app_secret"
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
     payload_json = payload_hash.to_json
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_json,
@@ -524,10 +524,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "X-Hub-Signature-256" => "sha256=invalid_signature_here"
       }
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should reject with unauthorized status
     assert_equal :unauthorized, context.controller.last_head_status
     assert_nil context.input
@@ -536,19 +536,19 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_missing_webhook_signature_header
     # Set up app_secret for signature validation
     @mock_config.app_secret = "test_app_secret"
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json,
       headers: {skip_auto_signature: true}  # Skip auto-signature generation
       # No signature header provided
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should reject with unauthorized status
     assert_equal :unauthorized, context.controller.last_head_status
     assert_nil context.input
@@ -557,9 +557,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_malformed_webhook_signature_header
     # Set up app_secret for signature validation
     @mock_config.app_secret = "test_app_secret"
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json,
@@ -567,10 +567,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "X-Hub-Signature-256" => "malformed_header_without_sha256_prefix"
       }
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should reject with unauthorized status
     assert_equal :unauthorized, context.controller.last_head_status
     assert_nil context.input
@@ -579,17 +579,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_webhook_validation_skipped_without_app_secret
     # Don't set app_secret (or set to nil/empty)
     @mock_config.app_secret = nil
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json
       # No signature header - should raise exception without app_secret
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-    
+
     # Should raise ConfigurationError when app_secret is missing and validation not explicitly disabled
     assert_raises(FlowChat::Whatsapp::ConfigurationError) do
       gateway.call(context)
@@ -599,17 +599,17 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_webhook_validation_skipped_with_empty_app_secret
     # Set app_secret to empty string
     @mock_config.app_secret = ""
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json
       # No signature header - should raise exception with empty app_secret
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-    
+
     # Should raise ConfigurationError when app_secret is empty and validation not explicitly disabled
     assert_raises(FlowChat::Whatsapp::ConfigurationError) do
       gateway.call(context)
@@ -620,18 +620,18 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Explicitly disable signature validation
     @mock_config.app_secret = nil
     @mock_config.skip_signature_validation = true
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json
       # No signature header - should be fine when explicitly disabled
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should process successfully when validation is explicitly disabled
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
@@ -642,9 +642,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Test that when validation is disabled, we don't even check the signature
     @mock_config.app_secret = "test_secret"
     @mock_config.skip_signature_validation = true
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json,
@@ -652,10 +652,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "X-Hub-Signature-256" => "sha256=completely_invalid_signature"
       }
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should process successfully even with invalid signature when validation is disabled
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
@@ -664,21 +664,21 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   def test_configuration_error_message_provides_helpful_guidance
     @mock_config.app_secret = nil
-    
+
     payload_hash = create_text_message_payload("Hello", "wamid.test123")
-    
+
     context = create_context_with_request(
       method: :post,
       body: payload_hash.to_json
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-    
+
     # Should raise ConfigurationError with helpful message
     error = assert_raises(FlowChat::Whatsapp::ConfigurationError) do
       gateway.call(context)
     end
-    
+
     assert_includes error.message, "app_secret is required"
     assert_includes error.message, "skip_signature_validation=true"
   end
@@ -686,20 +686,20 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def test_signature_validation_with_different_body_content
     # Test that signature validation properly compares against actual body content
     @mock_config.app_secret = "test_app_secret"
-    
+
     original_payload = create_text_message_payload("Hello", "wamid.test123")
     original_json = original_payload.to_json
-    
+
     # Calculate signature for original payload
     valid_signature = OpenSSL::HMAC.hexdigest(
       OpenSSL::Digest.new("sha256"),
       "test_app_secret",
       original_json
     )
-    
+
     # But send a different payload with the same signature
     different_payload = create_text_message_payload("Different message", "wamid.test456")
-    
+
     context = create_context_with_request(
       method: :post,
       body: different_payload.to_json,
@@ -707,10 +707,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         "X-Hub-Signature-256" => "sha256=#{valid_signature}"
       }
     )
-    
+
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
-    
+
     # Should reject because signature doesn't match the actual body
     assert_equal :unauthorized, context.controller.last_head_status
     assert_nil context.input
@@ -718,28 +718,28 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   def test_secure_compare_method
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-    
+
     # Test identical strings
     assert gateway.send(:secure_compare, "hello", "hello")
-    
+
     # Test different strings of same length
     refute gateway.send(:secure_compare, "hello", "world")
-    
+
     # Test different lengths
     refute gateway.send(:secure_compare, "hello", "hi")
     refute gateway.send(:secure_compare, "hi", "hello")
-    
+
     # Test empty strings
     assert gateway.send(:secure_compare, "", "")
     refute gateway.send(:secure_compare, "", "hello")
-    
+
     # Test with actual HMAC signatures
     secret = "test_secret"
     message = "test_message"
     signature1 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
     signature2 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
     signature3 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, "different_message")
-    
+
     assert gateway.send(:secure_compare, signature1, signature2)
     refute gateway.send(:secure_compare, signature1, signature3)
   end
@@ -760,7 +760,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       )
       headers["X-Hub-Signature-256"] = "sha256=#{signature}"
     end
-    
+
     # Remove the special marker before creating the request
     headers.delete(:skip_auto_signature)
 

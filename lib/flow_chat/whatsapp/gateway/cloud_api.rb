@@ -11,15 +11,14 @@ module FlowChat
     module Gateway
       class CloudApi
         include FlowChat::Instrumentation
-        
-        
+
         attr_reader :context
-        
+
         def initialize(app, config = nil)
           @app = app
           @config = config || FlowChat::Whatsapp::Configuration.from_credentials
           @client = FlowChat::Whatsapp::Client.new(@config)
-          
+
           FlowChat.logger.info { "CloudApi: Initialized WhatsApp Cloud API gateway with phone_number_id: #{@config.phone_number_id}" }
           FlowChat.logger.debug { "CloudApi: Gateway configuration - API base URL: #{FlowChat::Config.whatsapp.api_base_url}" }
         end
@@ -81,7 +80,7 @@ module FlowChat
               challenge: challenge,
               platform: :whatsapp
             })
-            
+
             controller.render plain: challenge
           else
             # Use instrumentation for webhook verification failure
@@ -89,14 +88,14 @@ module FlowChat
               reason: "Invalid verify token",
               platform: :whatsapp
             })
-            
+
             controller.head :forbidden
           end
         end
 
         def handle_webhook(context)
           controller = context.controller
-          
+
           # Parse body
           begin
             parse_request_body(controller.request)
@@ -105,7 +104,7 @@ module FlowChat
             FlowChat.logger.error { "CloudApi: Failed to parse webhook body: #{e.message}" }
             return controller.head :bad_request
           end
-          
+
           # Check for simulator mode parameter in request (before validation)
           # But only enable if valid simulator token is provided
           is_simulator_mode = simulate?(context)
@@ -235,13 +234,13 @@ module FlowChat
 
           # Compare signatures using secure comparison to prevent timing attacks
           signature_valid = secure_compare(expected_signature, calculated_signature)
-          
+
           if signature_valid
             FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
           else
             FlowChat.logger.warn { "CloudApi: Webhook signature validation failed - signatures do not match" }
           end
-          
+
           signature_valid
         rescue FlowChat::Whatsapp::ConfigurationError
           raise
@@ -263,7 +262,7 @@ module FlowChat
         def extract_message_content(message, context)
           message_type = message["type"]
           FlowChat.logger.debug { "CloudApi: Extracting content from #{message_type} message" }
-          
+
           case message_type
           when "text"
             content = message.dig("text", "body")
@@ -318,7 +317,7 @@ module FlowChat
           if response
             _type, prompt, choices, media = response
             rendered_message = render_response(prompt, choices, media)
-            
+
             # Queue only the response delivery asynchronously
             send_data = {
               msisdn: context["request.msisdn"],
@@ -348,7 +347,7 @@ module FlowChat
           if response
             _type, prompt, choices, media = response
             rendered_message = render_response(prompt, choices, media)
-            
+
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via WhatsApp API
             message_payload = @client.build_message_payload(rendered_message, context["request.msisdn"])
@@ -372,7 +371,7 @@ module FlowChat
         def simulate?(context)
           # Check if simulator mode is enabled for this processor
           return false unless context["enable_simulator"]
-          
+
           # Then check if simulator mode is requested and valid
           @body.dig("simulator_mode") && valid_simulator_cookie?(context)
         end
@@ -380,27 +379,27 @@ module FlowChat
         def valid_simulator_cookie?(context)
           simulator_secret = FlowChat::Config.simulator_secret
           return false unless simulator_secret && !simulator_secret.empty?
-          
+
           # Check for simulator cookie
           request = context.controller.request
           simulator_cookie = request.cookies["flowchat_simulator"]
           return false unless simulator_cookie
-          
+
           # Verify the cookie is a valid HMAC signature
           # Cookie format: "timestamp:signature" where signature = HMAC(simulator_secret, "simulator:timestamp")
           begin
             timestamp_str, signature = simulator_cookie.split(":", 2)
             return false unless timestamp_str && signature
-            
+
             # Check timestamp is recent (within 24 hours for reasonable session duration)
             timestamp = timestamp_str.to_i
             return false if timestamp <= 0
             return false if (Time.now.to_i - timestamp).abs > 86400 # 24 hours
-            
+
             # Calculate expected signature
             message = "simulator:#{timestamp_str}"
             expected_signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
-            
+
             # Use secure comparison
             secure_compare(signature, expected_signature)
           rescue => e

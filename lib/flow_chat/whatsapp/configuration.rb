@@ -18,7 +18,7 @@ module FlowChat
         @business_account_id = nil
         @skip_signature_validation = false
 
-        FlowChat.logger.debug { "WhatsApp::Configuration: Initialized configuration with name: #{name || 'anonymous'}" }
+        FlowChat.logger.debug { "WhatsApp::Configuration: Initialized configuration with name: #{name || "anonymous"}" }
 
         register_as(name) if name.present?
       end
@@ -26,7 +26,7 @@ module FlowChat
       # Load configuration from Rails credentials or environment variables
       def self.from_credentials
         FlowChat.logger.info { "WhatsApp::Configuration: Loading configuration from credentials/environment" }
-        
+
         config = new(nil)
 
         if defined?(Rails) && Rails.application.credentials.whatsapp
@@ -107,10 +107,10 @@ module FlowChat
       end
 
       def valid?
-        is_valid = access_token && !access_token.to_s.empty? && 
-                   phone_number_id && !phone_number_id.to_s.empty? && 
-                   verify_token && !verify_token.to_s.empty?
-        
+        is_valid = access_token && !access_token.to_s.empty? &&
+          phone_number_id && !phone_number_id.to_s.empty? &&
+          verify_token && !verify_token.to_s.empty?
+
         FlowChat.logger.debug { "WhatsApp::Configuration: Configuration valid: #{is_valid}" }
         is_valid
       end

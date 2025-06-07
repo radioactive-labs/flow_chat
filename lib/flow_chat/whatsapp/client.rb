@@ -8,7 +8,7 @@ module FlowChat
   module Whatsapp
     class Client
       include FlowChat::Instrumentation
-      
+
       def initialize(config)
         @config = config
         FlowChat.logger.info { "WhatsApp::Client: Initialized WhatsApp client for phone_number_id: #{@config.phone_number_id}" }
@@ -20,10 +20,10 @@ module FlowChat
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
       def send_message(to, response)
-        type, content, options = response
+        type, content, _ = response
         FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
         FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
-        
+
         result = instrument(Events::MESSAGE_SENT, {
           to: to,
           message_type: type.to_s,
@@ -33,14 +33,14 @@ module FlowChat
           message_data = build_message_payload(response, to)
           send_message_payload(message_data)
         end
-        
-                if result
-          message_id = result.dig('messages', 0, 'id')
+
+        if result
+          message_id = result.dig("messages", 0, "id")
           FlowChat.logger.debug { "WhatsApp::Client: Message sent successfully to #{to}, message_id: #{message_id}" }
-      else
-        FlowChat.logger.error { "WhatsApp::Client: Failed to send message to #{to}" }
+        else
+          FlowChat.logger.error { "WhatsApp::Client: Failed to send message to #{to}" }
         end
-        
+
         result
       end
 
@@ -97,7 +97,7 @@ module FlowChat
       # @param mime_type [String] Optional MIME type for URLs (e.g., 'image/jpeg')
       # @return [Hash] API response
       def send_image(to, image_url_or_id, caption = nil, mime_type = nil)
-        FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? 'URL' : 'Media ID'}" }
+        FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? "URL" : "Media ID"}" }
         send_media_message(to, :image, image_url_or_id, caption: caption, mime_type: mime_type)
       end
 
@@ -153,7 +153,7 @@ module FlowChat
       # @raise [StandardError] If upload fails
       def upload_media(file_path_or_io, mime_type, filename = nil)
         FlowChat.logger.info { "WhatsApp::Client: Uploading media file - type: #{mime_type}, filename: #{filename}" }
-        
+
         raise ArgumentError, "mime_type is required" if mime_type.nil? || mime_type.empty?
 
         file_size = nil
@@ -220,7 +220,7 @@ module FlowChat
             media_id = data["id"]
             if media_id
               FlowChat.logger.info { "WhatsApp::Client: Media upload successful - media_id: #{media_id}" }
-              { success: true, media_id: media_id }
+              {success: true, media_id: media_id}
             else
               FlowChat.logger.error { "WhatsApp::Client: Media upload failed - no media_id in response: #{data}" }
               raise StandardError, "Failed to upload media: #{data}"
@@ -230,11 +230,11 @@ module FlowChat
             raise StandardError, "Media upload failed: #{response.body}"
           end
         end
-        
+
         result[:media_id]
       rescue => error
         FlowChat.logger.error { "WhatsApp::Client: Media upload exception: #{error.class.name}: #{error.message}" }
-        
+
         # Instrument the error
         instrument(Events::MEDIA_UPLOAD, {
           filename: filename,
@@ -244,7 +244,7 @@ module FlowChat
           error: error.message,
           platform: :whatsapp
         })
-        
+
         raise
       ensure
         file&.close if file_path_or_io.is_a?(String)
@@ -468,9 +468,9 @@ module FlowChat
       def send_message_payload(message_data)
         to = message_data[:to]
         message_type = message_data[:type]
-        
+
         FlowChat.logger.debug { "WhatsApp::Client: Sending API request to #{to} - type: #{message_type}" }
-        
+
         uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true

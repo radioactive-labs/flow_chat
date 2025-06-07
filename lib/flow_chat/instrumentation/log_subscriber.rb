@@ -65,9 +65,9 @@ module FlowChat
       # Platform-agnostic events (new scalable approach)
       def message_received(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
-        
+
         case platform.to_sym
         when :whatsapp
           contact_info = payload[:contact_name] ? " (#{payload[:contact_name]})" : ""
@@ -81,10 +81,10 @@ module FlowChat
 
       def message_sent(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         duration = event.duration.round(2)
-        
+
         case platform.to_sym
         when :whatsapp
           FlowChat.logger.info { "#{platform_name} Message Sent: #{payload[:to]} - Type: #{payload[:message_type]} (#{duration}ms) [Length: #{payload[:content_length]} chars]" }
@@ -97,24 +97,24 @@ module FlowChat
 
       def webhook_verified(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         FlowChat.logger.info { "#{platform_name} Webhook Verified Successfully [Challenge: #{payload[:challenge]}]" }
       end
 
       def webhook_failed(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         FlowChat.logger.warn { "#{platform_name} Webhook Verification Failed: #{payload[:reason]}" }
       end
 
       def media_upload(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         duration = event.duration.round(2)
-        
+
         if payload[:success] != false  # Check for explicit false, not just falsy
           FlowChat.logger.info { "#{platform_name} Media Upload: #{payload[:filename]} (#{format_bytes(payload[:size])}, #{duration}ms) - Success" }
         else
@@ -124,17 +124,17 @@ module FlowChat
 
       def pagination_triggered(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         FlowChat.logger.info { "#{platform_name} Pagination Triggered: Page #{payload[:current_page]}/#{payload[:total_pages]} (#{payload[:content_length]} chars) [Session: #{payload[:session_id]}]" }
       end
 
       def api_request(event)
         payload = event.payload
-        platform = payload[:platform] || 'unknown'
+        platform = payload[:platform] || "unknown"
         platform_name = format_platform_name(platform)
         duration = event.duration.round(2)
-        
+
         if payload[:success]
           FlowChat.logger.debug { "#{platform_name} API Request: #{payload[:method]} #{payload[:endpoint]} (#{duration}ms) - Success" }
         else
@@ -145,7 +145,7 @@ module FlowChat
       # Context events
       def context_created(event)
         payload = event.payload
-        FlowChat.logger.debug { "Context Created [Gateway: #{payload[:gateway] || 'unknown'}]" }
+        FlowChat.logger.debug { "Context Created [Gateway: #{payload[:gateway] || "unknown"}]" }
       end
 
       private
@@ -153,8 +153,8 @@ module FlowChat
       # Format platform name for display
       def format_platform_name(platform)
         case platform.to_sym
-        when :whatsapp then 'WhatsApp'
-        when :ussd then 'USSD'
+        when :whatsapp then "WhatsApp"
+        when :ussd then "USSD"
         else platform.to_s.capitalize
         end
       end
@@ -162,7 +162,7 @@ module FlowChat
       # Format bytes in a human-readable way
       def format_bytes(bytes)
         return "unknown size" unless bytes
-        
+
         if bytes < 1024
           "#{bytes} bytes"
         elsif bytes < 1024 * 1024
@@ -173,4 +173,4 @@ module FlowChat
       end
     end
   end
-end 
+end

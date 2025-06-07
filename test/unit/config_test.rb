@@ -179,7 +179,7 @@ class ConfigTest < Minitest::Test
 
   def test_combine_validation_error_with_message_can_be_changed
     original_setting = FlowChat::Config.combine_validation_error_with_message
-    
+
     # Should be able to change the setting
     FlowChat::Config.combine_validation_error_with_message = false
     assert_equal false, FlowChat::Config.combine_validation_error_with_message

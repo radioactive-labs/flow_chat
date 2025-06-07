@@ -1,10 +1,10 @@
 module FlowChat
   class Context
     include FlowChat::Instrumentation
-    
+
     def initialize
       @data = {}.with_indifferent_access
-      
+
       # Use instrumentation for context creation
       self.class.instrument(Events::CONTEXT_CREATED, {
         gateway: @data["request.gateway"]

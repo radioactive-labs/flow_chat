@@ -61,7 +61,7 @@ class WhatsappRendererTest < Minitest::Test
   def test_render_media_with_buttons
     choices = ["Like", "Dislike", "Share"]
     media = {type: :image, url: "https://example.com/photo.jpg"}
-    
+
     renderer = FlowChat::Whatsapp::Renderer.new(
       "What do you think?",
       choices: choices,
@@ -119,13 +119,13 @@ class WhatsappRendererTest < Minitest::Test
   def test_unsupported_header_media_type_raises_error
     media = {type: :audio, url: "https://example.com/audio.mp3"}
     choices = ["Option 1", "Option 2"]
-    
+
     renderer = FlowChat::Whatsapp::Renderer.new("Test", choices: choices, media: media)
-    
+
     error = assert_raises(ArgumentError) do
       renderer.render
     end
-    
+
     assert_includes error.message, "Unsupported header media type: audio"
     assert_includes error.message, "Supported types for button headers: image, video, document, text"
   end
@@ -133,7 +133,7 @@ class WhatsappRendererTest < Minitest::Test
   def test_hash_choices_with_media
     choices = {"option1" => "First Option", "option2" => "Second Option"}
     media = {type: :image, url: "https://example.com/image.jpg"}
-    
+
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices, media: media)
     result = renderer.render
 
@@ -150,7 +150,7 @@ class WhatsappRendererTest < Minitest::Test
   def test_button_title_truncation
     long_title = "This is a very long option title that exceeds twenty characters"
     choices = [long_title].map.with_index { |c, i| [i + 1, c] }.to_h
-    
+
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
     result = renderer.render
 
@@ -185,7 +185,7 @@ class WhatsappRendererTest < Minitest::Test
   def test_list_item_description_for_long_titles
     long_title = "This is a very long option title that should be truncated in the title but appear fully in description"
     choices = [long_title, "Short", "Another option", "Fourth option"].map.with_index { |c, i| [i + 1, c] }.to_h # >3 choices to force list
-    
+
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
     result = renderer.render
 
@@ -193,10 +193,10 @@ class WhatsappRendererTest < Minitest::Test
     assert_equal :interactive_list, result[0]
     assert result[2][:sections].present?, "Sections should be present"
     assert result[2][:sections][0][:rows].present?, "Rows should be present"
-    
+
     item = result[2][:sections][0][:rows][0] # First item with long title
     assert item.present?, "Item should be present"
-    
+
     assert_equal "This is a very long o...", item[:title] # Truncated at 24 chars
     if item[:description]
       # Description is truncated at 72 chars, so check for beginning portion
@@ -204,17 +204,15 @@ class WhatsappRendererTest < Minitest::Test
     end
   end
 
-
   def test_invalid_choices_type_raises_error
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: "invalid")
-    
+
     error = assert_raises(ArgumentError) do
       renderer.render
     end
-    
+
     assert_equal "choices must be a Hash", error.message
   end
-
 
   def test_media_uses_path_fallback
     media = {type: :image, path: "/local/image.jpg"}
@@ -227,11 +225,11 @@ class WhatsappRendererTest < Minitest::Test
   def test_unsupported_media_type_raises_error
     media = {type: :unsupported, url: "https://example.com/file"}
     renderer = FlowChat::Whatsapp::Renderer.new("Test", media: media)
-    
+
     error = assert_raises(ArgumentError) do
       renderer.render
     end
-    
+
     assert_equal "Unsupported media type: unsupported", error.message
   end
-end 
+end

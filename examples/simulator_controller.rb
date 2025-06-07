@@ -23,7 +23,7 @@ class SimulatorController < ApplicationController
         color: "#28a745"
       },
       whatsapp_main: {
-        name: "Main WhatsApp Endpoint", 
+        name: "Main WhatsApp Endpoint",
         description: "Primary WhatsApp webhook",
         processor_type: "whatsapp",
         provider: "cloud_api",
@@ -43,7 +43,7 @@ class SimulatorController < ApplicationController
       whatsapp_legacy: {
         name: "Legacy WhatsApp",
         description: "Legacy endpoint for compatibility",
-        processor_type: "whatsapp", 
+        processor_type: "whatsapp",
         provider: "cloud_api",
         endpoint: "/legacy/whatsapp",
         icon: "📦",
@@ -62,7 +62,7 @@ class SimulatorController < ApplicationController
     "+1234567890"
   end
 
-  # Default test contact name  
+  # Default test contact name
   def default_contact_name
     "Test User"
   end
@@ -81,6 +81,6 @@ end
 # This allows you to test:
 # - Different controller implementations on the same server
 # - Different API versions (v1, v2, etc.)
-# - Multi-tenant endpoints with different configurations  
+# - Multi-tenant endpoints with different configurations
 # - Legacy endpoints alongside new ones
-# - Different flow implementations for different endpoints 
+# - Different flow implementations for different endpoints

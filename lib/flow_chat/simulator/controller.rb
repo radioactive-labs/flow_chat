@@ -4,7 +4,7 @@ module FlowChat
       def flowchat_simulator
         # Set simulator cookie for authentication
         set_simulator_cookie
-        
+
         respond_to do |format|
           format.html do
             render inline: simulator_view_template, layout: false, locals: simulator_locals
@@ -51,7 +51,7 @@ module FlowChat
             color: "#25D366",
             settings: {
               phone_number: default_phone_number,
-              contact_name: default_contact_name,
+              contact_name: default_contact_name
             }
           }
         }
@@ -78,18 +78,18 @@ module FlowChat
       def set_simulator_cookie
         # Get global simulator secret
         simulator_secret = FlowChat::Config.simulator_secret
-        
+
         unless simulator_secret && !simulator_secret.empty?
           raise StandardError, "Simulator secret not configured. Please set FlowChat::Config.simulator_secret to enable simulator mode."
         end
-        
+
         # Generate timestamp-based signed cookie
         timestamp = Time.now.to_i
         message = "simulator:#{timestamp}"
         signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
-        
+
         cookie_value = "#{timestamp}:#{signature}"
-        
+
         # Set secure cookie (valid for 24 hours)
         cookies[:flowchat_simulator] = {
           value: cookie_value,

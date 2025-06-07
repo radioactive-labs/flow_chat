@@ -3,12 +3,12 @@ require "middleware"
 module FlowChat
   class BaseProcessor
     include FlowChat::Instrumentation
-    
+
     attr_reader :middleware
 
     def initialize(controller, enable_simulator: nil)
       FlowChat.logger.debug { "BaseProcessor: Initializing processor for controller #{controller.class.name}" }
-      
+
       @context = FlowChat::Context.new
       @context["controller"] = controller
       @context["enable_simulator"] = enable_simulator.nil? ? (defined?(Rails) && Rails.env.local?) : enable_simulator
@@ -17,7 +17,7 @@ module FlowChat
       FlowChat.logger.debug { "BaseProcessor: Simulator mode #{@context["enable_simulator"] ? "enabled" : "disabled"}" }
 
       yield self if block_given?
-      
+
       FlowChat.logger.debug { "BaseProcessor: Initialized #{self.class.name} successfully" }
     end
 
@@ -58,21 +58,19 @@ module FlowChat
       yield stack if block_given?
 
       FlowChat.logger.debug { "BaseProcessor: Executing middleware stack for #{flow_class.name}##{action}" }
-      
+
       # Instrument flow execution with timing (this will log completion via LogSubscriber)
-      result = instrument(Events::FLOW_EXECUTION_END, {
+      instrument(Events::FLOW_EXECUTION_END, {
         flow_name: flow_class.name.underscore,
         action: action.to_s,
         processor_type: self.class.name
       }) do
         stack.call(@context)
       end
-      
-      result
     rescue => error
       FlowChat.logger.error { "BaseProcessor: Flow execution failed - #{flow_class.name}##{action}, Error: #{error.class.name}: #{error.message}" }
       FlowChat.logger.debug { "BaseProcessor: Stack trace: #{error.backtrace.join("\n")}" }
-      
+
       # Instrument flow execution error (this will log error via LogSubscriber)
       instrument(Events::FLOW_EXECUTION_ERROR, {
         flow_name: flow_class.name.underscore,
@@ -82,7 +80,7 @@ module FlowChat
         error_message: error.message,
         backtrace: error.backtrace&.first(10)
       })
-      
+
       raise
     end
 
@@ -111,7 +109,6 @@ module FlowChat
       raise NotImplementedError, "Subclasses must implement configure_middleware_stack"
     end
 
-    
     attr_reader :context
   end
 end

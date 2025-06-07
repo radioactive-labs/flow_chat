@@ -27,7 +27,7 @@ class MetricsCollectorTest < Minitest::Test
     metrics = @collector.snapshot
     assert_equal 1, metrics["flows.executed"]
     assert_equal 1, metrics["flows.by_name.TestFlow"]
-    
+
     # Check timing metrics (allow some tolerance for timing precision)
     assert_in_delta 150.0, metrics["flows.execution_time.min"], 5.0
     assert_in_delta 150.0, metrics["flows.execution_time.max"], 5.0
@@ -103,7 +103,7 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["whatsapp.messages.received.by_type.text"]
     assert_equal 1, metrics["whatsapp.messages.sent"]
     assert_equal 1, metrics["whatsapp.messages.sent.by_type.text"]
-    
+
     # Check timing for sent messages (allow some tolerance for timing precision)
     assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 5.0
   end
@@ -128,7 +128,7 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["whatsapp.api.requests.success"]
     assert_equal 1, metrics["whatsapp.api.requests.failure"]
     assert_equal 1, metrics["whatsapp.api.requests.failure.by_status.400"]
-    
+
     # Check timing for API requests (allow some tolerance for timing precision)
     assert_in_delta 50.0, metrics["whatsapp.api.request_time.min"], 5.0
     assert_in_delta 250.0, metrics["whatsapp.api.request_time.max"], 5.0
@@ -155,7 +155,7 @@ class MetricsCollectorTest < Minitest::Test
     metrics = @collector.snapshot
     assert_equal 1, metrics["whatsapp.media.uploads.success"]
     assert_equal 1, metrics["whatsapp.media.uploads.failure"]
-    
+
     # Check timing and size metrics (allow some tolerance for timing precision)
     assert_in_delta 100.0, metrics["whatsapp.media.upload_time.min"], 5.0
     assert_in_delta 2000.0, metrics["whatsapp.media.upload_time.max"], 10.0
@@ -195,7 +195,7 @@ class MetricsCollectorTest < Minitest::Test
 
     metrics = @collector.snapshot
     assert_equal 1, metrics["ussd.pagination.triggered"]
-    
+
     # Check content length metrics
     assert_equal 250, metrics["ussd.pagination.content_length.avg"]
   end
@@ -212,12 +212,12 @@ class MetricsCollectorTest < Minitest::Test
     sleep 0.01
 
     metrics = @collector.snapshot
-    
+
     assert_equal 5, metrics["flows.executed"]
     assert_in_delta 100.0, metrics["flows.execution_time.min"], 5.0
     assert_in_delta 300.0, metrics["flows.execution_time.max"], 5.0
     assert_in_delta 200.0, metrics["flows.execution_time.avg"], 5.0  # (100+200+300+150+250)/5
-    
+
     # Check percentiles (sorted: 100, 150, 200, 250, 300) - allow tolerance for timing
     assert_in_delta 200.0, metrics["flows.execution_time.p50"], 5.0  # median
     assert_in_delta 280.0, metrics["flows.execution_time.p95"], 15.0  # 95th percentile - more tolerance
@@ -260,7 +260,7 @@ class MetricsCollectorTest < Minitest::Test
     assert flow_metrics.keys.any? { |k| k.to_s.start_with?("flows.") }
     refute flow_metrics.keys.any? { |k| k.to_s.start_with?("sessions.") }
 
-    # Get only session metrics  
+    # Get only session metrics
     session_metrics = @collector.get_category("sessions")
     assert session_metrics.keys.any? { |k| k.to_s.start_with?("sessions.") }
     refute session_metrics.keys.any? { |k| k.to_s.start_with?("flows.") }
@@ -268,7 +268,7 @@ class MetricsCollectorTest < Minitest::Test
 
   def test_thread_safety
     threads = []
-    
+
     # Start multiple threads publishing events
     10.times do |i|
       threads << Thread.new do
@@ -280,15 +280,15 @@ class MetricsCollectorTest < Minitest::Test
         end
       end
     end
-    
+
     threads.each(&:join)
     sleep 0.1  # Give time for all events to process
 
     metrics = @collector.snapshot
-    
+
     # Should have 100 total executions (10 threads * 10 events each)
     assert_equal 100, metrics["flows.executed"]
-    
+
     # Should have metrics for each flow name
     10.times do |i|
       assert_equal 10, metrics["flows.by_name.TestFlow#{i}"]
@@ -302,4 +302,4 @@ class MetricsCollectorTest < Minitest::Test
       sleep(duration / 1000.0) if duration > 0
     end
   end
-end 
+end

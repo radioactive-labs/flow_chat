@@ -213,7 +213,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
       FlowChat::Config.whatsapp.stub(:background_job_class, "WhatsappBackgroundModeIntegrationTest::TestWhatsappSendJob") do
         # Set up global simulator secret for cookie validation
         FlowChat::Config.simulator_secret = "test_simulator_secret_123"
-        
+
         # Generate valid simulator cookie
         timestamp = Time.now.to_i
         message = "simulator:#{timestamp}"

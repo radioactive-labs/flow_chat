@@ -366,7 +366,7 @@ class PromptTest < Minitest::Test
 
   def test_combine_validation_error_with_message_enabled_by_default
     prompt = FlowChat::Prompt.new("12")
-    
+
     # Default behavior should combine error with original message
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
@@ -383,7 +383,7 @@ class PromptTest < Minitest::Test
     FlowChat::Config.combine_validation_error_with_message = false
 
     prompt = FlowChat::Prompt.new("12")
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
         validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
@@ -401,7 +401,7 @@ class PromptTest < Minitest::Test
     FlowChat::Config.combine_validation_error_with_message = true
 
     prompt = FlowChat::Prompt.new("12")
-    
+
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Enter your age:",
         validate: ->(input) { "Must be at least 18" unless input.to_i >= 18 },
@@ -421,8 +421,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new(nil)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      prompt.ask("Choose size:", 
-        choices: ["Small", "Medium", "Large"], 
+      prompt.ask("Choose size:",
+        choices: ["Small", "Medium", "Large"],
         media: {type: :image, url: "https://example.com/sizes.jpg"})
     end
 
@@ -436,8 +436,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new(nil)
 
     error = assert_raises(ArgumentError) do
-      prompt.ask("Choose color:", 
-        choices: ["Red", "Blue", "Green", "Yellow", "Purple"], 
+      prompt.ask("Choose color:",
+        choices: ["Red", "Blue", "Green", "Yellow", "Purple"],
         media: {type: :image, url: "https://example.com/colors.jpg"})
     end
 
@@ -448,8 +448,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new(nil)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      prompt.ask("Pick one:", 
-        choices: ["Option A", "Option B", "Option C"], 
+      prompt.ask("Pick one:",
+        choices: ["Option A", "Option B", "Option C"],
         media: {type: :video, url: "https://example.com/demo.mp4"})
     end
 
@@ -463,8 +463,8 @@ class PromptTest < Minitest::Test
 
     # Hash with 3 choices should work
     begin
-      prompt.ask("Choose:", 
-        choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma"}, 
+      prompt.ask("Choose:",
+        choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma"},
         media: {type: :image, url: "https://example.com/image.jpg"})
     rescue FlowChat::Interrupt::Prompt
       # Expected interrupt, validation passed
@@ -474,8 +474,8 @@ class PromptTest < Minitest::Test
 
     # Hash with 4 choices should fail
     error = assert_raises(ArgumentError) do
-      prompt.ask("Choose:", 
-        choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma", "d" => "Delta"}, 
+      prompt.ask("Choose:",
+        choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma", "d" => "Delta"},
         media: {type: :image, url: "https://example.com/image.jpg"})
     end
 
@@ -487,7 +487,7 @@ class PromptTest < Minitest::Test
 
     # Should work fine with many choices when no media
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      prompt.ask("Choose from menu:", 
+      prompt.ask("Choose from menu:",
         choices: (1..10).map { |i| "Option #{i}" })
     end
 
@@ -500,7 +500,7 @@ class PromptTest < Minitest::Test
 
     # Should work fine with media when no choices
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      prompt.ask("Look at this:", 
+      prompt.ask("Look at this:",
         media: {type: :image, url: "https://example.com/image.jpg"})
     end
 
@@ -512,8 +512,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new(nil)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      prompt.select("Rate this image:", 
-        ["⭐", "⭐⭐", "⭐⭐⭐"], 
+      prompt.select("Rate this image:",
+        ["⭐", "⭐⭐", "⭐⭐⭐"],
         media: {type: :image, url: "https://example.com/photo.jpg"})
     end
 
@@ -526,8 +526,8 @@ class PromptTest < Minitest::Test
     prompt = FlowChat::Prompt.new(nil)
 
     error = assert_raises(ArgumentError) do
-      prompt.select("Choose difficulty:", 
-        ["Easy", "Medium", "Hard", "Expert", "Nightmare"], 
+      prompt.select("Choose difficulty:",
+        ["Easy", "Medium", "Hard", "Expert", "Nightmare"],
         media: {type: :image, url: "https://example.com/difficulty.jpg"})
     end
 
@@ -556,4 +556,4 @@ class PromptTest < Minitest::Test
     assert_raises(ArgumentError) { prompt.ask("Test", choices: many_choices, media: media) }
     assert_raises(ArgumentError) { prompt.select("Test", many_choices, media: media) }
   end
-end 
+end
