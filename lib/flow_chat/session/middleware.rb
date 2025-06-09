@@ -102,11 +102,44 @@ module FlowChat
         # Add provider/gateway if provider isolation is enabled
         parts << gateway.to_s if @session_options.boundaries.include?(:provider)
 
+        # Add URL if URL isolation is enabled
+        if @session_options.boundaries.include?(:url)
+          url_identifier = get_url_identifier(context)
+          parts << url_identifier if url_identifier.present?
+        end
+
         # Add the session identifier
         parts << identifier if identifier.present?
 
         # Join parts with colons
         parts.join(":")
+      end
+
+      def get_url_identifier(context)
+        request = context.controller&.request
+        return nil unless request
+
+        # Extract host and path for URL boundary
+        host = request.host rescue nil
+        path = request.path rescue nil
+
+        # Create a normalized URL identifier: host + path 
+        # e.g., "example.com/api/v1/ussd" or "tenant1.example.com/ussd"
+        url_parts = []
+        url_parts << host if host.present?
+        url_parts << path.sub(/^\//, '') if path.present? && path != '/'
+
+        # For long URLs, use first part + hash suffix instead of full hash
+        url_identifier = url_parts.join('/').gsub(/[^a-zA-Z0-9._-]/, '_')
+        if url_identifier.length > 50
+          require 'digest'
+          # Take first 41 chars + hash suffix to keep it manageable but recognizable
+          first_part = url_identifier[0, 41]
+          hash_suffix = Digest::SHA256.hexdigest(url_identifier)[0, 8]
+          url_identifier = "#{first_part}_#{hash_suffix}"
+        end
+
+        url_identifier
       end
 
       def hash_phone_number(phone)

@@ -387,6 +387,135 @@ class SessionMiddlewareTest < Minitest::Test
     refute_equal hashed, hashed3
   end
 
+  def test_url_boundary_isolates_sessions_by_url
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    # Mock different request URLs
+    request1 = OpenStruct.new(host: "tenant1.example.com", path: "/ussd")
+    controller1 = OpenStruct.new(request: request1)
+    @context["controller"] = controller1
+    
+    middleware.call(@context)
+    session_id_1 = @context["session.id"]
+    
+    # Reset session.id for next call
+    @context["session.id"] = nil
+    @context.session = nil
+    
+    # Different host should get different session
+    request2 = OpenStruct.new(host: "tenant2.example.com", path: "/ussd")
+    controller2 = OpenStruct.new(request: request2)
+    @context["controller"] = controller2
+    
+    middleware.call(@context)
+    session_id_2 = @context["session.id"]
+    
+    refute_equal session_id_1, session_id_2
+    assert_includes session_id_1, "tenant1.example.com_ussd"
+    assert_includes session_id_2, "tenant2.example.com_ussd"
+  end
+
+  def test_url_boundary_with_path_isolation
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    # Different paths should get different sessions
+    request1 = OpenStruct.new(host: "example.com", path: "/api/v1/ussd")
+    controller1 = OpenStruct.new(request: request1)
+    @context["controller"] = controller1
+    
+    middleware.call(@context)
+    session_id_1 = @context["session.id"]
+    
+    # Reset session.id for next call
+    @context["session.id"] = nil
+    @context.session = nil
+    
+    request2 = OpenStruct.new(host: "example.com", path: "/api/v2/ussd")
+    controller2 = OpenStruct.new(request: request2)
+    @context["controller"] = controller2
+    
+    middleware.call(@context)
+    session_id_2 = @context["session.id"]
+    
+    refute_equal session_id_1, session_id_2
+    assert_includes session_id_1, "example.com_api_v1_ussd"
+    assert_includes session_id_2, "example.com_api_v2_ussd"
+  end
+
+  def test_url_boundary_sanitizes_special_characters
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    request = OpenStruct.new(host: "test.example.com", path: "/api/v1/ussd?param=value")
+    controller = OpenStruct.new(request: request)
+    @context["controller"] = controller
+    
+    middleware.call(@context)
+    session_id = @context["session.id"]
+    
+    # Should sanitize the URL to remove special characters
+    assert_includes session_id, "test.example.com_api_v1_ussd_param_value"
+  end
+
+  def test_url_boundary_handles_long_urls
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    # Create a very long URL
+    long_path = "/api/v1/ussd/with/very/long/path/that/exceeds/fifty/characters/in/length"
+    request = OpenStruct.new(host: "verylongsubdomainnamethatmakestheentireurlverylongindeed.example.com", path: long_path)
+    controller = OpenStruct.new(request: request)
+    @context["controller"] = controller
+    
+    middleware.call(@context)
+    session_id = @context["session.id"]
+    
+    # Should truncate and hash long URLs to keep session keys manageable
+    parts = session_id.split(":")
+    url_part = parts.first  # Get the URL part of the session ID (before the identifier)
+    
+    # Should be exactly 50 characters (41 first part + 1 underscore + 8 char hash)
+    assert_equal 50, url_part.length
+    
+    # Should contain the beginning of the original URL (first 41 characters)
+    assert url_part.start_with?("verylongsubdomainnamethatmakestheentireur")
+    
+    # Should end with underscore + 8 character hash
+    assert_match /_[a-f0-9]{8}$/, url_part
+  end
+
+  def test_url_boundary_handles_root_path
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    request = OpenStruct.new(host: "example.com", path: "/")
+    controller = OpenStruct.new(request: request)
+    @context["controller"] = controller
+    
+    middleware.call(@context)
+    session_id = @context["session.id"]
+    
+    # Root path should just use host
+    assert_includes session_id, "example.com"
+    refute_includes session_id, "example.com/"
+  end
+
+  def test_url_boundary_handles_missing_request
+    @session_options.boundaries = [:url]
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    
+    # No controller/request set
+    @context["controller"] = nil
+    
+    middleware.call(@context)
+    session_id = @context["session.id"]
+    
+    # Should handle gracefully without URL part
+    refute_nil session_id
+  end
+
   private
 
   def refute_ends_with(string, suffix)

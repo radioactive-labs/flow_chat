@@ -52,6 +52,7 @@ Boundaries control how session IDs are constructed, determining when sessions ar
 - **`:flow`** - Separate sessions per flow class
 - **`:platform`** - Separate sessions per platform (ussd, whatsapp)
 - **`:provider`** - Separate sessions per gateway/provider
+- **`:url`** - Separate sessions per request URL (host + path)
 - **`[]`** - Global sessions (no boundaries)
 
 ### Examples
@@ -164,6 +165,31 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
   # Equivalent to: boundaries: [:flow]
 end
 ```
+
+### URL-Based Session Isolation
+
+Perfect for multi-tenant applications:
+
+```ruby
+processor = FlowChat::Ussd::Processor.new(self) do |config|
+  config.use_gateway FlowChat::Ussd::Gateway::Nalo
+  config.use_session_store FlowChat::Session::CacheSessionStore
+  
+  # Isolate sessions by URL (great for multi-tenant SaaS)
+  config.use_url_isolation
+  # Adds :url to existing boundaries
+end
+```
+
+**URL Boundary Examples:**
+- `tenant1.example.com/ussd` vs `tenant2.example.com/ussd` - Different sessions
+- `api.example.com/v1/ussd` vs `api.example.com/v2/ussd` - Different sessions  
+- `dev.example.com/ussd` vs `prod.example.com/ussd` - Different sessions
+
+**URL Processing:**
+- Combines host + path: `example.com/api/v1/ussd`
+- Sanitizes special characters: `tenant-1.com/ussd` → `tenant_1.com/ussd`
+- Hashes long URLs (>50 chars): `verylongdomain.../path` → `url_a1b2c3d4`
 
 ### Global Sessions
 

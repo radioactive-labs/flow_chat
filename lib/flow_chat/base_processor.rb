@@ -63,6 +63,13 @@ module FlowChat
       self
     end
 
+    def use_url_isolation
+      FlowChat.logger.debug { "BaseProcessor: Enabling URL-based session isolation" }
+      current_boundaries = @session_options.boundaries.dup
+      current_boundaries << :url unless current_boundaries.include?(:url)
+      use_session_config(boundaries: current_boundaries)
+    end
+
     def run(flow_class, action)
       # Instrument flow execution (this will log via LogSubscriber)
       instrument(Events::FLOW_EXECUTION_START, {
