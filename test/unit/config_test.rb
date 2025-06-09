@@ -12,6 +12,54 @@ class ConfigTest < Minitest::Test
     assert_respond_to FlowChat::Config, :cache
   end
 
+  def test_session_config_object_accessible
+    assert_respond_to FlowChat::Config, :session
+
+    session_config = FlowChat::Config.session
+    assert_kind_of FlowChat::Config::SessionConfig, session_config
+  end
+
+  def test_session_config_defaults
+    session_config = FlowChat::Config.session
+
+    # Session boundaries defaults
+    assert_equal [:flow, :provider, :platform], session_config.boundaries
+    assert_equal true, session_config.hash_phone_numbers
+    assert_nil session_config.identifier  # Platform chooses default
+
+  end
+
+  def test_session_config_setter_methods
+    original_boundaries = FlowChat::Config.session.boundaries.dup
+    original_hash_phone = FlowChat::Config.session.hash_phone_numbers
+    original_identifier = FlowChat::Config.session.identifier
+
+    begin
+      # Test setters work
+      FlowChat::Config.session.boundaries = [:flow, :provider]
+      FlowChat::Config.session.hash_phone_numbers = false
+      FlowChat::Config.session.identifier = :request_id
+
+      assert_equal [:flow, :provider], FlowChat::Config.session.boundaries
+      assert_equal false, FlowChat::Config.session.hash_phone_numbers
+      assert_equal :request_id, FlowChat::Config.session.identifier
+
+    ensure
+      # Restore original values
+      FlowChat::Config.session.boundaries = original_boundaries
+      FlowChat::Config.session.hash_phone_numbers = original_hash_phone
+      FlowChat::Config.session.identifier = original_identifier
+    end
+  end
+
+  def test_session_config_singleton_instance
+    # Should return the same instance each time
+    config1 = FlowChat::Config.session
+    config2 = FlowChat::Config.session
+
+    assert_same config1, config2
+  end
+
   def test_ussd_config_object_accessible
     assert_respond_to FlowChat::Config, :ussd
 
@@ -28,28 +76,19 @@ class ConfigTest < Minitest::Test
     assert_equal "Back", ussd_config.pagination_back_text
     assert_equal "#", ussd_config.pagination_next_option
     assert_equal "More", ussd_config.pagination_next_text
-
-    # Resumable sessions defaults
-    assert_equal false, ussd_config.resumable_sessions_enabled
-    assert_equal true, ussd_config.resumable_sessions_global
-    assert_equal 300, ussd_config.resumable_sessions_timeout_seconds
   end
 
   def test_ussd_config_setter_methods
     original_page_size = FlowChat::Config.ussd.pagination_page_size
-    original_enabled = FlowChat::Config.ussd.resumable_sessions_enabled
 
     begin
       # Test setters work
       FlowChat::Config.ussd.pagination_page_size = 200
-      FlowChat::Config.ussd.resumable_sessions_enabled = true
 
       assert_equal 200, FlowChat::Config.ussd.pagination_page_size
-      assert_equal true, FlowChat::Config.ussd.resumable_sessions_enabled
     ensure
       # Restore original values
       FlowChat::Config.ussd.pagination_page_size = original_page_size
-      FlowChat::Config.ussd.resumable_sessions_enabled = original_enabled
     end
   end
 
@@ -62,13 +101,17 @@ class ConfigTest < Minitest::Test
   end
 
   def test_config_separation
-    # General config should not have USSD methods
+    # General config should not have specific config methods
     refute_respond_to FlowChat::Config, :pagination_page_size
-    refute_respond_to FlowChat::Config, :resumable_sessions_enabled
+    refute_respond_to FlowChat::Config, :boundaries
 
     # USSD config should not have general methods
     refute_respond_to FlowChat::Config.ussd, :logger
     refute_respond_to FlowChat::Config.ussd, :cache
+
+    # Session config should not have other config methods
+    refute_respond_to FlowChat::Config.session, :pagination_page_size
+    refute_respond_to FlowChat::Config.session, :message_handling_mode
   end
 
   def test_whatsapp_config_object_accessible
@@ -167,9 +210,9 @@ class ConfigTest < Minitest::Test
     refute_respond_to FlowChat::Config.whatsapp, :logger
     refute_respond_to FlowChat::Config.whatsapp, :cache
 
-    # WhatsApp config should not have USSD methods
+    # WhatsApp config should not have other config methods
     refute_respond_to FlowChat::Config.whatsapp, :pagination_page_size
-    refute_respond_to FlowChat::Config.whatsapp, :resumable_sessions_enabled
+    refute_respond_to FlowChat::Config.whatsapp, :boundaries
   end
 
   def test_combine_validation_error_with_message_default

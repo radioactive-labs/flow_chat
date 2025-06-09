@@ -20,8 +20,6 @@ module FlowChat
 
       def configure_middleware_stack(builder)
         FlowChat.logger.debug { "Whatsapp::Processor: Configuring WhatsApp middleware stack" }
-        builder.use FlowChat::Session::Middleware
-        FlowChat.logger.debug { "Whatsapp::Processor: Added Session::Middleware" }
 
         builder.use middleware
         FlowChat.logger.debug { "Whatsapp::Processor: Added custom middleware" }

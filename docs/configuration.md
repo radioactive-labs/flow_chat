@@ -19,6 +19,26 @@ FlowChat::Config.combine_validation_error_with_message = true  # default
 FlowChat.setup_instrumentation!
 ```
 
+## Session Configuration
+
+```ruby
+# Session boundaries control how session IDs are constructed
+FlowChat::Config.session.boundaries = [:flow, :platform]  # default
+FlowChat::Config.session.hash_phone_numbers = true        # hash phone numbers for privacy
+FlowChat::Config.session.identifier = nil                 # let platforms choose (default)
+
+# Available boundary options:
+# :flow - separate sessions per flow class
+# :platform - separate sessions per platform (ussd, whatsapp)  
+# :provider - separate sessions per provider/gateway
+# [] - global sessions (no boundaries)
+
+# Available identifier options:
+# nil - platform chooses default (:request_id for USSD, :msisdn for WhatsApp)
+# :msisdn - use phone number (durable sessions)
+# :request_id - use request ID (ephemeral sessions)
+```
+
 ## USSD Configuration
 
 ```ruby
@@ -28,10 +48,6 @@ FlowChat::Config.ussd.pagination_next_option = "#"        # option to go to next
 FlowChat::Config.ussd.pagination_next_text = "More"       # text for next option
 FlowChat::Config.ussd.pagination_back_option = "0"        # option to go back
 FlowChat::Config.ussd.pagination_back_text = "Back"       # text for back option
-
-# Resumable sessions
-FlowChat::Config.ussd.resumable_sessions_enabled = true   # default
-FlowChat::Config.ussd.resumable_sessions_timeout_seconds = 300  # 5 minutes
 ```
 
 ## WhatsApp Configuration
@@ -174,8 +190,15 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
   # Optional middleware
   config.use_middleware MyCustomMiddleware
   
-  # Optional resumable sessions
-  config.use_resumable_sessions
+  # Configure session boundaries
+  config.use_session_config(
+    boundaries: [:flow, :platform],     # which boundaries to enforce
+    hash_phone_numbers: true,           # hash phone numbers for privacy
+    identifier: :msisdn                 # use MSISDN for durable sessions (optional)
+  )
+  
+  # Shorthand for durable sessions (identifier: :msisdn)
+  config.use_durable_sessions
 end
 ```
 

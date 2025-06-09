@@ -8,6 +8,11 @@ module FlowChat
     # When false, only the validation error message is shown to the user.
     mattr_accessor :combine_validation_error_with_message, default: true
 
+    # Session configuration object
+    def self.session
+      @session ||= SessionConfig.new
+    end
+
     # USSD-specific configuration object
     def self.ussd
       @ussd ||= UssdConfig.new
@@ -18,10 +23,29 @@ module FlowChat
       @whatsapp ||= WhatsappConfig.new
     end
 
+    class SessionConfig
+      attr_accessor :boundaries, :hash_phone_numbers, :identifier
+
+      def initialize
+        # Session boundaries control how session IDs are constructed
+        # :flow = separate sessions per flow
+        # :provider = separate sessions per provider/gateway
+        # :platform = separate sessions per platform (ussd, whatsapp)
+        @boundaries = [:flow, :provider, :platform]
+        
+        # Always hash phone numbers for privacy
+        @hash_phone_numbers = true
+        
+        # Session identifier type (nil = let platforms choose their default)
+        # :msisdn = durable sessions (durable across timeouts)
+        # :request_id = ephemeral sessions (new session each time)
+        @identifier = nil
+      end
+    end
+
     class UssdConfig
       attr_accessor :pagination_page_size, :pagination_back_option, :pagination_back_text,
-        :pagination_next_option, :pagination_next_text,
-        :resumable_sessions_enabled, :resumable_sessions_global, :resumable_sessions_timeout_seconds
+        :pagination_next_option, :pagination_next_text
 
       def initialize
         @pagination_page_size = 140
@@ -29,9 +53,6 @@ module FlowChat
         @pagination_back_text = "Back"
         @pagination_next_option = "#"
         @pagination_next_text = "More"
-        @resumable_sessions_enabled = false
-        @resumable_sessions_global = true
-        @resumable_sessions_timeout_seconds = 300
       end
     end
 

@@ -5,8 +5,9 @@ module FlowChat
 
       attr_reader :context
 
-      def initialize(app)
+      def initialize(app, session_options)
         @app = app
+        @session_options = session_options
         FlowChat.logger.debug { "Session::Middleware: Initialized session middleware" }
       end
 
@@ -19,9 +20,10 @@ module FlowChat
         context.session = context["session.store"].new(context)
 
         # Use instrumentation instead of direct logging for session creation
+        store_type = context["session.store"].name || "$Anonymous"
         instrument(Events::SESSION_CREATED, {
           session_id: session_id,
-          store_type: context["session.store"].name,
+          store_type: store_type,
           gateway: context["request.gateway"]
         })
 
@@ -40,27 +42,77 @@ module FlowChat
 
       def session_id(context)
         gateway = context["request.gateway"]
+        platform = context["request.platform"]
         flow_name = context["flow.name"]
 
-        FlowChat.logger.debug { "Session::Middleware: Building session ID for gateway=#{gateway}, flow=#{flow_name}" }
-
-        case gateway
-        when :whatsapp_cloud_api
-          # For WhatsApp, use phone number + flow name for consistent sessions
-          phone = context["request.msisdn"]
-          session_id = "#{gateway}:#{flow_name}:#{phone}"
-          FlowChat.logger.debug { "Session::Middleware: WhatsApp session ID created for phone #{phone}" }
-          session_id
-        # when :nalo, :nsano
-        #   # For USSD, use the request ID from the gateway
-        #   "#{gateway}:#{flow_name}:#{context["request.id"]}"
-        else
-          # Fallback to request ID
-          request_id = context["request.id"]
-          session_id = "#{gateway}:#{flow_name}:#{request_id}"
-          FlowChat.logger.debug { "Session::Middleware: Generic session ID created for request #{request_id}" }
-          session_id
+        # Check for explicit session ID first (for manual session management)
+        if context["session.id"].present?
+          session_id = context["session.id"]
+          FlowChat.logger.debug { "Session::Middleware: Using explicit session ID: #{session_id}" }
+          return session_id
         end
+
+        FlowChat.logger.debug { "Session::Middleware: Building session ID for platform=#{platform}, gateway=#{gateway}, flow=#{flow_name}" }
+
+        # Get identifier based on configuration
+        identifier = get_session_identifier(context)
+
+        # Build session ID based on configuration
+        session_id = build_session_id(flow_name, platform, gateway, identifier)
+        FlowChat.logger.debug { "Session::Middleware: Generated session ID: #{session_id}" }
+        session_id
+      end
+
+      def get_session_identifier(context)
+        identifier_type = @session_options.identifier
+        
+        # If no identifier specified, use platform defaults
+        if identifier_type.nil?
+          platform = context["request.platform"]
+          identifier_type = case platform
+          when :ussd
+            :request_id    # USSD defaults to ephemeral sessions
+          when :whatsapp
+            :msisdn       # WhatsApp defaults to durable sessions
+          else
+            :msisdn       # Default fallback to durable
+          end
+        end
+        
+        case identifier_type
+        when :request_id
+          context["request.id"]
+        when :msisdn
+          phone = context["request.msisdn"]
+          @session_options.hash_phone_numbers ? hash_phone_number(phone) : phone
+        else
+          raise "Invalid session identifier type: #{identifier_type}"
+        end
+      end
+
+      def build_session_id(flow_name, platform, gateway, identifier)
+        parts = []
+
+        # Add flow name if flow isolation is enabled
+        parts << flow_name if @session_options.boundaries.include?(:flow)
+
+        # Add platform if platform isolation is enabled
+        parts << platform.to_s if @session_options.boundaries.include?(:platform)
+
+        # Add provider/gateway if provider isolation is enabled
+        parts << gateway.to_s if @session_options.boundaries.include?(:provider)
+
+        # Add the session identifier
+        parts << identifier if identifier.present?
+
+        # Join parts with colons
+        parts.join(":")
+      end
+
+      def hash_phone_number(phone)
+        # Use SHA256 but only take first 8 characters for reasonable session IDs
+        require 'digest'
+        Digest::SHA256.hexdigest(phone.to_s)[0, 8]
       end
     end
   end

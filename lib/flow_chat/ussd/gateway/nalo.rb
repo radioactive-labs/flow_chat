@@ -20,6 +20,7 @@ module FlowChat
           context["request.message_id"] = SecureRandom.uuid
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :nalo
+          context["request.platform"] = :ussd
           context["request.network"] = nil
           context["request.msisdn"] = Phonelib.parse(params["MSISDN"]).e164
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response

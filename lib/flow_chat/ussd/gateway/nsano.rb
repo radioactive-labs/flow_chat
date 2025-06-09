@@ -22,6 +22,7 @@ module FlowChat
 
           # Set a basic message_id (can be enhanced based on actual Nsano implementation)
           context["request.message_id"] = SecureRandom.uuid
+          context["request.platform"] = :ussd
 
           # TODO: Implement Nsano-specific parameter parsing
           # For now, add basic instrumentation structure for when this is implemented

@@ -1,10 +1,11 @@
 module FlowChat
   module Ussd
     class Processor < FlowChat::BaseProcessor
-      def use_resumable_sessions
-        FlowChat.logger.debug { "Ussd::Processor: Enabling resumable sessions middleware" }
-        middleware.insert_before 0, FlowChat::Ussd::Middleware::ResumableSession
-        self
+      def use_durable_sessions(cross_provider: false)
+        FlowChat.logger.debug { "Ussd::Processor: Enabling durable sessions via session configuration" }
+        use_session_config(
+          identifier: :msisdn  # Use MSISDN for durable sessions
+        )
       end
 
       protected
@@ -20,9 +21,6 @@ module FlowChat
 
       def configure_middleware_stack(builder)
         FlowChat.logger.debug { "Ussd::Processor: Configuring USSD middleware stack" }
-
-        builder.use FlowChat::Session::Middleware
-        FlowChat.logger.debug { "Ussd::Processor: Added Session::Middleware" }
 
         builder.use FlowChat::Ussd::Middleware::Pagination
         FlowChat.logger.debug { "Ussd::Processor: Added Ussd::Middleware::Pagination" }

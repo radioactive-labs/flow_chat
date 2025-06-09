@@ -160,6 +160,7 @@ module FlowChat
 
             context["request.id"] = phone_number
             context["request.gateway"] = :whatsapp_cloud_api
+            context["request.platform"] = :whatsapp
             context["request.message_id"] = message_id
             context["request.msisdn"] = Phonelib.parse(phone_number).e164
             context["request.contact_name"] = contact_name

@@ -13,6 +13,7 @@ module FlowChat
       @context["controller"] = controller
       @context["enable_simulator"] = enable_simulator.nil? ? (defined?(Rails) && Rails.env.local?) : enable_simulator
       @middleware = ::Middleware::Builder.new(name: middleware_name)
+      @session_options = FlowChat::Config.session
 
       FlowChat.logger.debug { "BaseProcessor: Simulator mode #{@context["enable_simulator"] ? "enabled" : "disabled"}" }
 
@@ -29,14 +30,36 @@ module FlowChat
     end
 
     def use_session_store(session_store)
-      FlowChat.logger.debug { "BaseProcessor: Configuring session store #{session_store.class.name}" }
+      raise "Session store must be a class" unless session_store.is_a?(Class)
+      FlowChat.logger.debug { "BaseProcessor: Configuring session store #{session_store.name}" }
       @context["session.store"] = session_store
       self
     end
 
+    def use_session_config(boundaries: nil, hash_phone_numbers: nil, identifier: nil)
+      FlowChat.logger.debug { "BaseProcessor: Configuring session config: boundaries=#{boundaries.inspect}, hash_phone_numbers=#{hash_phone_numbers}, identifier=#{identifier}" }
+      
+      # Update the session options directly
+      @session_options = @session_options.dup
+      @session_options.boundaries = Array(boundaries) if boundaries
+      @session_options.hash_phone_numbers = hash_phone_numbers if hash_phone_numbers
+      @session_options.identifier = identifier if identifier
+      
+      self
+    end
+
     def use_middleware(middleware)
-      FlowChat.logger.debug { "BaseProcessor: Adding middleware #{middleware.class.name}" }
+      raise "Middleware must be a class" unless middleware.is_a?(Class)
+      FlowChat.logger.debug { "BaseProcessor: Adding middleware #{middleware.name}" }
       @middleware.use middleware
+      self
+    end
+
+    def use_cross_platform_sessions
+      FlowChat.logger.debug { "BaseProcessor: Enabling cross-platform sessions via session configuration" }
+      use_session_config(
+        boundaries: [:flow]
+      )
       self
     end
 
@@ -101,6 +124,7 @@ module FlowChat
 
       ::Middleware::Builder.new(name: name) do |b|
         b.use @gateway_class, *@gateway_args
+        b.use FlowChat::Session::Middleware, @session_options
         configure_middleware_stack(b)
       end.inject_logger(FlowChat.logger)
     end

@@ -99,6 +99,31 @@ module TestHelpers
     end.new
   end
 
+  def create_test_session_store_class
+    Class.new do
+      def initialize(context = nil)
+        @data = {}
+        @context = context
+      end
+
+      def get(key)
+        @data[key.to_s]
+      end
+
+      def set(key, value)
+        @data[key.to_s] = value
+      end
+
+      def delete(key)
+        @data.delete(key.to_s)
+      end
+
+      def clear
+        @data.clear
+      end
+    end
+  end
+
   # Helper to stub constantize method properly
   def stub_constantize(class_name, mock_class)
     original_constantize = String.instance_method(:constantize)

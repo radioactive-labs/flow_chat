@@ -10,8 +10,8 @@ class UssdController < ApplicationController
       # Use Rails session for USSD (shorter sessions)
       config.use_session_store FlowChat::Session::RailsSessionStore
 
-      # Enable resumable sessions (optional)
-      config.use_resumable_sessions
+      # Enable durable sessions (optional)
+      config.use_durable_sessions  # Configures flow+platform isolation with durable sessions
     end
 
     processor.run WelcomeFlow, :main_page
@@ -232,7 +232,13 @@ class UssdController < ApplicationController
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       config.use_session_store FlowChat::Session::RailsSessionStore
       config.use_middleware LoggingMiddleware  # Add custom logging
-      config.use_resumable_sessions           # Enable resumable sessions
+      config.use_durable_sessions           # Enable durable sessions
+      
+      # Or configure session boundaries explicitly:
+      # config.use_session_config(
+      #   boundaries: [:flow, :platform],     # which boundaries to enforce
+      #   hash_phone_numbers: true            # hash phone numbers for privacy
+      # )
     end
 
     processor.run WelcomeFlow, :main_page

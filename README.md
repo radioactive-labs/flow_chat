@@ -186,6 +186,7 @@ See the [Testing Guide](docs/testing.md) for complete setup instructions and tes
 - **[WhatsApp Setup](docs/whatsapp-setup.md)** - Comprehensive WhatsApp configuration
 - **[USSD Setup](docs/ussd-setup.md)** - USSD gateway configuration and examples
 - **[Flow Development](docs/flows.md)** - Advanced flow patterns and techniques
+- **[Session Management](docs/sessions.md)** - Session architecture and configuration
 - **[Media Support](docs/media.md)** - Rich media handling for WhatsApp
 - **[Testing Guide](docs/testing.md)** - Complete testing strategies
 - **[Configuration Reference](docs/configuration.md)** - All configuration options

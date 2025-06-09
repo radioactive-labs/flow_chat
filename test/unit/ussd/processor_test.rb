@@ -30,7 +30,7 @@ class UssdProcessorTest < Minitest::Test
   end
 
   def test_use_session_store_sets_session_store
-    session_store = create_test_session_store
+    session_store = create_test_session_store_class
     result = @processor.use_session_store(session_store)
 
     context = @processor.instance_variable_get(:@context)
@@ -47,11 +47,22 @@ class UssdProcessorTest < Minitest::Test
     assert_equal @processor, result
   end
 
-  def test_use_resumable_sessions_inserts_middleware
-    result = @processor.use_resumable_sessions
+  def test_use_durable_sessions_inserts_middleware
+    result = @processor.use_durable_sessions
 
     assert_equal @processor, result
     # The middleware should be inserted but we can't easily verify without complex setup
+  end
+
+  def test_use_session_config
+    result = @processor.use_session_config(
+      boundaries: [:flow, :provider],
+      hash_phone_numbers: false,
+      identifier: :request_id
+    )
+
+    assert_equal @processor, result
+    # Should return self for chaining
   end
 
   def test_run_sets_flow_context
@@ -62,7 +73,7 @@ class UssdProcessorTest < Minitest::Test
     end
 
     @processor.use_gateway(Class.new)
-    @processor.use_session_store(create_test_session_store)
+    @processor.use_session_store(create_test_session_store_class)
 
     # Mock the middleware stack execution to avoid complex setup
     @processor.instance_variable_get(:@context)
@@ -94,12 +105,12 @@ class UssdProcessorTest < Minitest::Test
 
   def test_processor_can_be_configured_with_block
     gateway_class = Class.new
-    session_store = create_test_session_store
+    session_store = create_test_session_store_class
 
     processor = FlowChat::Ussd::Processor.new(@controller) do |p|
       p.use_gateway(gateway_class)
       p.use_session_store(session_store)
-      p.use_resumable_sessions
+      p.use_durable_sessions
     end
 
     assert_equal gateway_class, processor.instance_variable_get(:@gateway_class)
@@ -110,14 +121,14 @@ class UssdProcessorTest < Minitest::Test
 
   def test_chaining_configuration_methods
     gateway_class = Class.new
-    session_store = create_test_session_store
+    session_store = create_test_session_store_class
     middleware_class = Class.new
 
     result = @processor
       .use_gateway(gateway_class)
       .use_session_store(session_store)
       .use_middleware(middleware_class)
-      .use_resumable_sessions
+      .use_durable_sessions
 
     assert_equal @processor, result
     assert_equal gateway_class, @processor.instance_variable_get(:@gateway_class)
@@ -131,7 +142,7 @@ class UssdProcessorTest < Minitest::Test
     end
 
     @processor.use_gateway(MockGateway)
-    @processor.use_session_store(create_test_session_store)
+    @processor.use_session_store(create_test_session_store_class)
 
     # Track if the block was called with the stack
     yielded_stack = nil
@@ -173,7 +184,7 @@ class UssdProcessorTest < Minitest::Test
     end
 
     @processor.use_gateway(MockGateway)
-    @processor.use_session_store(create_test_session_store)
+    @processor.use_session_store(create_test_session_store_class)
 
     # Create a test middleware to verify insertion
     test_middleware_called = false
@@ -221,7 +232,7 @@ class UssdProcessorTest < Minitest::Test
     end
 
     @processor.use_gateway(MockGateway)
-    @processor.use_session_store(create_test_session_store)
+    @processor.use_session_store(create_test_session_store_class)
 
     block_called = false
 
@@ -251,7 +262,7 @@ class UssdProcessorTest < Minitest::Test
 
     custom_middleware = Class.new
     @processor.use_gateway(MockGateway)
-    @processor.use_session_store(create_test_session_store)
+    @processor.use_session_store(create_test_session_store_class)
     @processor.use_middleware(custom_middleware)
 
     middleware_order = []
@@ -259,9 +270,9 @@ class UssdProcessorTest < Minitest::Test
     # Mock the middleware builder to capture the order
     original_use = ::Middleware::Builder.instance_method(:use)
     ::Middleware::Builder.class_eval do
-      define_method(:use) do |middleware|
+      define_method(:use) do |middleware, *args|
         middleware_order << middleware
-        original_use.bind_call(self, middleware)
+        original_use.bind_call(self, middleware, *args)
       end
     end
 

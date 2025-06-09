@@ -119,19 +119,35 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor i
 0 Back
 ```
 
-## Resumable Sessions
+## Session Management
 
-Enable resumable sessions for better user experience:
+Configure session behavior for better user experience:
 
 ```ruby
 processor = FlowChat::Ussd::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
   config.use_session_store FlowChat::Session::CacheSessionStore
-  config.use_resumable_sessions  # Enable resumable sessions
+  
+  # Enable durable sessions (shorthand)
+  config.use_durable_sessions
 end
 ```
 
-Users can continue interrupted conversations within the timeout period.
+### Session Boundaries
+
+Session boundaries control how session IDs are constructed:
+
+- **`:flow`** - Separate sessions per flow class
+- **`:platform`** - Separate USSD from WhatsApp sessions  
+- **`:provider`** - Separate sessions per gateway/provider
+- **`[]`** - Global sessions (no boundaries)
+
+Session identifier options:
+
+- **`nil`** - Platform chooses default (`:request_id` for USSD, `:msisdn` for WhatsApp)
+- **`:msisdn`** - Use phone number (durable sessions)
+- **`:request_id`** - Use request ID (ephemeral sessions)
+- **`hash_phone_numbers`** - Hash phone numbers for privacy (recommended)
 
 ## Middleware
 
