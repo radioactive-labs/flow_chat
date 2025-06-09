@@ -30,7 +30,7 @@ FlowChat::Config.session.identifier = nil                 # let platforms choose
 # Available boundary options:
 # :flow - separate sessions per flow class
 # :platform - separate sessions per platform (ussd, whatsapp)  
-# :provider - separate sessions per provider/gateway
+# :gateway - separate sessions per gateway
 # [] - global sessions (no boundaries)
 
 # Available identifier options:

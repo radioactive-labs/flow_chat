@@ -43,7 +43,7 @@ class SimulatorController < ApplicationController
         name: "USSD Integration",
         icon: "📱", 
         processor_type: "ussd",
-        provider: "nalo",
+        gateway: "nalo",
         endpoint: "/ussd",
         color: "#007bff"
       },
@@ -51,7 +51,7 @@ class SimulatorController < ApplicationController
         name: "WhatsApp Integration",
         icon: "💬",
         processor_type: "whatsapp", 
-        provider: "cloud_api",
+        gateway: "cloud_api",
         endpoint: "/whatsapp/webhook",
         color: "#25D366"
       }

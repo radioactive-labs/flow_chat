@@ -83,17 +83,17 @@ class SessionMiddlewareTest < Minitest::Test
   end
 
   def test_default_boundary_configuration
-    # Default boundaries: [:flow, :provider, :platform]
+    # Default boundaries: [:flow, :gateway, :platform]
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
     
     session_id = @context["session.id"]
     parts = session_id.split(":")
     
-    # Should contain: flow, platform, provider, identifier
+    # Should contain: flow, platform, gateway, identifier
     assert_includes session_id, "test_flow"      # flow
     assert_includes session_id, "ussd"           # platform  
-    assert_includes session_id, "nalo"           # provider
+    assert_includes session_id, "nalo"           # gateway
     assert_includes session_id, "request_123"    # identifier (request_id for USSD)
   end
 
@@ -109,7 +109,7 @@ class SessionMiddlewareTest < Minitest::Test
     assert_includes session_id, "test_flow"
     assert_includes session_id, "request_123"
     
-    # Should not contain platform or provider
+    # Should not contain platform or gateway
     refute_includes session_id, "ussd"
     refute_includes session_id, "nalo"
   end
@@ -126,20 +126,20 @@ class SessionMiddlewareTest < Minitest::Test
     assert_includes session_id, "ussd"
     assert_includes session_id, "request_123"
     
-    # Should not contain flow or provider
+    # Should not contain flow or gateway
     refute_includes session_id, "test_flow"
     refute_includes session_id, "nalo"
   end
 
-  def test_provider_boundary_isolation
-    @session_options.boundaries = [:provider]
+  def test_gateway_boundary_isolation
+    @session_options.boundaries = [:gateway]
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
     
     session_id = @context["session.id"]
     
-    # Should contain provider and identifier
+    # Should contain gateway and identifier
     assert_includes session_id, "nalo"
     assert_includes session_id, "request_123"
     
@@ -173,7 +173,7 @@ class SessionMiddlewareTest < Minitest::Test
     assert_includes session_id, "ussd"
     assert_includes session_id, "request_123"
     
-    # Should not contain provider
+    # Should not contain gateway
     refute_includes session_id, "nalo"
   end
 
@@ -264,7 +264,7 @@ class SessionMiddlewareTest < Minitest::Test
   end
 
   def test_session_id_parts_joined_with_colons
-    @session_options.boundaries = [:flow, :platform, :provider]
+    @session_options.boundaries = [:flow, :platform, :gateway]
     @session_options.identifier = :request_id
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)

@@ -59,7 +59,7 @@ module FlowChat
           #   if params["network"].present? && params["UserSessionID"].present?
           #     request_id = "nsano::request_id::#{params["UserSessionID"]}"
           #     context["ussd.request"] = {
-          #       provider: :nsano,
+          #       gateway: :nsano,
           #       network: params["network"].to_sym,
           #       msisdn: Phonelib.parse(params["msisdn"]).e164,
           #       type: Config.cache&.read(request_id).present? ? :response : :initial,
@@ -71,7 +71,7 @@ module FlowChat
 
           # status, headers, response = @app.call(context)
 
-          # if context["ussd.response"].present? && context["ussd.request"][:provider] == :nsano
+          # if context["ussd.response"].present? && context["ussd.request"][:gateway] == :nsano
           #   if context["ussd.response"][:type] == :terminal
           #     Config.cache&.write(request_id, nil)
           #   else

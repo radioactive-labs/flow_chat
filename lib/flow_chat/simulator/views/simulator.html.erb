@@ -1057,8 +1057,8 @@
             <span class="config-detail-value">${config.endpoint}</span>
           </div>
           <div class="config-detail-item">
-            <span class="config-detail-label">Provider:</span>
-            <span class="config-detail-value">${config.provider}</span>
+            <span class="config-detail-label">gateway:</span>
+            <span class="config-detail-value">${config.gateway}</span>
           </div>
           <div class="config-detail-item">
             <span class="config-detail-label">Type:</span>
@@ -1304,7 +1304,7 @@
         
         let requestData = {}
         
-        switch (config.provider) {
+        switch (config.gateway) {
           case 'nalo':
             requestData = {
               USERID: state.sessionId,
@@ -1322,7 +1322,7 @@
             }
             break
           default:
-            throw new Error(`Unsupported USSD provider: ${config.provider}`)
+            throw new Error(`Unsupported USSD gateway: ${config.gateway}`)
         }
         
         try {
@@ -1342,7 +1342,7 @@
             throw new Error(`HTTP ${response.status}: ${response.statusText}`)
           }
           
-          switch (config.provider) {
+          switch (config.gateway) {
             case 'nalo':
               displayUSSDResponse(data.MSG)
               state.isRunning = data.MSGTYPE

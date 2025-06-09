@@ -22,7 +22,7 @@ Controls how session IDs are generated and sessions are isolated:
 
 ```ruby
 # Global session configuration
-FlowChat::Config.session.boundaries = [:flow, :provider, :platform]  # isolation boundaries
+FlowChat::Config.session.boundaries = [:flow, :gateway, :platform]  # isolation boundaries
 FlowChat::Config.session.hash_phone_numbers = true                   # privacy protection
 FlowChat::Config.session.identifier = nil                            # platform chooses default
 ```
@@ -51,7 +51,7 @@ Boundaries control how session IDs are constructed, determining when sessions ar
 
 - **`:flow`** - Separate sessions per flow class
 - **`:platform`** - Separate sessions per platform (ussd, whatsapp)
-- **`:provider`** - Separate sessions per gateway/provider
+- **`:gateway`** - Separate sessions per gateway
 - **`:url`** - Separate sessions per request URL (host + path)
 - **`[]`** - Global sessions (no boundaries)
 
@@ -59,7 +59,7 @@ Boundaries control how session IDs are constructed, determining when sessions ar
 
 ```ruby
 # Default: Full isolation
-FlowChat::Config.session.boundaries = [:flow, :provider, :platform]
+FlowChat::Config.session.boundaries = [:flow, :gateway, :platform]
 # Session ID: "registration_flow:nalo:ussd:abc123"
 
 # Flow isolation only
@@ -141,14 +141,14 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
 end
 ```
 
-### Cross-Provider Sessions
+### Cross-gateway Sessions
 
 ```ruby
 processor = FlowChat::Ussd::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
   config.use_session_store FlowChat::Session::CacheSessionStore
   
-  # Allow sessions to work across different providers
+  # Allow sessions to work across different gateways
   config.use_session_config(boundaries: [:flow, :platform])
 end
 ```
@@ -288,7 +288,7 @@ session.exists?                  # Check if session has any data
 
 ```ruby
 # High-traffic public services
-boundaries: [:flow, :provider, :platform]  # Full isolation
+boundaries: [:flow, :gateway, :platform]  # Full isolation
 
 # Single-tenant applications
 boundaries: [:flow]  # Simpler, allows cross-platform

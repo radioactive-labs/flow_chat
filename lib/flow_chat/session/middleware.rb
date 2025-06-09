@@ -99,8 +99,8 @@ module FlowChat
         # Add platform if platform isolation is enabled
         parts << platform.to_s if @session_options.boundaries.include?(:platform)
 
-        # Add provider/gateway if provider isolation is enabled
-        parts << gateway.to_s if @session_options.boundaries.include?(:provider)
+        # Add gateway if gateway isolation is enabled
+        parts << gateway.to_s if @session_options.boundaries.include?(:gateway)
 
         # Add URL if URL isolation is enabled
         if @session_options.boundaries.include?(:url)

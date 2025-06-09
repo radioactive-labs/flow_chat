@@ -17,7 +17,7 @@ class SimulatorController < ApplicationController
         name: "Main USSD Endpoint",
         description: "Primary USSD integration",
         processor_type: "ussd",
-        provider: "nalo",
+        gateway: "nalo",
         endpoint: "/ussd",
         icon: "📱",
         color: "#28a745"
@@ -26,7 +26,7 @@ class SimulatorController < ApplicationController
         name: "Main WhatsApp Endpoint",
         description: "Primary WhatsApp webhook",
         processor_type: "whatsapp",
-        provider: "cloud_api",
+        gateway: "cloud_api",
         endpoint: "/whatsapp/webhook",
         icon: "💬",
         color: "#25D366"
@@ -35,7 +35,7 @@ class SimulatorController < ApplicationController
         name: "Tenant A WhatsApp",
         description: "Multi-tenant endpoint for Tenant A",
         processor_type: "whatsapp",
-        provider: "cloud_api",
+        gateway: "cloud_api",
         endpoint: "/tenants/a/whatsapp/webhook",
         icon: "🏢",
         color: "#fd7e14"
@@ -44,7 +44,7 @@ class SimulatorController < ApplicationController
         name: "Legacy WhatsApp",
         description: "Legacy endpoint for compatibility",
         processor_type: "whatsapp",
-        provider: "cloud_api",
+        gateway: "cloud_api",
         endpoint: "/legacy/whatsapp",
         icon: "📦",
         color: "#6c757d"

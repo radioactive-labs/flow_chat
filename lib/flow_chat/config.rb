@@ -29,9 +29,9 @@ module FlowChat
       def initialize
         # Session boundaries control how session IDs are constructed
         # :flow = separate sessions per flow
-        # :provider = separate sessions per provider/gateway
+        # :gateway = separate sessions per gateway
         # :platform = separate sessions per platform (ussd, whatsapp)
-        @boundaries = [:flow, :provider, :platform]
+        @boundaries = [:flow, :gateway, :platform]
         
         # Always hash phone numbers for privacy
         @hash_phone_numbers = true

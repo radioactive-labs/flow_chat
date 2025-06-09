@@ -139,7 +139,7 @@ Session boundaries control how session IDs are constructed:
 
 - **`:flow`** - Separate sessions per flow class
 - **`:platform`** - Separate USSD from WhatsApp sessions  
-- **`:provider`** - Separate sessions per gateway/provider
+- **`:gateway`** - Separate sessions per gateway
 - **`[]`** - Global sessions (no boundaries)
 
 Session identifier options:

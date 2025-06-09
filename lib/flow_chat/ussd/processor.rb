@@ -1,7 +1,7 @@
 module FlowChat
   module Ussd
     class Processor < FlowChat::BaseProcessor
-      def use_durable_sessions(cross_provider: false)
+      def use_durable_sessions(cross_gateway: false)
         FlowChat.logger.debug { "Ussd::Processor: Enabling durable sessions via session configuration" }
         use_session_config(
           identifier: :msisdn  # Use MSISDN for durable sessions
