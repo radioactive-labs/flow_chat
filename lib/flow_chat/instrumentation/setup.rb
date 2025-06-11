@@ -22,7 +22,6 @@ module FlowChat
         def setup_logging!(options = {})
           return if @log_subscriber_setup
 
-          require_relative "log_subscriber"
           setup_log_subscriber(options)
           @log_subscriber_setup = true
         end
@@ -31,7 +30,6 @@ module FlowChat
         def setup_metrics!(options = {})
           return if @metrics_collector_setup
 
-          require_relative "metrics_collector"
           setup_metrics_collector(options)
           @metrics_collector_setup = true
         end

@@ -15,7 +15,6 @@ module FlowChat
   end
 
   def self.setup_instrumentation!
-    require_relative "flow_chat/instrumentation/setup"
     FlowChat::Instrumentation::Setup.setup_instrumentation!
   end
 

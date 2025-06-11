@@ -23,6 +23,9 @@ module FlowChat
           flow.send action
           FlowChat.logger.warn { "Ussd::Executor: Flow execution failed to interact with user for #{flow_class.name}##{action}" }
           raise FlowChat::Interrupt::Terminate, "Unexpected end of flow."
+        rescue FlowChat::Interrupt::RestartFlow => e
+          FlowChat.logger.info { "Ussd::Executor: Flow restart requested - Session: #{session_id}, restarting #{action}" }
+          retry
         rescue FlowChat::Interrupt::Prompt => e
           FlowChat.logger.info { "Ussd::Executor: Flow prompted user - Session: #{session_id}, Prompt: '#{e.prompt.truncate(100)}'" }
           FlowChat.logger.debug { "Ussd::Executor: Prompt details - Choices: #{e.choices&.size || 0}, Has media: #{!e.media.nil?}" }

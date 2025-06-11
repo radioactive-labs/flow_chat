@@ -22,5 +22,11 @@ module FlowChat
     end
 
     class Terminate < Base; end
+
+    class RestartFlow < Base
+      def initialize
+        super("restart_flow")
+      end
+    end
   end
 end
