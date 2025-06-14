@@ -25,11 +25,11 @@ module FlowChat
       FlowChat.logger.info { "#{log_prefix}: Flow restart requested - Session: #{session_id}, restarting #{action}" }
       retry
     rescue FlowChat::Interrupt::Prompt => e
-      FlowChat.logger.info { "#{log_prefix}: Flow prompted user - Session: #{session_id}, Prompt: '#{e.prompt.truncate(100)}'" }
+      FlowChat.logger.info { "#{log_prefix}: Flow prompted user - Session: #{session_id}, Prompt: '#{e.prompt&.truncate(100)}'" }
       FlowChat.logger.debug { "#{log_prefix}: Prompt details - Choices: #{e.choices&.size || 0}, Has media: #{!e.media.nil?}" }
       [:prompt, e.prompt, e.choices, e.media]
     rescue FlowChat::Interrupt::Terminate => e
-      FlowChat.logger.info { "#{log_prefix}: Flow terminated - Session: #{session_id}, Message: '#{e.prompt.truncate(100)}'" }
+      FlowChat.logger.info { "#{log_prefix}: Flow terminated - Session: #{session_id}, Message: '#{e.prompt&.truncate(100)}'" }
       FlowChat.logger.debug { "#{log_prefix}: Destroying session #{session_id}" }
       context.session.destroy
       [:terminate, e.prompt, nil, e.media]
