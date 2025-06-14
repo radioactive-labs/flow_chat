@@ -27,12 +27,3 @@ module FlowChat
     FlowChat::Instrumentation::Setup.metrics_collector
   end
 end
-
-loader.eager_load
-
-# Auto-setup instrumentation in Rails environments
-if defined?(Rails)
-  Rails.application.config.after_initialize do
-    FlowChat.setup_instrumentation!
-  end
-end
