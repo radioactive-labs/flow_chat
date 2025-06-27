@@ -237,7 +237,7 @@ class UssdController < ApplicationController
       # Or configure session boundaries explicitly:
       # config.use_session_config(
       #   boundaries: [:flow, :platform],     # which boundaries to enforce
-      #   hash_phone_numbers: true            # hash phone numbers for privacy
+      #   hash_identifiers: true            # hash phone numbers for privacy
       # )
     end
 

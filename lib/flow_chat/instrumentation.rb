@@ -8,9 +8,11 @@ module FlowChat
     def instrument(event_name, payload = {}, &block)
       enriched_payload = payload&.dup || {}
       if respond_to?(:context) && context
+        enriched_payload[:request_id] = context["request.id"] if context["request.id"]
         enriched_payload[:session_id] = context["session.id"] if context["session.id"]
         enriched_payload[:flow_name] = context["flow.name"] if context["flow.name"]
         enriched_payload[:gateway] = context["request.gateway"] if context["request.gateway"]
+        enriched_payload[:platform] = context["request.platform"] if context["request.platform"]
       end
 
       self.class.instrument(event_name, enriched_payload, &block)

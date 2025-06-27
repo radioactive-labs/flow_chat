@@ -1,5 +1,3 @@
-require "phonelib"
-
 module FlowChat
   module Ussd
     module Gateway

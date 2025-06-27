@@ -36,14 +36,14 @@ module FlowChat
       self
     end
 
-    def use_session_config(boundaries: nil, hash_phone_numbers: nil, identifier: nil)
-      FlowChat.logger.debug { "BaseProcessor: Configuring session config: boundaries=#{boundaries.inspect}, hash_phone_numbers=#{hash_phone_numbers}, identifier=#{identifier}" }
+    def use_session_config(boundaries: nil, hash_identifiers: nil, identifier: nil)
+      FlowChat.logger.debug { "BaseProcessor: Configuring session config: boundaries=#{boundaries.inspect}, hash_identifiers=#{hash_identifiers}, identifier=#{identifier}" }
       
       # Update the session options directly
       @session_options = @session_options.dup
-      @session_options.boundaries = Array(boundaries) if boundaries
-      @session_options.hash_phone_numbers = hash_phone_numbers if hash_phone_numbers
-      @session_options.identifier = identifier if identifier
+      @session_options.boundaries = Array(boundaries) if boundaries != nil
+      @session_options.hash_identifiers = hash_identifiers if hash_identifiers != nil
+      @session_options.identifier = identifier if identifier != nil
       
       self
     end

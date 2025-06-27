@@ -444,6 +444,8 @@ class UssdInstrumentationTest < Minitest::Test
 
       context = FlowChat::Context.new
       context["controller"] = controller
+      # Set session.id so instrumentation can include it in payloads
+      context["session.id"] = "test_flow:ussd:nalo:test_session_123"
 
       # Mock app to be called by gateway
       mock_app = lambda { |ctx| [:prompt, "Test response", []] }

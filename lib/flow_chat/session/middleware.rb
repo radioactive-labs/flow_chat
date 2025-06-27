@@ -64,29 +64,30 @@ module FlowChat
       end
 
       def get_session_identifier(context)
-        identifier_type = @session_options.identifier
-        
-        # If no identifier specified, use platform defaults
-        if identifier_type.nil?
-          platform = context["request.platform"]
-          identifier_type = case platform
-          when :ussd
-            :request_id    # USSD defaults to ephemeral sessions
-          when :whatsapp
-            :msisdn       # WhatsApp defaults to durable sessions
-          else
-            :msisdn       # Default fallback to durable
-          end
-        end
+        identifier_type = @session_options.identifier || platform_default_identifier(context)
         
         case identifier_type
         when :request_id
           context["request.id"]
+        when :user_id
+          user_id = context["request.user_id"]
+          @session_options.hash_identifiers ? hash_identifier(user_id) : user_id
         when :msisdn
-          phone = context["request.msisdn"]
-          @session_options.hash_phone_numbers ? hash_phone_number(phone) : phone
+          msisdn = context["request.msisdn"]
+          @session_options.hash_identifiers ? hash_identifier(msisdn) : msisdn
         else
           raise "Invalid session identifier type: #{identifier_type}"
+        end
+      end
+
+      def platform_default_identifier(context)
+        platform = context["request.platform"]
+        
+        case platform
+        when :whatsapp
+          :msisdn
+        else
+          :request_id
         end
       end
 
@@ -142,10 +143,10 @@ module FlowChat
         url_identifier
       end
 
-      def hash_phone_number(phone)
+      def hash_identifier(identifier)
         # Use SHA256 but only take first 8 characters for reasonable session IDs
         require 'digest'
-        Digest::SHA256.hexdigest(phone.to_s)[0, 8]
+        Digest::SHA256.hexdigest(identifier.to_s)[0, 8]
       end
     end
   end

@@ -24,30 +24,30 @@ class ConfigTest < Minitest::Test
 
     # Session boundaries defaults
     assert_equal [:flow, :gateway, :platform], session_config.boundaries
-    assert_equal true, session_config.hash_phone_numbers
+    assert_equal true, session_config.hash_identifiers
     assert_nil session_config.identifier  # Platform chooses default
 
   end
 
   def test_session_config_setter_methods
     original_boundaries = FlowChat::Config.session.boundaries.dup
-    original_hash_phone = FlowChat::Config.session.hash_phone_numbers
+    original_hash_phone = FlowChat::Config.session.hash_identifiers
     original_identifier = FlowChat::Config.session.identifier
 
     begin
       # Test setters work
       FlowChat::Config.session.boundaries = [:flow, :gateway]
-      FlowChat::Config.session.hash_phone_numbers = false
+      FlowChat::Config.session.hash_identifiers = false
       FlowChat::Config.session.identifier = :request_id
 
       assert_equal [:flow, :gateway], FlowChat::Config.session.boundaries
-      assert_equal false, FlowChat::Config.session.hash_phone_numbers
+      assert_equal false, FlowChat::Config.session.hash_identifiers
       assert_equal :request_id, FlowChat::Config.session.identifier
 
     ensure
       # Restore original values
       FlowChat::Config.session.boundaries = original_boundaries
-      FlowChat::Config.session.hash_phone_numbers = original_hash_phone
+      FlowChat::Config.session.hash_identifiers = original_hash_phone
       FlowChat::Config.session.identifier = original_identifier
     end
   end

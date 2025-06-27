@@ -1,6 +1,5 @@
 require "net/http"
 require "json"
-require "phonelib"
 require "openssl"
 
 module FlowChat
@@ -145,29 +144,32 @@ module FlowChat
             message = value["messages"].first
             contact = value["contacts"]&.first
 
-            phone_number = message["from"]
+            phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
             message_id = message["id"]
             contact_name = contact&.dig("profile", "name")
 
-            # Use instrumentation for message received
-            instrument(Events::MESSAGE_RECEIVED, {
-              from: phone_number,
-              message: context.input,
-              message_type: message["type"],
-              message_id: message_id,
-              platform: :whatsapp
-            })
-
             context["request.id"] = phone_number
+            context["request.msisdn"] = phone_number
+            context["request.user_id"] = context["request.msisdn"]
             context["request.gateway"] = :whatsapp_cloud_api
             context["request.platform"] = :whatsapp
             context["request.message_id"] = message_id
-            context["request.msisdn"] = Phonelib.parse(phone_number).e164
             context["request.contact_name"] = contact_name
             context["request.timestamp"] = message["timestamp"]
 
             # Extract message content based on type
-            extract_message_content(message, context)
+            extract_message_content!(message, context)
+
+            if context.input.present?
+              # Use instrumentation for message received
+              instrument(Events::MESSAGE_RECEIVED, {
+                from: phone_number,
+                message: context.input,
+                message_type: message["type"],
+                message_id: message_id,
+              })
+            end
+
 
             FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
 
@@ -260,7 +262,7 @@ module FlowChat
           res == 0
         end
 
-        def extract_message_content(message, context)
+        def extract_message_content!(message, context)
           message_type = message["type"]
           FlowChat.logger.debug { "CloudApi: Extracting content from #{message_type} message" }
 

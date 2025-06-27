@@ -1,5 +1,3 @@
-require "phonelib"
-
 module FlowChat
   module Ussd
     module Gateway
@@ -17,23 +15,21 @@ module FlowChat
           params = context.controller.request.params
 
           context["request.id"] = params["USERID"]
+          context["request.msisdn"] = FlowChat::PhoneNumberUtil.to_e164(params["MSISDN"])
+          context["request.user_id"] = context["request.msisdn"]
           context["request.message_id"] = SecureRandom.uuid
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :nalo
           context["request.platform"] = :ussd
           context["request.network"] = nil
-          context["request.msisdn"] = Phonelib.parse(params["MSISDN"]).e164
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response
           context.input = params["USERDATA"].presence
 
           # Instrument message received when user provides input using new scalable approach
           if context.input.present?
             instrument(Events::MESSAGE_RECEIVED, {
-              from: context["request.msisdn"],
+              from: context["request.user_id"],
               message: context.input,
-              session_id: context["request.id"],
-              gateway: :nalo,
-              platform: :ussd,
               timestamp: context["request.timestamp"]
             })
           end

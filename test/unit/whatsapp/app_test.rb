@@ -117,13 +117,13 @@ class WhatsappAppTest < Minitest::Test
     assert_nil @app.timestamp
   end
 
-  def test_phone_number_returns_msisdn
-    assert_equal "+256700000000", @app.phone_number
+  def test_msisdn_returns_msisdn
+    assert_equal "+256700000000", @app.msisdn
   end
 
-  def test_phone_number_returns_nil_when_not_set
+  def test_msisdn_returns_nil_when_not_set
     @context["request.msisdn"] = nil
-    assert_nil @app.phone_number
+    assert_nil @app.msisdn
   end
 
   def test_location_returns_location_data

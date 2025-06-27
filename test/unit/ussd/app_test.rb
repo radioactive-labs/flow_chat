@@ -160,13 +160,13 @@ class UssdAppTest < Minitest::Test
     assert_nil @app.timestamp
   end
 
-  def test_phone_number_returns_msisdn
+  def test_msisdn_returns_msisdn
     @context["request.msisdn"] = "+256700123456"
-    assert_equal "+256700123456", @app.phone_number
+    assert_equal "+256700123456", @app.msisdn
   end
 
-  def test_phone_number_returns_nil_when_not_set
-    assert_nil @app.phone_number
+  def test_msisdn_returns_nil_when_not_set
+    assert_nil @app.msisdn
   end
 
   def test_contact_name_returns_nil_for_ussd

@@ -191,7 +191,7 @@ class SessionMiddlewareTest < Minitest::Test
   def test_whatsapp_platform_defaults_to_msisdn_identifier
     @context["request.platform"] = :whatsapp
     @session_options.identifier = nil  # Platform chooses
-    @session_options.hash_phone_numbers = false  # Don't hash for easier testing
+    @session_options.hash_identifiers = false  # Don't hash for easier testing
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
@@ -202,7 +202,7 @@ class SessionMiddlewareTest < Minitest::Test
 
   def test_explicit_msisdn_identifier
     @session_options.identifier = :msisdn
-    @session_options.hash_phone_numbers = false
+    @session_options.hash_identifiers = false
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
@@ -223,7 +223,7 @@ class SessionMiddlewareTest < Minitest::Test
 
   def test_phone_number_hashing_enabled
     @session_options.identifier = :msisdn
-    @session_options.hash_phone_numbers = true
+    @session_options.hash_identifiers = true
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
@@ -242,7 +242,7 @@ class SessionMiddlewareTest < Minitest::Test
 
   def test_phone_number_hashing_disabled
     @session_options.identifier = :msisdn
-    @session_options.hash_phone_numbers = false
+    @session_options.hash_identifiers = false
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
@@ -289,16 +289,17 @@ class SessionMiddlewareTest < Minitest::Test
     refute_ends_with session_id, ":"
   end
 
-  def test_unknown_platform_defaults_to_msisdn
+  def test_unknown_platform_defaults_to_request_id
     @context["request.platform"] = :unknown_platform
     @session_options.identifier = nil  # Platform chooses
-    @session_options.hash_phone_numbers = false
+    @session_options.hash_identifiers = false
     
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     middleware.call(@context)
     
     session_id = @context["session.id"]
-    assert_includes session_id, "+256700123456"
+    # Unknown platforms now default to request_id identifier
+    assert_includes session_id, "request_123"
   end
 
   def test_context_gets_session_store_instance
@@ -367,10 +368,10 @@ class SessionMiddlewareTest < Minitest::Test
     assert_equal first_session_id, second_session_id
   end
 
-  def test_hash_phone_number_method
+  def test_hash_identifier_method
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
     
-    hashed = middleware.send(:hash_phone_number, "+256700123456")
+    hashed = middleware.send(:hash_identifier, "+256700123456")
     
     # Should be 8 characters
     assert_equal 8, hashed.length
@@ -379,11 +380,11 @@ class SessionMiddlewareTest < Minitest::Test
     assert_match /^[a-f0-9]+$/, hashed
     
     # Should be consistent
-    hashed2 = middleware.send(:hash_phone_number, "+256700123456")
+    hashed2 = middleware.send(:hash_identifier, "+256700123456")
     assert_equal hashed, hashed2
     
     # Different numbers should produce different hashes
-    hashed3 = middleware.send(:hash_phone_number, "+256700654321")
+    hashed3 = middleware.send(:hash_identifier, "+256700654321")
     refute_equal hashed, hashed3
   end
 

@@ -24,7 +24,7 @@ FlowChat.setup_instrumentation!
 ```ruby
 # Session boundaries control how session IDs are constructed
 FlowChat::Config.session.boundaries = [:flow, :platform]  # default
-FlowChat::Config.session.hash_phone_numbers = true        # hash phone numbers for privacy
+FlowChat::Config.session.hash_identifiers = true          # hash identifiers for privacy
 FlowChat::Config.session.identifier = nil                 # let platforms choose (default)
 
 # Available boundary options:
@@ -193,7 +193,7 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
   # Configure session boundaries
   config.use_session_config(
     boundaries: [:flow, :platform],     # which boundaries to enforce
-    hash_phone_numbers: true,           # hash phone numbers for privacy
+    hash_identifiers: true,             # hash identifiers for privacy
     identifier: :msisdn                 # use MSISDN for durable sessions (optional)
   )
   

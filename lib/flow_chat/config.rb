@@ -24,7 +24,7 @@ module FlowChat
     end
 
     class SessionConfig
-      attr_accessor :boundaries, :hash_phone_numbers, :identifier
+      attr_accessor :boundaries, :hash_identifiers, :identifier
 
       def initialize
         # Session boundaries control how session IDs are constructed
@@ -34,7 +34,7 @@ module FlowChat
         @boundaries = [:flow, :gateway, :platform]
         
         # Always hash phone numbers for privacy
-        @hash_phone_numbers = true
+        @hash_identifiers = true
         
         # Session identifier type (nil = let platforms choose their default)
         # :msisdn = durable sessions (durable across timeouts)

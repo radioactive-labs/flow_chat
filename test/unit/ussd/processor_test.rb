@@ -57,7 +57,7 @@ class UssdProcessorTest < Minitest::Test
   def test_use_session_config
     result = @processor.use_session_config(
       boundaries: [:flow, :gateway],
-      hash_phone_numbers: false,
+      hash_identifiers: false,
       identifier: :request_id
     )
 

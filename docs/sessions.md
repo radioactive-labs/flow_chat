@@ -23,7 +23,7 @@ Controls how session IDs are generated and sessions are isolated:
 ```ruby
 # Global session configuration
 FlowChat::Config.session.boundaries = [:flow, :gateway, :platform]  # isolation boundaries
-FlowChat::Config.session.hash_phone_numbers = true                   # privacy protection
+FlowChat::Config.session.hash_identifiers = true                     # privacy protection
 FlowChat::Config.session.identifier = nil                            # platform chooses default
 ```
 
@@ -99,15 +99,15 @@ identifier: :msisdn
 # Same session resumes across conversations
 ```
 
-### Phone Number Hashing
+### Identifier Hashing
 
 When using `:msisdn` identifier, phone numbers are automatically hashed for privacy:
 
 ```ruby
-FlowChat::Config.session.hash_phone_numbers = true  # default
+FlowChat::Config.session.hash_identifiers = true  # default
 # "+256700123456" becomes "a1b2c3d4" (8-character hash)
 
-FlowChat::Config.session.hash_phone_numbers = false
+FlowChat::Config.session.hash_identifiers = false
 # "+256700123456" used directly (not recommended for production)
 ```
 
@@ -135,7 +135,7 @@ processor = FlowChat::Ussd::Processor.new(self) do |config|
   # Explicit session configuration
   config.use_session_config(
     boundaries: [:flow, :platform],     # isolate by flow and platform
-    hash_phone_numbers: true,           # hash phone numbers for privacy
+    hash_identifiers: true,             # hash identifiers for privacy
     identifier: :msisdn                 # use phone number for durable sessions
   )
 end
@@ -352,8 +352,8 @@ end
 ### 5. Security Considerations
 
 ```ruby
-# Always hash phone numbers in production
-FlowChat::Config.session.hash_phone_numbers = true
+# Always hash identifiers in production
+FlowChat::Config.session.hash_identifiers = true
 
 # Use secure cache backends
 config.cache_store = :redis_cache_store, {

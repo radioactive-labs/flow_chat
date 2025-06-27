@@ -147,7 +147,7 @@ Session identifier options:
 - **`nil`** - Platform chooses default (`:request_id` for USSD, `:msisdn` for WhatsApp)
 - **`:msisdn`** - Use phone number (durable sessions)
 - **`:request_id`** - Use request ID (ephemeral sessions)
-- **`hash_phone_numbers`** - Hash phone numbers for privacy (recommended)
+- **`hash_identifiers`** - Hash identifiers for privacy (recommended)
 
 ## Middleware
 

@@ -40,7 +40,19 @@ module FlowChat
       raise FlowChat::Interrupt::Terminate.new(msg, media: media)
     end
 
-    def phone_number
+    def platform
+      context["request.platform"]
+    end
+
+    def gateway
+      context["request.gateway"]
+    end
+    
+    def user_id
+      context["request.user_id"]
+    end
+
+    def msisdn
       context["request.msisdn"]
     end
 
