@@ -23,6 +23,11 @@ module FlowChat
       @whatsapp ||= WhatsappConfig.new
     end
 
+    # HTTP-specific configuration object
+    def self.http
+      @http ||= HttpConfig.new
+    end
+
     class SessionConfig
       attr_accessor :boundaries, :hash_identifiers, :identifier
 
@@ -86,6 +91,16 @@ module FlowChat
 
       def simulator_mode?
         @message_handling_mode == :simulator
+      end
+    end
+
+    class HttpConfig
+      attr_accessor :default_gateway, :request_timeout, :response_format
+
+      def initialize
+        @default_gateway = :simple
+        @request_timeout = 30
+        @response_format = :json
       end
     end
   end

@@ -232,4 +232,64 @@ class ConfigTest < Minitest::Test
   ensure
     FlowChat::Config.combine_validation_error_with_message = original_setting
   end
+
+  def test_http_config_object_accessible
+    assert_respond_to FlowChat::Config, :http
+
+    http_config = FlowChat::Config.http
+    assert_kind_of FlowChat::Config::HttpConfig, http_config
+  end
+
+  def test_http_config_defaults
+    http_config = FlowChat::Config.http
+
+    assert_equal :simple, http_config.default_gateway
+    assert_equal 30, http_config.request_timeout
+    assert_equal :json, http_config.response_format
+  end
+
+  def test_http_config_setter_methods
+    original_gateway = FlowChat::Config.http.default_gateway
+    original_timeout = FlowChat::Config.http.request_timeout
+    original_format = FlowChat::Config.http.response_format
+
+    begin
+      # Test setters work
+      FlowChat::Config.http.default_gateway = :custom
+      FlowChat::Config.http.request_timeout = 60
+      FlowChat::Config.http.response_format = :xml
+
+      assert_equal :custom, FlowChat::Config.http.default_gateway
+      assert_equal 60, FlowChat::Config.http.request_timeout
+      assert_equal :xml, FlowChat::Config.http.response_format
+    ensure
+      # Restore original values
+      FlowChat::Config.http.default_gateway = original_gateway
+      FlowChat::Config.http.request_timeout = original_timeout
+      FlowChat::Config.http.response_format = original_format
+    end
+  end
+
+  def test_http_config_singleton_instance
+    # Should return the same instance each time
+    config1 = FlowChat::Config.http
+    config2 = FlowChat::Config.http
+
+    assert_same config1, config2
+  end
+
+  def test_http_config_separation
+    # General config should not have HTTP methods
+    refute_respond_to FlowChat::Config, :default_gateway
+    refute_respond_to FlowChat::Config, :request_timeout
+
+    # HTTP config should not have general methods
+    refute_respond_to FlowChat::Config.http, :logger
+    refute_respond_to FlowChat::Config.http, :cache
+
+    # HTTP config should not have other config methods
+    refute_respond_to FlowChat::Config.http, :pagination_page_size
+    refute_respond_to FlowChat::Config.http, :boundaries
+    refute_respond_to FlowChat::Config.http, :message_handling_mode
+  end
 end

@@ -31,6 +31,15 @@ class SimulatorController < ApplicationController
         icon: "💬",
         color: "#25D366"
       },
+      http_main: {
+        name: "Main HTTP API",
+        description: "JSON HTTP API endpoint",
+        processor_type: "http",
+        gateway: "http_simple",
+        endpoint: "/http/webhook",
+        icon: "🌐",
+        color: "#0066cc"
+      },
       whatsapp_tenant_a: {
         name: "Tenant A WhatsApp",
         description: "Multi-tenant endpoint for Tenant A",
@@ -39,6 +48,15 @@ class SimulatorController < ApplicationController
         endpoint: "/tenants/a/whatsapp/webhook",
         icon: "🏢",
         color: "#fd7e14"
+      },
+      http_external: {
+        name: "External HTTP Test",
+        description: "Test with external HTTP server",
+        processor_type: "http",
+        gateway: "http_simple",
+        endpoint: "http://localhost:4567/http/webhook",
+        icon: "🔗",
+        color: "#17a2b8"
       },
       whatsapp_legacy: {
         name: "Legacy WhatsApp",
@@ -54,7 +72,7 @@ class SimulatorController < ApplicationController
 
   # Default configuration to start with
   def default_config_key
-    "whatsapp_main"
+    :http_main
   end
 
   # Default test phone number
@@ -79,8 +97,10 @@ end
 # 5. View request/response logs in real-time
 
 # This allows you to test:
+# - Different protocol types (USSD, WhatsApp, HTTP)
 # - Different controller implementations on the same server
 # - Different API versions (v1, v2, etc.)
 # - Multi-tenant endpoints with different configurations
 # - Legacy endpoints alongside new ones
+# - External HTTP servers (run examples/http_simulator_test.rb)
 # - Different flow implementations for different endpoints

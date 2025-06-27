@@ -314,8 +314,27 @@
         height: 100%;
       }
 
+      .http-screen {
+        background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+      }
+
       .whatsapp-header {
         background: #075e54;
+        color: white;
+        padding: 15px 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+      }
+
+      .http-header {
+        background: #0066cc;
         color: white;
         padding: 15px 20px;
         display: flex;
@@ -931,6 +950,20 @@
                     <!-- Messages will be displayed here -->
                   </div>
                 </div>
+
+                <!-- HTTP Screen -->
+                <div id="http-screen" class="http-screen hidden">
+                  <div class="http-header">
+                    <div class="config-icon" style="background: #0066cc;">🌐</div>
+                    <div class="contact-info">
+                      <h4>HTTP API</h4>
+                      <p>JSON Request/Response</p>
+                    </div>
+                  </div>
+                  <div class="messages-area" id="http-messages-area">
+                    <!-- HTTP messages will be displayed here -->
+                  </div>
+                </div>
               </div>
             </div>
             
@@ -1000,7 +1033,9 @@
         
         ussdScreen: document.getElementById('ussd-screen'),
         whatsappScreen: document.getElementById('whatsapp-screen'),
+        httpScreen: document.getElementById('http-screen'),
         messagesArea: document.getElementById('messages-area'),
+        httpMessagesArea: document.getElementById('http-messages-area'),
         contactAvatar: document.getElementById('contact-avatar'),
         headerContactName: document.getElementById('header-contact-name'),
         
@@ -1091,17 +1126,24 @@
       function updateUI() {
         if (!state.currentConfig) return
         
-        const isWhatsApp = state.currentConfig.processor_type === 'whatsapp'
+        const processorType = state.currentConfig.processor_type
+        const isWhatsApp = processorType === 'whatsapp'
+        const isHttp = processorType === 'http'
         
         // Show/hide platform-specific elements
         elements.contactNameGroup.style.display = isWhatsApp ? 'block' : 'none'
-        elements.ussdScreen.classList.toggle('hidden', isWhatsApp)
+        elements.ussdScreen.classList.toggle('hidden', isWhatsApp || isHttp)
         elements.whatsappScreen.classList.toggle('hidden', !isWhatsApp)
+        elements.httpScreen.classList.toggle('hidden', !isHttp)
         
         // Update input placeholder
-        elements.messageInput.placeholder = isWhatsApp ? 
-          'Type your WhatsApp message...' : 
-          'Enter USSD input...'
+        let placeholder = 'Enter USSD input...'
+        if (isWhatsApp) {
+          placeholder = 'Type your WhatsApp message...'
+        } else if (isHttp) {
+          placeholder = 'Type your HTTP message...'
+        }
+        elements.messageInput.placeholder = placeholder
         
         // Update button states
         const canStart = state.currentConfig && !state.isRunning
@@ -1144,8 +1186,10 @@
           
           if (state.currentConfig.processor_type === 'ussd') {
             await makeUSSDRequest()
-          } else {
+          } else if (state.currentConfig.processor_type === 'whatsapp') {
             await makeWhatsAppRequest()
+          } else if (state.currentConfig.processor_type === 'http') {
+            await makeHTTPRequest()
           }
           
           updateStatus('Connected', 'connected')
@@ -1164,9 +1208,11 @@
         try {
           updateStatus('Sending...', 'connecting')
           
-          // Add outgoing message to WhatsApp chat
+          // Add outgoing message to appropriate chat
           if (state.currentConfig.processor_type === 'whatsapp') {
             addMessage(message, true)
+          } else if (state.currentConfig.processor_type === 'http') {
+            addHttpMessage(message, true)
           }
           
           elements.messageInput.value = ''
@@ -1174,8 +1220,10 @@
           
           if (state.currentConfig.processor_type === 'ussd') {
             await makeUSSDRequest(message)
-          } else {
+          } else if (state.currentConfig.processor_type === 'whatsapp') {
             await makeWhatsAppRequest(message)
+          } else if (state.currentConfig.processor_type === 'http') {
+            await makeHTTPRequest(message)
           }
           
           updateStatus('Connected', 'connected')
@@ -1192,6 +1240,7 @@
         elements.messageInput.value = ''
         elements.ussdScreen.textContent = ''
         elements.messagesArea.innerHTML = ''
+        elements.httpMessagesArea.innerHTML = ''
         
         updateCharCount()
         updateStatus('Ready', 'disconnected')
@@ -1510,6 +1559,75 @@
               `• Returns JSON with mode: "simulator" for simulator requests\n` +
               `• Handles webhook verification (if required by your setup)`
             )
+          }, 500)
+          
+          throw error
+        }
+      }
+
+      // HTTP API request handler
+      async function makeHTTPRequest(userInput = null) {
+        const config = state.currentConfig
+        const userId = elements.phoneNumber.value
+        
+        // Build HTTP request payload
+        const requestData = {
+          session_id: state.sessionId,
+          user_id: userId,
+          input: userInput || '',
+          simulator_mode: true
+        }
+        
+        try {
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestData),
+            credentials: 'include'
+          })
+          
+          // Read and parse response
+          const responseText = await response.text()
+          let responseData = null
+          
+          // Try to parse as JSON
+          if (response.headers.get('content-type')?.includes('application/json')) {
+            try {
+              responseData = JSON.parse(responseText)
+              
+              // Display the HTTP response
+              displayHTTPResponse(responseData)
+              addRequestLog('POST', config.endpoint, requestData, responseData, response.status)
+              
+            } catch (jsonError) {
+              console.warn('Failed to parse JSON response:', jsonError)
+              responseData = responseText
+              displayHTTPResponse({ message: responseText, type: 'text' })
+              addRequestLog('POST', config.endpoint, requestData, responseData, response.status)
+            }
+          } else {
+            responseData = responseText
+            displayHTTPResponse({ message: responseText, type: 'text' })
+            addRequestLog('POST', config.endpoint, requestData, responseData, response.status)
+          }
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+          
+        } catch (error) {
+          // Log the error
+          addRequestLog('POST', config.endpoint, requestData, null, 0, error.message)
+          
+          // Show error in HTTP chat
+          setTimeout(() => {
+            addHttpMessage(
+              `❌ Request Failed: ${error.message}\n\n` +
+              `💡 Ensure your HTTP endpoint:\n` +
+              `• Accepts POST requests\n` +
+              `• Returns JSON with message, type, choices (optional), media (optional)\n` +
+              `• Handles CORS if cross-origin`
+            , false, 'error')
           }, 500)
           
           throw error
@@ -1887,6 +2005,100 @@
         
         elements.messagesArea.appendChild(messageDiv)
         elements.messagesArea.scrollTop = elements.messagesArea.scrollHeight
+      }
+
+      function displayHTTPResponse(responseData) {
+        // Handle the HTTP response data
+        let message = responseData.message || 'Empty response'
+        let messageType = responseData.type || 'text'
+        let choices = responseData.choices || null
+        let media = responseData.media || null
+        
+        // Log choices for debugging if needed
+        if (choices && console.log) {
+          console.log('HTTP Response choices:', choices)
+        }
+        
+        // Add incoming HTTP message
+        addHttpMessage(message, false, messageType, choices, media)
+        
+        // Update session state based on response type  
+        state.isRunning = (messageType === 'prompt' || messageType === 'text')
+      }
+
+      function addHttpMessage(content, isOutgoing = false, type = 'text', choices = null, media = null) {
+        const messageDiv = document.createElement('div')
+        messageDiv.className = `message ${isOutgoing ? 'outgoing' : 'incoming'}`
+        
+        const bubbleDiv = document.createElement('div')
+        bubbleDiv.className = 'message-bubble'
+        
+        // Style differently for different message types
+        if (type === 'error') {
+          bubbleDiv.style.background = '#ffebee'
+          bubbleDiv.style.borderLeft = '4px solid #f44336'
+          bubbleDiv.style.whiteSpace = 'pre-line'
+        } else if (type === 'terminal') {
+          bubbleDiv.style.background = '#f3e5f5'
+          bubbleDiv.style.borderLeft = '4px solid #9c27b0'
+        }
+        
+        // Handle media content if present
+        if (media && !isOutgoing) {
+          const mediaContainer = document.createElement('div')
+          mediaContainer.className = 'media-container'
+          mediaContainer.style.marginBottom = content ? '8px' : '0'
+          
+          if (media.type === 'image' && media.url) {
+            const img = document.createElement('img')
+            img.src = media.url
+            img.style.maxWidth = '100%'
+            img.style.height = 'auto'
+            img.style.borderRadius = '8px'
+            img.style.display = 'block'
+            img.alt = media.caption || 'Image'
+            mediaContainer.appendChild(img)
+          }
+          
+          bubbleDiv.appendChild(mediaContainer)
+        }
+        
+        // Add text content
+        if (content) {
+          const textDiv = document.createElement('div')
+          textDiv.textContent = content
+          bubbleDiv.appendChild(textDiv)
+        }
+        
+        messageDiv.appendChild(bubbleDiv)
+        
+        // Add choice buttons for incoming messages
+        if (!isOutgoing && choices && Object.keys(choices).length > 0) {
+          const buttonsDiv = document.createElement('div')
+          buttonsDiv.className = 'interactive-buttons'
+          
+          Object.entries(choices).forEach(([key, value]) => {
+            const btn = document.createElement('div')
+            btn.className = 'interactive-button'
+            
+            const choiceKey = value.key || key
+            const displayValue = value.value || 'Option'
+            
+            btn.textContent = displayValue
+            btn.onclick = () => selectHttpOption(choiceKey)
+            buttonsDiv.appendChild(btn)
+          })
+          
+          bubbleDiv.appendChild(buttonsDiv)
+        }
+        
+        elements.httpMessagesArea.appendChild(messageDiv)
+        elements.httpMessagesArea.scrollTop = elements.httpMessagesArea.scrollHeight
+      }
+
+      function selectHttpOption(optionKey) {
+        elements.messageInput.value = optionKey
+        sendMessage()
       }
 
       function getDocumentIcon(filename) {

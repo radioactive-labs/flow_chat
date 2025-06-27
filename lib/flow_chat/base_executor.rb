@@ -32,7 +32,7 @@ module FlowChat
       FlowChat.logger.info { "#{log_prefix}: Flow terminated - Session: #{session_id}, Message: '#{e.prompt&.truncate(100)}'" }
       FlowChat.logger.debug { "#{log_prefix}: Destroying session #{session_id}" }
       context.session.destroy
-      [:terminate, e.prompt, nil, e.media]
+      [:terminal, e.prompt, nil, e.media]
     rescue => error
       FlowChat.logger.error { "#{log_prefix}: Flow execution failed - #{flow_class.name}##{action}, Session: #{session_id}, Error: #{error.class.name}: #{error.message}" }
       FlowChat.logger.debug { "#{log_prefix}: Stack trace: #{error.backtrace.join("\n")}" }
