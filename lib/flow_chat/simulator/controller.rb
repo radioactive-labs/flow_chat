@@ -26,7 +26,7 @@ module FlowChat
         "ussd"
       end
 
-      def simulator_configurations
+      def configurations
         {
           "ussd" => {
             name: "USSD (Nalo)",
@@ -71,7 +71,7 @@ module FlowChat
           default_phone_number: default_phone_number,
           default_contact_name: default_contact_name,
           default_config_key: default_config_key,
-          configurations: simulator_configurations
+          configurations: configurations
         }
       end
 

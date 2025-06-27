@@ -59,7 +59,7 @@ class SimulatorController < ApplicationController
   end
 
   def default_config_key
-    :whatsapp
+    "whatsapp"
   end
 
   def default_phone_number

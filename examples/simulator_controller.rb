@@ -54,7 +54,7 @@ class SimulatorController < ApplicationController
 
   # Default configuration to start with
   def default_config_key
-    :whatsapp_main
+    "whatsapp_main"
   end
 
   # Default test phone number
