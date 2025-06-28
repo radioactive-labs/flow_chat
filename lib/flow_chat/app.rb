@@ -1,5 +1,5 @@
 module FlowChat
-  class BaseApp
+  class App
     attr_reader :session, :input, :context, :navigation_stack
 
     def initialize(context)
@@ -78,9 +78,13 @@ module FlowChat
 
     protected
 
-    # Platform-specific methods to be overridden
     def prepare_user_input
-      input
+      user_input = input
+      if platform != :ussd && session.get("$start$").nil?
+        session.set("$start$", user_input)
+        user_input = nil
+      end
+      user_input
     end
   end
 end 

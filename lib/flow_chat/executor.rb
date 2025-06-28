@@ -1,8 +1,8 @@
 module FlowChat
-  class BaseExecutor
+  class Executor
     def initialize(app)
       @app = app
-      FlowChat.logger.debug { "#{log_prefix}: Initialized #{platform_name} executor middleware" }
+      FlowChat.logger.debug { "#{log_prefix}: Initialized executor middleware" }
     end
 
     def call(context)
@@ -13,7 +13,7 @@ module FlowChat
       FlowChat.logger.info { "#{log_prefix}: Executing flow #{flow_class.name}##{action} for session #{session_id}" }
 
       platform_app = build_platform_app(context)
-      FlowChat.logger.debug { "#{log_prefix}: #{platform_name} app built for flow execution" }
+      FlowChat.logger.debug { "#{log_prefix}: app built for flow execution" }
 
       flow = flow_class.new platform_app
       FlowChat.logger.debug { "#{log_prefix}: Flow instance created, invoking #{action} method" }
@@ -41,17 +41,12 @@ module FlowChat
 
     protected
 
-    # Subclasses must implement these methods
-    def platform_name
-      raise NotImplementedError, "Subclasses must implement platform_name"
-    end
-
     def log_prefix
-      raise NotImplementedError, "Subclasses must implement log_prefix"
+      "Executor"
     end
 
     def build_platform_app(context)
-      raise NotImplementedError, "Subclasses must implement build_platform_app"
+      FlowChat::App.new(context)
     end
   end
 end 
