@@ -70,7 +70,7 @@ module FlowChat
       use_session_config(boundaries: current_boundaries)
     end
 
-    def run(flow_class, action)
+    def run(flow_class, action, **options)
       # Instrument flow execution (this will log via LogSubscriber)
       instrument(Events::FLOW_EXECUTION_START, {
         flow_name: flow_class.name.underscore,
@@ -81,6 +81,7 @@ module FlowChat
       @context["flow.name"] = flow_class.name.underscore
       @context["flow.class"] = flow_class
       @context["flow.action"] = action
+      @context["flow.options"] = options
 
       FlowChat.logger.debug { "BaseProcessor: Context prepared for flow #{flow_class.name}" }
 
