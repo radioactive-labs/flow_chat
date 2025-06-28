@@ -12,8 +12,8 @@ class WhatsappAppTest < Minitest::Test
     @context["request.location"] = {"latitude" => 0.3476, "longitude" => 32.5825}
     @context["request.media"] = {"type" => "image", "url" => "https://example.com/image.jpg"}
 
-    # Set started_at to simulate ongoing conversation (not first message)
-    @context.session.set("$started_at$", "2023-12-01T10:00:00Z")
+    # Set start to simulate ongoing conversation (not first message)
+    @context.session.set("$start$", "Hi")
 
     @app = FlowChat::Whatsapp::App.new(@context)
   end
@@ -202,7 +202,7 @@ class WhatsappAppTest < Minitest::Test
     # Create session store that can be shared between app instances
     session_store = create_test_session_store
     # Set started_at to simulate ongoing conversation
-    session_store.set("$started_at$", Time.current.iso8601)
+    session_store.set("$start$", Time.current.iso8601)
 
     # First request - user provides name
     context1 = FlowChat::Context.new
@@ -286,7 +286,7 @@ class WhatsappAppTest < Minitest::Test
     # Simulate someone sending "Hello" to start a conversation
     @context.input = "Hello"
     session_store = create_test_session_store
-    # No $started_at$ in session, so this is the initial message
+    # No $start$ in session, so this is the initial message
     @context.session = session_store
 
     app = FlowChat::Whatsapp::App.new(@context)
@@ -301,8 +301,8 @@ class WhatsappAppTest < Minitest::Test
     assert_nil error.choices
     assert_nil error.media
 
-    # Should have set $started_at$
-    refute_nil session_store.get("$started_at$")
+    # Should have set $start$
+    refute_nil session_store.get("$start$")
     # App's internal input should be cleared after screen processing
     assert_nil app.input
   end
@@ -311,7 +311,7 @@ class WhatsappAppTest < Minitest::Test
     # Simulate ongoing conversation
     @context.input = "John"
     @context.session = create_test_session_store
-    @context.session.set("$started_at$", "2023-12-01T10:00:00Z")  # Conversation already started
+    @context.session.set("$start$", "2023-12-01T10:00:00Z")  # Conversation already started
     app = FlowChat::Whatsapp::App.new(@context)
 
     # Subsequent screens should get the actual input
@@ -324,9 +324,9 @@ class WhatsappAppTest < Minitest::Test
   end
 
   def test_started_at_timestamp_not_overwritten
-    # Test that $started_at$ doesn't get overwritten if already set
+    # Test that $start$ doesn't get overwritten if already set
     original_timestamp = "2023-12-01T10:00:00Z"
-    @context.session.set("$started_at$", original_timestamp)
+    @context.session.set("$start$", original_timestamp)
 
     app = FlowChat::Whatsapp::App.new(@context)
     app.screen(:second_screen) do |prompt|
@@ -334,7 +334,7 @@ class WhatsappAppTest < Minitest::Test
     end
 
     # Timestamp should remain unchanged
-    assert_equal original_timestamp, app.session.get("$started_at$")
+    assert_equal original_timestamp, app.session.get("$start$")
   end
 
   def test_complete_conversation_flow
@@ -357,8 +357,8 @@ class WhatsappAppTest < Minitest::Test
     assert_nil error1.choices
     assert_nil error1.media
 
-    # At this point, session should have $started_at$ and app input should be cleared
-    refute_nil session_store.get("$started_at$")
+    # At this point, session should have $start$ and app input should be cleared
+    refute_nil session_store.get("$start$")
     assert_nil app1.input
 
     # Step 2: User responds with their name

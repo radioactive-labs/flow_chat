@@ -18,8 +18,8 @@ module FlowChat
       # WhatsApp has special startup logic and supports media
       def prepare_user_input
         user_input = input
-        if session.get("$started_at$").nil?
-          session.set("$started_at$", Time.current.iso8601)
+        if session.get("$start$").nil?
+          session.set("$start$", user_input)
           user_input = nil
         end
         user_input

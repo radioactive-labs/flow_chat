@@ -170,10 +170,10 @@ class GoBackTest < Minitest::Test
     # Test that WhatsApp's special startup logic doesn't interfere with navigation
     app = FlowChat::Whatsapp::App.new(@context)
 
-    # First screen should set $started_at$
-    refute app.session.get("$started_at$")
+    # First screen should set $start$
+    refute app.session.get("$start$")
     app.screen(:welcome) { |prompt| "welcome" }
-    assert app.session.get("$started_at$")
+    assert app.session.get("$start$")
 
     # Add another screen
     app.screen(:menu) { |prompt| "menu_choice" }
@@ -186,7 +186,7 @@ class GoBackTest < Minitest::Test
     assert_equal "restart_flow", error.prompt
     assert_nil app.session.get(:menu)  # Current screen deleted
     assert_equal "welcome", app.session.get(:welcome)  # Previous preserved
-    assert app.session.get("$started_at$")  # Startup flag preserved
+    assert app.session.get("$start$")  # Startup flag preserved
   end
 
   def test_navigation_stack_duplicate_prevention_still_works

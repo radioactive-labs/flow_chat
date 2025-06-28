@@ -7,7 +7,7 @@ class MediaSupportTest < Minitest::Test
     @ussd_context["request.msisdn"] = "+1234567890"
     @ussd_context["request.message_id"] = "test_message_123"
     @ussd_context["request.timestamp"] = Time.now
-    @ussd_context.session.set("$started_at$", "2023-12-01T10:00:00Z")
+    @ussd_context.session.set("$start$", "2023-12-01T10:00:00Z")
 
     @whatsapp_context = FlowChat::Context.new
     @whatsapp_context.session = create_test_session_store
@@ -15,7 +15,7 @@ class MediaSupportTest < Minitest::Test
     @whatsapp_context["request.message_id"] = "whatsapp_message_123"
     @whatsapp_context["request.timestamp"] = Time.now
     @whatsapp_context["request.contact_name"] = "John Doe"
-    @whatsapp_context.session.set("$started_at$", "2023-12-01T10:00:00Z")
+    @whatsapp_context.session.set("$start$", "2023-12-01T10:00:00Z")
   end
 
   # ============================================================================
