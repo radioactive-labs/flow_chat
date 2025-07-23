@@ -37,10 +37,10 @@ module FlowChat
         # :gateway = separate sessions per gateway
         # :platform = separate sessions per platform (ussd, whatsapp)
         @boundaries = [:flow, :gateway, :platform]
-        
+
         # Always hash phone numbers for privacy
         @hash_identifiers = true
-        
+
         # Session identifier type (nil = let platforms choose their default)
         # :msisdn = durable sessions (durable across timeouts)
         # :request_id = ephemeral sessions (new session each time)

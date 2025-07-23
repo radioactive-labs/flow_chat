@@ -26,7 +26,6 @@ class ConfigTest < Minitest::Test
     assert_equal [:flow, :gateway, :platform], session_config.boundaries
     assert_equal true, session_config.hash_identifiers
     assert_nil session_config.identifier  # Platform chooses default
-
   end
 
   def test_session_config_setter_methods
@@ -43,7 +42,6 @@ class ConfigTest < Minitest::Test
       assert_equal [:flow, :gateway], FlowChat::Config.session.boundaries
       assert_equal false, FlowChat::Config.session.hash_identifiers
       assert_equal :request_id, FlowChat::Config.session.identifier
-
     ensure
       # Restore original values
       FlowChat::Config.session.boundaries = original_boundaries

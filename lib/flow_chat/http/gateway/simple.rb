@@ -62,7 +62,7 @@ module FlowChat
 
         def render_response(type, prompt, choices, media)
           rendered = FlowChat::Http::Renderer.new(prompt, choices: choices, media: media).render
-          
+
           {
             type: type,
             session_id: context["request.id"],
@@ -74,4 +74,4 @@ module FlowChat
       end
     end
   end
-end 
+end

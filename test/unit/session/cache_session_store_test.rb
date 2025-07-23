@@ -171,7 +171,7 @@ class CacheSessionStoreTest < Minitest::Test
   def test_cross_platform_session_isolation
     ussd_context = create_ussd_context("shared_session", "+256700123456")
     whatsapp_context = create_whatsapp_context("+256700123456")
-    
+
     # Set different session IDs for different platforms
     ussd_context["session.id"] = "test_flow:ussd:nalo:shared_session"
     whatsapp_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
@@ -191,7 +191,7 @@ class CacheSessionStoreTest < Minitest::Test
   def test_different_users_session_isolation
     user1_context = create_whatsapp_context("+256700111111")
     user2_context = create_whatsapp_context("+256700222222")
-    
+
     # Set different session IDs for different users
     user1_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:user1hash"
     user2_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:user2hash"
@@ -212,7 +212,7 @@ class CacheSessionStoreTest < Minitest::Test
   def test_whatsapp_sessions_persist_longer
     whatsapp_context = create_whatsapp_context("+256700123456")
     ussd_context = create_ussd_context("test", "+256700123456")
-    
+
     whatsapp_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:persist_test"
     ussd_context["session.id"] = "test_flow:ussd:nalo:persist_test"
 

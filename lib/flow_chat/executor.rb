@@ -49,4 +49,4 @@ module FlowChat
       FlowChat::App.new(context)
     end
   end
-end 
+end

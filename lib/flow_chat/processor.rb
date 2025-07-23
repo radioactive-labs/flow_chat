@@ -51,7 +51,7 @@ module FlowChat
     def use_middleware(middleware)
       if block_given?
         yield custom_middleware_builder
-        return self 
+        return self
       end
 
       raise "Middleware must be a class" unless middleware.is_a?(Class)

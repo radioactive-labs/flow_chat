@@ -310,7 +310,7 @@ class UssdProcessorTest < Minitest::Test
     result = @processor.use_url_isolation
 
     assert_equal @processor, result
-    
+
     # Should add :url to existing boundaries
     session_options = @processor.instance_variable_get(:@session_options)
     assert_includes session_options.boundaries, :url
@@ -319,7 +319,7 @@ class UssdProcessorTest < Minitest::Test
   def test_use_url_isolation_preserves_existing_boundaries
     @processor.use_session_config(boundaries: [:flow, :platform])
     @processor.use_url_isolation
-    
+
     session_options = @processor.instance_variable_get(:@session_options)
     assert_equal [:flow, :platform, :url], session_options.boundaries
   end
@@ -327,7 +327,7 @@ class UssdProcessorTest < Minitest::Test
   def test_use_url_isolation_prevents_duplicates
     @processor.use_url_isolation
     @processor.use_url_isolation  # Call twice
-    
+
     session_options = @processor.instance_variable_get(:@session_options)
     url_count = session_options.boundaries.count(:url)
     assert_equal 1, url_count, "Should only have one :url boundary even if called multiple times"

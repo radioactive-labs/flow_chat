@@ -5,16 +5,16 @@ class HttpSimpleGatewayTest < Minitest::Test
     @context = FlowChat::Context.new
     @controller = mock_controller
     @context["controller"] = @controller
-    
+
     # Add render method to controller mock
     @controller.define_singleton_method(:render) do |options|
       @last_render = options
     end
-    
+
     # Add method to retrieve last render for testing
     @controller.define_singleton_method(:last_render) { @last_render }
-    
-    @mock_app = lambda { |ctx| [:prompt, "Test response", { "1" => "Option 1" }, nil] }
+
+    @mock_app = lambda { |ctx| [:prompt, "Test response", {"1" => "Option 1"}, nil] }
     @gateway = FlowChat::Http::Gateway::Simple.new(@mock_app)
   end
 
@@ -32,7 +32,7 @@ class HttpSimpleGatewayTest < Minitest::Test
       "msisdn" => "+256700123456",
       "input" => "Hello"
     }
-    
+
     # Add the missing request methods to the mock
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:path) { "/http/webhook" }
@@ -81,7 +81,7 @@ class HttpSimpleGatewayTest < Minitest::Test
   end
 
   def test_call_renders_json_response
-    @controller.request.params = { "input" => "Test" }
+    @controller.request.params = {"input" => "Test"}
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
@@ -107,12 +107,12 @@ class HttpSimpleGatewayTest < Minitest::Test
 
   def test_call_with_media_response
     mock_app_with_media = lambda do |ctx|
-      media = { url: "https://example.com/image.jpg", type: :image }
+      media = {url: "https://example.com/image.jpg", type: :image}
       [:prompt, "Check this image", nil, media]
     end
     gateway = FlowChat::Http::Gateway::Simple.new(mock_app_with_media)
 
-    @controller.request.params = { "input" => "Show image" }
+    @controller.request.params = {"input" => "Show image"}
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
@@ -133,7 +133,7 @@ class HttpSimpleGatewayTest < Minitest::Test
     mock_terminal_app = lambda { |ctx| [:terminal, "Goodbye!", nil, nil] }
     gateway = FlowChat::Http::Gateway::Simple.new(mock_terminal_app)
 
-    @controller.request.params = { "input" => "bye" }
+    @controller.request.params = {"input" => "bye"}
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
@@ -161,7 +161,7 @@ class HttpSimpleGatewayTest < Minitest::Test
     # Mock PhoneNumberUtil to test normalization
     original_method = FlowChat::PhoneNumberUtil.method(:to_e164)
     FlowChat::PhoneNumberUtil.define_singleton_method(:to_e164) do |phone|
-      phone == "0700123456" ? "+256700123456" : original_method.call(phone)
+      (phone == "0700123456") ? "+256700123456" : original_method.call(phone)
     end
 
     begin
@@ -176,7 +176,7 @@ class HttpSimpleGatewayTest < Minitest::Test
   end
 
   def test_instrumentation_events
-    @controller.request.params = { "input" => "Test message" }
+    @controller.request.params = {"input" => "Test message"}
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
@@ -188,7 +188,7 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     received_payload = nil
     sent_payload = nil
-    
+
     original_instrument = @gateway.method(:instrument)
     @gateway.define_singleton_method(:instrument) do |event, payload|
       case event
@@ -206,7 +206,7 @@ class HttpSimpleGatewayTest < Minitest::Test
 
       assert message_received_called, "MESSAGE_RECEIVED event should be instrumented"
       assert message_sent_called, "MESSAGE_SENT event should be instrumented"
-      
+
       # Test the payload contents
       assert_equal "Test message", received_payload[:message]
       assert_equal :http_simple, sent_payload[:gateway]
@@ -216,4 +216,4 @@ class HttpSimpleGatewayTest < Minitest::Test
       @gateway.define_singleton_method(:instrument, original_instrument)
     end
   end
-end 
+end

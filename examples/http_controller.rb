@@ -6,10 +6,10 @@
 # Usage:
 #   POST /http/webhook
 #   Content-Type: application/json
-#   
+#
 #   {
 #     "session_id": "unique_session_123",
-#     "user_id": "user_456", 
+#     "user_id": "user_456",
 #     "input": "Hello"
 #   }
 #
@@ -32,7 +32,7 @@ class HttpController < ApplicationController
     processor = FlowChat::Http::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
       config.use_session_store FlowChat::Session::CacheSessionStore
-      
+
       # Configure session management
       config.use_session_config(
         boundaries: [:flow, :platform],
@@ -56,7 +56,7 @@ class WelcomeFlow < FlowChat::Flow
 
     age = app.screen(:age) do |prompt|
       prompt.ask "Nice to meet you, #{name}! How old are you?",
-        validate: ->(input) { 
+        validate: ->(input) {
           return "Please enter a number" unless input.match?(/^\d+$/)
           return "Age must be between 1 and 120" unless (1..120).include?(input.to_i)
           nil
@@ -67,7 +67,7 @@ class WelcomeFlow < FlowChat::Flow
     preferences = app.screen(:preferences) do |prompt|
       prompt.select "What are you interested in?", {
         "tech" => "Technology",
-        "sports" => "Sports", 
+        "sports" => "Sports",
         "music" => "Music",
         "travel" => "Travel"
       }
@@ -78,7 +78,7 @@ class WelcomeFlow < FlowChat::Flow
     app.say "Name: #{name}"
     app.say "Age: #{age}"
     app.say "Interest: #{preferences.capitalize}"
-    
+
     # Ask if they want to continue
     continue = app.screen(:continue) do |prompt|
       prompt.yes? "Would you like to explore more features?"
@@ -149,6 +149,6 @@ class WelcomeFlow < FlowChat::Flow
     app.say "• This is visit ##{counter} in this session"
     app.say "• Session started at: #{timestamp}"
     app.say "• Session data persists across HTTP requests"
-    app.say "• Session ID: #{app.session.context['session.id']}"
+    app.say "• Session ID: #{app.session.context["session.id"]}"
   end
-end 
+end

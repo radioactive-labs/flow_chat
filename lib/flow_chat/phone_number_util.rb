@@ -2,7 +2,7 @@ module FlowChat
   module PhoneNumberUtil
     def self.to_e164(phone_number)
       return phone_number if phone_number.nil? || phone_number.empty?
-      
+
       begin
         # Try to load phonelib without Rails dependency
         require_phonelib_safely
@@ -18,9 +18,11 @@ module FlowChat
 
     def self.require_phonelib_safely
       return if defined?(Phonelib)
-      
+
       # Temporarily stub Rails if it doesn't exist
-      unless defined?(Rails)
+      if defined?(Rails)
+        require "phonelib"
+      else
         stub_rails = Module.new do
           def self.const_missing(name)
             if name == :Railtie
@@ -33,15 +35,13 @@ module FlowChat
         Object.const_set(:Rails, stub_rails)
         require "phonelib"
         Object.send(:remove_const, :Rails)
-      else
-        require "phonelib"
       end
     end
 
     def self.fallback_e164_format(phone_number)
       # Simple fallback - ensure it starts with + and looks like a phone number
-      cleaned = phone_number.to_s.gsub(/[^\d+]/, '')
-      cleaned.start_with?('+') ? cleaned : "+#{cleaned}"
+      cleaned = phone_number.to_s.gsub(/[^\d+]/, "")
+      cleaned.start_with?("+") ? cleaned : "+#{cleaned}"
     end
   end
-end 
+end

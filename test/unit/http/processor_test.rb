@@ -153,4 +153,4 @@ class HttpProcessorTest < Minitest::Test
       @app.call(env)
     end
   end
-end 
+end

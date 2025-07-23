@@ -28,4 +28,4 @@ class HttpExecutorTest < Minitest::Test
   def test_initializes_with_app
     assert_equal @mock_app, @executor.instance_variable_get(:@app)
   end
-end 
+end

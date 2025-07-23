@@ -65,7 +65,7 @@ module FlowChat
 
       def get_session_identifier(context)
         identifier_type = @session_options.identifier || platform_default_identifier(context)
-        
+
         case identifier_type
         when :request_id
           context["request.id"]
@@ -82,7 +82,7 @@ module FlowChat
 
       def platform_default_identifier(context)
         platform = context["request.platform"]
-        
+
         case platform
         when :whatsapp
           :msisdn
@@ -121,19 +121,27 @@ module FlowChat
         return nil unless request
 
         # Extract host and path for URL boundary
-        host = request.host rescue nil
-        path = request.path rescue nil
+        host = begin
+          request.host
+        rescue
+          nil
+        end
+        path = begin
+          request.path
+        rescue
+          nil
+        end
 
-        # Create a normalized URL identifier: host + path 
+        # Create a normalized URL identifier: host + path
         # e.g., "example.com/api/v1/ussd" or "tenant1.example.com/ussd"
         url_parts = []
         url_parts << host if host.present?
-        url_parts << path.sub(/^\//, '') if path.present? && path != '/'
+        url_parts << path.sub(/^\//, "") if path.present? && path != "/"
 
         # For long URLs, use first part + hash suffix instead of full hash
-        url_identifier = url_parts.join('/').gsub(/[^a-zA-Z0-9._-]/, '_')
+        url_identifier = url_parts.join("/").gsub(/[^a-zA-Z0-9._-]/, "_")
         if url_identifier.length > 50
-          require 'digest'
+          require "digest"
           # Take first 41 chars + hash suffix to keep it manageable but recognizable
           first_part = url_identifier[0, 41]
           hash_suffix = Digest::SHA256.hexdigest(url_identifier)[0, 8]
@@ -145,7 +153,7 @@ module FlowChat
 
       def hash_identifier(identifier)
         # Use SHA256 but only take first 8 characters for reasonable session IDs
-        require 'digest'
+        require "digest"
         Digest::SHA256.hexdigest(identifier.to_s)[0, 8]
       end
     end

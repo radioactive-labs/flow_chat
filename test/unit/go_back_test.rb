@@ -13,7 +13,7 @@ class GoBackTest < Minitest::Test
     # Add screens to navigation stack
     app.screen(:screen1) { |prompt| "value1" }
     app.screen(:screen2) { |prompt| "value2" }
-    
+
     assert_equal [:screen1, :screen2], app.navigation_stack
     assert_equal "value1", app.session.get(:screen1)
     assert_equal "value2", app.session.get(:screen2)
@@ -24,7 +24,7 @@ class GoBackTest < Minitest::Test
     end
 
     assert_equal "restart_flow", error.prompt
-    
+
     # Current screen (:screen2) should be deleted
     assert_equal "value1", app.session.get(:screen1)  # Previous screen preserved
     assert_nil app.session.get(:screen2)  # Current screen deleted
@@ -36,7 +36,7 @@ class GoBackTest < Minitest::Test
     # Add screens to navigation stack
     app.screen(:screen1) { |prompt| "value1" }
     app.screen(:screen2) { |prompt| "value2" }
-    
+
     assert_equal [:screen1, :screen2], app.navigation_stack
     assert_equal "value1", app.session.get(:screen1)
     assert_equal "value2", app.session.get(:screen2)
@@ -47,7 +47,7 @@ class GoBackTest < Minitest::Test
     end
 
     assert_equal "restart_flow", error.prompt
-    
+
     # Current screen (:screen2) should be deleted
     assert_equal "value1", app.session.get(:screen1)  # Previous screen preserved
     assert_nil app.session.get(:screen2)  # Current screen deleted
@@ -135,7 +135,7 @@ class GoBackTest < Minitest::Test
     app2.screen(:screen1) { |prompt| "value1" }  # Should return cached value
     app2.screen(:screen2) { |prompt| "value2" }  # Should return cached value
 
-    # Second go_back (from screen2)  
+    # Second go_back (from screen2)
     assert_raises(FlowChat::Interrupt::RestartFlow) { app2.go_back }
     assert_nil app2.session.get(:screen2)
     assert_equal "value1", app2.session.get(:screen1)
@@ -207,7 +207,7 @@ class GoBackTest < Minitest::Test
 
   def test_go_back_practical_flow_simulation
     # Simulate a realistic flow with navigation
-    
+
     # Step 1: Main menu (first time, with input)
     @context.input = "Services"
     app = FlowChat::Ussd::App.new(@context)
@@ -227,11 +227,11 @@ class GoBackTest < Minitest::Test
 
     # Step 4: Flow restarts - simulate new request
     app2 = FlowChat::Ussd::App.new(@context)
-    
+
     # Main menu has cached data, returns immediately
     main_choice2 = app2.screen(:main_menu) { |prompt| "should_not_execute" }
     assert_equal "Services", main_choice2  # Returns cached value
-    
+
     # Services menu has no cached data (deleted), should re-prompt
     # This is where the user would be prompted again in real flow
     assert_nil app2.session.get(:services_menu)
@@ -240,4 +240,4 @@ class GoBackTest < Minitest::Test
     services_menu_choice2 = app2.screen(:services_menu) { |prompt| "New Response" }
     assert_equal "New Response", services_menu_choice2  # Returns cached value
   end
-end 
+end

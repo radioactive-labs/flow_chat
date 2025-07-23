@@ -166,10 +166,9 @@ module FlowChat
                 from: phone_number,
                 message: context.input,
                 message_type: message["type"],
-                message_id: message_id,
+                message_id: message_id
               })
             end
-
 
             FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
 

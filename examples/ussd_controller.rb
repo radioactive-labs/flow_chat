@@ -233,7 +233,7 @@ class UssdController < ApplicationController
       config.use_session_store FlowChat::Session::RailsSessionStore
       config.use_middleware LoggingMiddleware  # Add custom logging
       config.use_durable_sessions           # Enable durable sessions
-      
+
       # Or configure session boundaries explicitly:
       # config.use_session_config(
       #   boundaries: [:flow, :platform],     # which boundaries to enforce

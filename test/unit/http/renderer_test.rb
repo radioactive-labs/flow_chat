@@ -11,7 +11,7 @@ class HttpRendererTest < Minitest::Test
   end
 
   def test_renders_message_with_choices
-    choices = { "1" => "Option 1", "2" => "Option 2" }
+    choices = {"1" => "Option 1", "2" => "Option 2"}
     renderer = FlowChat::Http::Renderer.new("Choose an option:", choices: choices)
     result = renderer.render
 
@@ -24,7 +24,7 @@ class HttpRendererTest < Minitest::Test
   end
 
   def test_renders_message_with_media
-    media = { url: "https://example.com/image.jpg", type: :image, caption: "Test image" }
+    media = {url: "https://example.com/image.jpg", type: :image, caption: "Test image"}
     renderer = FlowChat::Http::Renderer.new("Check this out:", media: media)
     result = renderer.render
 
@@ -35,7 +35,7 @@ class HttpRendererTest < Minitest::Test
   end
 
   def test_renders_message_with_media_path
-    media = { path: "/local/image.jpg", type: :image }
+    media = {path: "/local/image.jpg", type: :image}
     renderer = FlowChat::Http::Renderer.new("Local image:", media: media)
     result = renderer.render
 
@@ -46,7 +46,7 @@ class HttpRendererTest < Minitest::Test
   end
 
   def test_renders_message_with_media_defaults
-    media = { url: "https://example.com/file.pdf" }
+    media = {url: "https://example.com/file.pdf"}
     renderer = FlowChat::Http::Renderer.new("Document:", media: media)
     result = renderer.render
 
@@ -56,9 +56,9 @@ class HttpRendererTest < Minitest::Test
   end
 
   def test_renders_complete_response
-    choices = { "yes" => "Yes", "no" => "No" }
-    media = { url: "https://example.com/image.jpg", type: :image }
-    
+    choices = {"yes" => "Yes", "no" => "No"}
+    media = {url: "https://example.com/image.jpg", type: :image}
+
     renderer = FlowChat::Http::Renderer.new(
       "Do you like this image?",
       choices: choices,
@@ -93,4 +93,4 @@ class HttpRendererTest < Minitest::Test
 
     assert_nil formatted
   end
-end 
+end

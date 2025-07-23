@@ -24,7 +24,7 @@ module FlowChat
       def format_choices
         return unless choices.present?
 
-        choices.map { |key, value| { key: key, value: value } }
+        choices.map { |key, value| {key: key, value: value} }
       end
 
       def format_media
@@ -38,4 +38,4 @@ module FlowChat
       end
     end
   end
-end 
+end

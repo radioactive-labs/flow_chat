@@ -1,10 +1,9 @@
 module FlowChat
   class App
-    attr_reader :session, :input, :context, :navigation_stack
+    attr_reader :input, :context, :navigation_stack
 
     def initialize(context)
       @context = context
-      @session = context.session
       @input = context.input
       @navigation_stack = []
     end
@@ -27,11 +26,11 @@ module FlowChat
 
     def go_back
       return false if navigation_stack.empty?
-      
+
       @context.input = nil
       current_screen = navigation_stack.last
       session.delete(current_screen)
-      
+
       # Restart the flow from the beginning
       raise FlowChat::Interrupt::RestartFlow.new
     end
@@ -47,7 +46,7 @@ module FlowChat
     def gateway
       context["request.gateway"]
     end
-    
+
     def user_id
       context["request.user_id"]
     end
@@ -76,6 +75,10 @@ module FlowChat
       nil
     end
 
+    def session
+      @context.session
+    end
+
     protected
 
     def prepare_user_input
@@ -87,4 +90,4 @@ module FlowChat
       user_input
     end
   end
-end 
+end

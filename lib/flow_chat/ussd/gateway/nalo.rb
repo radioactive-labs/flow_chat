@@ -59,13 +59,13 @@ module FlowChat
 
         def self.configure_middleware_stack(builder, custom_middleware)
           FlowChat.logger.debug { "FlowChat::Ussd::Gateway::Nalo: Configuring middleware stack" }
-    
+
           builder.use FlowChat::Ussd::Middleware::Pagination
           FlowChat.logger.debug { "FlowChat::Ussd::Gateway::Nalo: Added Ussd::Middleware::Pagination" }
-    
+
           builder.use custom_middleware
           FlowChat.logger.debug { "FlowChat::Ussd::Gateway::Nalo: Added custom middleware" }
-    
+
           builder.use FlowChat::Ussd::Middleware::ChoiceMapper
           FlowChat.logger.debug { "FlowChat::Ussd::Gateway::Nalo: Added Ussd::Middleware::ChoiceMapper" }
         end
