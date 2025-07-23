@@ -1,360 +1,647 @@
-# Configuration Reference
+# FlowChat Configuration
 
-This document covers all FlowChat configuration options.
+This guide covers all configuration options for FlowChat, from basic setup to advanced customization for production deployments.
 
-## Framework Configuration
+## Global Configuration
+
+Configure FlowChat globally in `config/initializers/flow_chat.rb`:
 
 ```ruby
-# config/initializers/flowchat.rb
-
-# Core configuration
+# Basic configuration
 FlowChat::Config.logger = Rails.logger
 FlowChat::Config.cache = Rails.cache
-FlowChat::Config.simulator_secret = "your_secure_secret_here"
 
-# Validation error display behavior
-FlowChat::Config.combine_validation_error_with_message = true  # default
+# Validation behavior
+FlowChat::Config.combine_validation_error_with_message = true
 
-# Setup instrumentation (optional)
-FlowChat.setup_instrumentation!
+# Simulator settings (for development/testing)
+FlowChat::Config.simulator_secret = "your_simulator_secret"
+```
+
+## Platform-Specific Configuration
+
+### USSD Configuration
+
+```ruby
+# USSD pagination settings
+FlowChat::Config.ussd.pagination_page_size = 160       # Characters per page
+FlowChat::Config.ussd.pagination_next_option = "#"     # Next page option
+FlowChat::Config.ussd.pagination_back_option = "0"     # Previous page option
+FlowChat::Config.ussd.pagination_next_text = "More"    # Next page text
+FlowChat::Config.ussd.pagination_back_text = "Back"    # Previous page text
+```
+
+### WhatsApp Configuration
+
+```ruby
+# WhatsApp processing mode
+FlowChat::Config.whatsapp.message_handling_mode = :inline    # :inline, :background, :simulator
+FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+FlowChat::Config.whatsapp.api_base_url = "https://graph.facebook.com/v22.0"
+```
+
+### HTTP Configuration
+
+```ruby
+# HTTP gateway settings
+FlowChat::Config.http.default_gateway = :simple
+FlowChat::Config.http.request_timeout = 30
+FlowChat::Config.http.response_format = :json
+```
+
+## Processor Configuration
+
+Configure processors for each request:
+
+```ruby
+processor = FlowChat::Processor.new(self) do |config|
+  # Gateway configuration
+  config.use_gateway FlowChat::Ussd::Gateway::Nalo
+  
+  # Session configuration
+  config.use_session_store FlowChat::Session::RailsSessionStore
+  config.use_session_config(
+    boundaries: [:flow, :platform, :gateway],
+    identifier: :msisdn,
+    hash_identifiers: true
+  )
+  
+  # Middleware configuration
+  config.use_middleware LoggingMiddleware
+  config.use_middleware AuthenticationMiddleware
+  
+  # Convenience methods
+  config.use_durable_sessions
+  config.use_cross_platform_sessions
+  config.use_url_isolation
+end
 ```
 
 ## Session Configuration
 
-```ruby
-# Session boundaries control how session IDs are constructed
-FlowChat::Config.session.boundaries = [:flow, :platform]  # default
-FlowChat::Config.session.hash_identifiers = true          # hash identifiers for privacy
-FlowChat::Config.session.identifier = nil                 # let platforms choose (default)
+### Session Boundaries
 
-# Available boundary options:
-# :flow - separate sessions per flow class
-# :platform - separate sessions per platform (ussd, whatsapp)  
-# :gateway - separate sessions per gateway
-# [] - global sessions (no boundaries)
-
-# Available identifier options:
-# nil - platform chooses default (:request_id for USSD, :msisdn for WhatsApp)
-# :msisdn - use phone number (durable sessions)
-# :request_id - use request ID (ephemeral sessions)
-```
-
-## USSD Configuration
+Control how session IDs are generated:
 
 ```ruby
-# USSD pagination settings
-FlowChat::Config.ussd.pagination_page_size = 140          # characters per page
-FlowChat::Config.ussd.pagination_next_option = "#"        # option to go to next page
-FlowChat::Config.ussd.pagination_next_text = "More"       # text for next option
-FlowChat::Config.ussd.pagination_back_option = "0"        # option to go back
-FlowChat::Config.ussd.pagination_back_text = "Back"       # text for back option
+# Available boundaries
+boundaries: [
+  :flow,      # Separate sessions per flow class
+  :platform,  # Separate sessions per platform (ussd, whatsapp, http)
+  :gateway,   # Separate sessions per gateway (nalo, cloud_api, etc.)
+  :url        # Separate sessions per URL (multi-tenancy)
+]
+
+# Examples
+config.use_session_config(boundaries: [:flow])                    # "survey_flow:user123"
+config.use_session_config(boundaries: [:flow, :platform])         # "survey_flow:ussd:user123"
+config.use_session_config(boundaries: [:flow, :url])              # "survey_flow:tenant1.app.com:user123"
 ```
 
-## WhatsApp Configuration
+### Session Identifiers
+
+Choose what identifies a user session:
 
 ```ruby
-# Message handling modes
-FlowChat::Config.whatsapp.message_handling_mode = :inline  # :inline, :background, :simulator
-FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
+# Identifier types
+:request_id  # Ephemeral (new session each request)
+:user_id     # Durable using user_id field
+:msisdn      # Durable using phone number
+
+# Examples
+config.use_session_config(identifier: :request_id)  # Default for HTTP
+config.use_session_config(identifier: :msisdn)      # Default for WhatsApp/USSD
+config.use_session_config(identifier: :user_id)     # For authenticated users
 ```
 
-### WhatsApp Credential Configuration
+### Session Stores
 
-#### Option 1: Rails Credentials
-
-```bash
-rails credentials:edit
-```
-
-```yaml
-whatsapp:
-  access_token: "your_access_token"
-  phone_number_id: "your_phone_number_id"
-  verify_token: "your_verify_token"
-  app_id: "your_app_id"
-  app_secret: "your_app_secret"
-  business_account_id: "your_business_account_id"
-  skip_signature_validation: false
-```
-
-#### Option 2: Environment Variables
-
-```bash
-export WHATSAPP_ACCESS_TOKEN="your_access_token"
-export WHATSAPP_PHONE_NUMBER_ID="your_phone_number_id" 
-export WHATSAPP_VERIFY_TOKEN="your_verify_token"
-export WHATSAPP_APP_ID="your_app_id"
-export WHATSAPP_APP_SECRET="your_app_secret"
-export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
-export WHATSAPP_SKIP_SIGNATURE_VALIDATION="false"
-```
-
-#### Option 3: Programmatic Configuration
+Choose where session data is stored:
 
 ```ruby
-config = FlowChat::Whatsapp::Configuration.new(:my_config)  # Named configuration
-config.access_token = "your_access_token"
-config.phone_number_id = "your_phone_number_id"
-config.verify_token = "your_verify_token"
-config.app_id = "your_app_id"
-config.app_secret = "your_app_secret"
-config.business_account_id = "your_business_account_id"
-config.skip_signature_validation = false
-# Configuration is automatically registered as :my_config
+# Built-in session stores
+config.use_session_store FlowChat::Session::RailsSessionStore    # Rails sessions
+config.use_session_store FlowChat::Session::CacheSessionStore   # Rails cache
+
+# Custom session store
+config.use_session_store MyCompany::CustomSessionStore
 ```
 
-**⚠️ Important for Background Jobs:** When using background mode with programmatic configurations, you must register them in an initializer:
+### Convenience Methods
 
 ```ruby
-# config/initializers/whatsapp_configs.rb
-# Register configurations so background jobs can access them
-production_config = FlowChat::Whatsapp::Configuration.new(:production)
-production_config.access_token = ENV['PROD_WHATSAPP_TOKEN']
-# ... other settings
+# Durable sessions (use phone number, survive timeouts)
+config.use_durable_sessions
 
-staging_config = FlowChat::Whatsapp::Configuration.new(:staging)  
-staging_config.access_token = ENV['STAGING_WHATSAPP_TOKEN']
-# ... other settings
+# Cross-platform sessions (same user across USSD/WhatsApp)
+config.use_cross_platform_sessions
+
+# URL-based isolation (multi-tenancy)
+config.use_url_isolation
 ```
 
-Then use named configurations in controllers:
+## Gateway Configuration
+
+### Built-in Gateways
+
+#### USSD - Nalo Gateway
 
 ```ruby
-# Use registered configuration
-config = FlowChat::Whatsapp::Configuration.get(:production)
-processor = FlowChat::Whatsapp::Processor.new(self) do |config|
-  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, config
+config.use_gateway FlowChat::Ussd::Gateway::Nalo
+
+# No additional configuration required for Nalo
+```
+
+#### WhatsApp - Cloud API Gateway
+
+```ruby
+# Basic configuration (uses Rails credentials)
+config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+
+# Custom configuration
+whatsapp_config = FlowChat::Whatsapp::Configuration.new
+whatsapp_config.access_token = ENV["WHATSAPP_ACCESS_TOKEN"]
+whatsapp_config.phone_number_id = ENV["WHATSAPP_PHONE_NUMBER_ID"]
+whatsapp_config.verify_token = ENV["WHATSAPP_VERIFY_TOKEN"]
+whatsapp_config.app_secret = ENV["WHATSAPP_APP_SECRET"]
+whatsapp_config.skip_signature_validation = Rails.env.development?
+
+config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
+```
+
+#### HTTP - Simple Gateway
+
+```ruby
+config.use_gateway FlowChat::Http::Gateway::Simple
+
+# No additional configuration required
+```
+
+### Custom Gateway Configuration
+
+```ruby
+# Custom gateway with configuration
+my_config = MyCompany::CustomGatewayConfig.new
+my_config.api_key = ENV["CUSTOM_API_KEY"]
+my_config.endpoint = ENV["CUSTOM_ENDPOINT"]
+
+config.use_gateway MyCompany::CustomGateway, my_config
+```
+
+## Environment-Specific Configuration
+
+### Development Configuration
+
+```ruby
+# config/environments/development.rb
+Rails.application.configure do
+  # Enable detailed logging
+  config.log_level = :debug
+  
+  # FlowChat development settings
+  config.after_initialize do
+    FlowChat::Config.logger = Rails.logger
+    FlowChat::Config.logger.level = Logger::DEBUG
+    
+    # USSD settings for development
+    FlowChat::Config.ussd.pagination_page_size = 200  # Larger for easier testing
+    
+    # WhatsApp settings for development
+    FlowChat::Config.whatsapp.message_handling_mode = :inline
+    
+    # Enable simulator
+    FlowChat::Config.simulator_secret = "dev_secret_123"
+  end
+end
+```
+
+### Production Configuration
+
+```ruby
+# config/environments/production.rb
+Rails.application.configure do
+  # Production logging
+  config.log_level = :info
+  
+  # FlowChat production settings
+  config.after_initialize do
+    FlowChat::Config.logger = Rails.logger
+    
+    # USSD production settings
+    FlowChat::Config.ussd.pagination_page_size = 140  # Conservative for compatibility
+    
+    # WhatsApp production settings
+    FlowChat::Config.whatsapp.message_handling_mode = :background
+    FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+    
+    # Disable simulator in production
+    FlowChat::Config.simulator_secret = nil
+  end
+end
+```
+
+### Staging Configuration
+
+```ruby
+# config/environments/staging.rb
+Rails.application.configure do
+  # Staging-specific settings
+  config.after_initialize do
+    FlowChat::Config.logger = Rails.logger
+    FlowChat::Config.logger.level = Logger::DEBUG  # More verbose for staging
+    
+    # Use background processing but with shorter delays
+    FlowChat::Config.whatsapp.message_handling_mode = :background
+    
+    # Enable simulator with staging secret
+    FlowChat::Config.simulator_secret = ENV["STAGING_SIMULATOR_SECRET"]
+  end
+end
+```
+
+## Multi-Tenant Configuration
+
+### URL-Based Tenancy
+
+```ruby
+class MultiTenantController < ApplicationController
+  def process_request
+    processor = FlowChat::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, tenant_whatsapp_config
+      config.use_session_store FlowChat::Session::CacheSessionStore
+      
+      # Enable URL-based session isolation
+      config.use_url_isolation
+      
+      # Optional: Additional tenant isolation
+      config.use_session_config(
+        boundaries: [:flow, :platform, :url],
+        identifier: :user_id
+      )
+    end
+
+    processor.run tenant_flow_class, :main_action
+  end
+
+  private
+
+  def tenant_whatsapp_config
+    tenant = extract_tenant_from_request
+    tenant.whatsapp_configuration
+  end
+
+  def tenant_flow_class
+    tenant = extract_tenant_from_request
+    tenant.flow_class
+  end
+
+  def extract_tenant_from_request
+    # Extract tenant from subdomain, domain, or path
+    subdomain = request.subdomain
+    Tenant.find_by(subdomain: subdomain)
+  end
+end
+```
+
+### Database-Based Tenancy
+
+```ruby
+class TenantSpecificController < ApplicationController
+  before_action :set_tenant
+
+  def process_request
+    processor = FlowChat::Processor.new(self) do |config|
+      config.use_gateway gateway_for_tenant
+      config.use_session_store FlowChat::Session::CacheSessionStore
+      
+      # Custom session boundaries for tenant isolation
+      config.use_session_config(
+        boundaries: [:flow, :platform],
+        identifier: :user_id
+      )
+    end
+
+    processor.run @tenant.flow_class.constantize, :main_action
+  end
+
+  private
+
+  def set_tenant
+    @tenant = Tenant.find(params[:tenant_id])
+  end
+
+  def gateway_for_tenant
+    case @tenant.platform
+    when 'whatsapp'
+      FlowChat::Whatsapp::Gateway::CloudApi
+    when 'ussd'
+      FlowChat::Ussd::Gateway::Nalo
+    else
+      FlowChat::Http::Gateway::Simple
+    end
+  end
 end
 ```
 
 ## Security Configuration
 
-### WhatsApp Security
+### WhatsApp Signature Validation
 
 ```ruby
-# Production security (recommended)
-config.app_secret = "your_whatsapp_app_secret"
-config.skip_signature_validation = false  # default
+# Always validate signatures in production
+whatsapp_config = FlowChat::Whatsapp::Configuration.new
+whatsapp_config.app_secret = ENV["WHATSAPP_APP_SECRET"]
+whatsapp_config.skip_signature_validation = false  # Never skip in production
 
-# Development mode (disable validation)
-config.app_secret = nil
-config.skip_signature_validation = true
+# Only skip validation in development if needed
+whatsapp_config.skip_signature_validation = Rails.env.development?
 ```
 
-### Simulator Security
+### Session Security
 
 ```ruby
-# Use Rails secret for uniqueness
-FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_simulator"
+# Hash sensitive identifiers
+config.use_session_config(
+  identifier: :msisdn,
+  hash_identifiers: true  # Phone numbers are hashed for privacy
+)
 
-# Or use dedicated secret
-FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+# Implement custom session store with encryption
+class EncryptedSessionStore < FlowChat::Session::CacheSessionStore
+  def set(key, value)
+    encrypted_value = encrypt(value.to_json)
+    super(key, encrypted_value)
+  end
+
+  def get(key)
+    encrypted_value = super(key)
+    return nil unless encrypted_value
+    
+    decrypted = decrypt(encrypted_value)
+    JSON.parse(decrypted)
+  rescue
+    nil  # Return nil if decryption fails
+  end
+
+  private
+
+  def encrypt(data)
+    # Use Rails credentials or environment variable
+    secret = Rails.application.credentials.session_encryption_key
+    crypt = ActiveSupport::MessageEncryptor.new(secret)
+    crypt.encrypt_and_sign(data)
+  end
+
+  def decrypt(encrypted_data)
+    secret = Rails.application.credentials.session_encryption_key
+    crypt = ActiveSupport::MessageEncryptor.new(secret)
+    crypt.decrypt_and_verify(encrypted_data)
+  end
+end
+
+# Use encrypted session store
+config.use_session_store EncryptedSessionStore
 ```
 
-## Environment-Specific Configuration
+## Performance Configuration
+
+### Redis Cache Configuration
 
 ```ruby
-# config/initializers/flowchat.rb
-case Rails.env
-when 'development'
-  FlowChat::Config.whatsapp.message_handling_mode = :simulator
-  FlowChat::Config.simulator_secret = Rails.application.secret_key_base + "_dev"
+# config/initializers/redis.rb
+redis_config = {
+  url: ENV["REDIS_URL"],
+  pool_size: ENV.fetch("REDIS_POOL_SIZE", 5).to_i,
+  pool_timeout: ENV.fetch("REDIS_POOL_TIMEOUT", 5).to_i
+}
+
+# Use Redis for session storage
+Rails.application.configure do
+  config.cache_store = :redis_cache_store, redis_config
+end
+
+# FlowChat will automatically use Rails.cache
+FlowChat::Config.cache = Rails.cache
+```
+
+### Background Job Configuration
+
+```ruby
+# config/initializers/sidekiq.rb (if using Sidekiq)
+Sidekiq.configure_server do |config|
+  config.redis = { url: ENV["REDIS_URL"] }
+end
+
+Sidekiq.configure_client do |config|
+  config.redis = { url: ENV["REDIS_URL"] }
+end
+
+# WhatsApp background processing
+FlowChat::Config.whatsapp.message_handling_mode = :background
+FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+```
+
+### Database Connection Configuration
+
+```ruby
+# config/database.yml
+production:
+  adapter: postgresql
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  timeout: 5000
+  # ... other database settings
   
-when 'test'
-  FlowChat::Config.whatsapp.message_handling_mode = :simulator
-  FlowChat::Config.simulator_secret = "test_secret"
-  
-when 'staging'
-  FlowChat::Config.whatsapp.message_handling_mode = :inline
-  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
-  
-when 'production'
-  FlowChat::Config.whatsapp.message_handling_mode = :background
-  FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
-  FlowChat::Config.simulator_secret = ENV['FLOWCHAT_SIMULATOR_SECRET']
+  # For high-volume USSD applications
+  checkout_timeout: 2
+  reaping_frequency: 10
+```
+
+## Monitoring Configuration
+
+### Instrumentation Setup
+
+```ruby
+# config/initializers/flow_chat.rb
+FlowChat.setup_instrumentation!
+
+# Subscribe to FlowChat events
+ActiveSupport::Notifications.subscribe("flow_chat.message_received") do |event|
+  # Log message received
+  Rails.logger.info "Message received: #{event.payload}"
+end
+
+ActiveSupport::Notifications.subscribe("flow_chat.message_sent") do |event|
+  # Log message sent
+  Rails.logger.info "Message sent: #{event.payload}"
+end
+
+ActiveSupport::Notifications.subscribe("flow_chat.flow_execution_error") do |event|
+  # Alert on flow errors
+  ErrorNotificationService.notify(event.payload)
 end
 ```
 
-## Processor Configuration
-
-### USSD Processor
+### Custom Metrics
 
 ```ruby
-processor = FlowChat::Ussd::Processor.new(self) do |config|
-  # Gateway (required)
-  config.use_gateway FlowChat::Ussd::Gateway::Nalo
-  
-  # Session storage (required)
-  config.use_session_store FlowChat::Session::CacheSessionStore
-  
-  # Optional middleware
-  config.use_middleware MyCustomMiddleware
-  
-  # Configure session boundaries
-  config.use_session_config(
-    boundaries: [:flow, :platform],     # which boundaries to enforce
-    hash_identifiers: true,             # hash identifiers for privacy
-    identifier: :msisdn                 # use MSISDN for durable sessions (optional)
-  )
-  
-  # Shorthand for durable sessions (identifier: :msisdn)
-  config.use_durable_sessions
+# Custom metrics collector
+class CustomMetricsCollector
+  def self.collect_metrics
+    {
+      active_sessions: count_active_sessions,
+      messages_per_minute: calculate_message_rate,
+      error_rate: calculate_error_rate
+    }
+  end
+
+  private
+
+  def self.count_active_sessions
+    # Implementation depends on your session store
+    Rails.cache.redis.keys("flow_chat:session:*").count
+  end
+
+  def self.calculate_message_rate
+    # Implementation depends on your metrics storage
+    # Return messages processed in the last minute
+  end
+
+  def self.calculate_error_rate
+    # Calculate error percentage
+  end
+end
+
+# Setup metrics collection
+FlowChat::Config.metrics_collector = CustomMetricsCollector
+```
+
+## Testing Configuration
+
+### Test Environment
+
+```ruby
+# config/environments/test.rb
+Rails.application.configure do
+  config.after_initialize do
+    FlowChat::Config.logger = Rails.logger
+    FlowChat::Config.logger.level = Logger::ERROR  # Reduce noise in tests
+    
+    # Use memory cache for tests
+    FlowChat::Config.cache = ActiveSupport::Cache::MemoryStore.new
+    
+    # Disable background processing in tests
+    FlowChat::Config.whatsapp.message_handling_mode = :inline
+    
+    # Enable simulator for testing
+    FlowChat::Config.simulator_secret = "test_secret"
+  end
 end
 ```
 
-### WhatsApp Processor
+### Test Helper Configuration
 
 ```ruby
-processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
-  # Gateway (required)
-  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
-  
-  # Session storage (required)  
-  config.use_session_store FlowChat::Session::CacheSessionStore
-  
-  # Optional custom configuration
-  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_whatsapp_config
+# test/test_helper.rb
+class ActiveSupport::TestCase
+  def setup_flow_chat_test_environment
+    # Reset FlowChat state between tests
+    FlowChat::Config.cache.clear
+    
+    # Mock external API calls
+    stub_whatsapp_api_calls
+    stub_ussd_gateway_calls
+  end
+
+  def create_test_processor(platform: :ussd, **options)
+    gateway_class = case platform
+    when :ussd then FlowChat::Ussd::Gateway::Nalo
+    when :whatsapp then FlowChat::Whatsapp::Gateway::CloudApi
+    when :http then FlowChat::Http::Gateway::Simple
+    end
+
+    FlowChat::Processor.new(MockController.new) do |config|
+      config.use_gateway gateway_class
+      config.use_session_store FlowChat::Session::MemorySessionStore
+      options.each { |key, value| config.send(key, value) }
+    end
+  end
 end
 ```
 
-## Session Store Options
+## Troubleshooting Configuration
 
-### Cache Session Store
-
-```ruby
-config.use_session_store FlowChat::Session::CacheSessionStore
-```
-
-Uses Rails cache backend with automatic TTL management. This is the primary session store available in FlowChat.
-
-## Middleware Configuration
-
-### Built-in Middleware
+### Debug Mode
 
 ```ruby
-# Pagination (USSD only, automatic)
-FlowChat::Ussd::Middleware::Pagination
+# Enable comprehensive debugging
+FlowChat::Config.logger.level = Logger::DEBUG
 
-# Session management (automatic)
-FlowChat::Session::Middleware
-
-# Gateway communication (automatic)
-FlowChat::Ussd::Gateway::Nalo
-FlowChat::Whatsapp::Gateway::CloudApi
-```
-
-### Custom Middleware
-
-```ruby
-class LoggingMiddleware
+# Add custom debug middleware
+class DebugMiddleware
   def initialize(app)
     @app = app
   end
 
   def call(context)
-    Rails.logger.info "Processing request: #{context.input}"
+    Rails.logger.debug "=== FlowChat Debug ==="
+    Rails.logger.debug "Context: #{context.to_h}"
+    Rails.logger.debug "Input: #{context.input.inspect}"
+    Rails.logger.debug "Session ID: #{context['session.id']}"
+    
     result = @app.call(context)
-    Rails.logger.info "Response: #{result[1]}"
+    
+    Rails.logger.debug "Result: #{result.inspect}"
+    Rails.logger.debug "======================"
+    
     result
   end
 end
 
-# Use custom middleware
-config.use_middleware LoggingMiddleware
+# Use debug middleware
+config.use_middleware DebugMiddleware
 ```
 
-## Validation Configuration
-
-### Error Display Options
+### Configuration Validation
 
 ```ruby
-# Combine validation error with original message (default)
-FlowChat::Config.combine_validation_error_with_message = true
-# User sees: "Invalid email format\n\nEnter your email:"
-
-# Show only validation error
-FlowChat::Config.combine_validation_error_with_message = false
-# User sees: "Invalid email format"
-```
-
-## Background Job Configuration
-
-### Job Class Setup
-
-```ruby
-# app/jobs/whatsapp_message_job.rb
-class WhatsappMessageJob < ApplicationJob
-  include FlowChat::Whatsapp::SendJobSupport
-
-  def perform(send_data)
-    perform_whatsapp_send(send_data)
-  end
-end
-```
-
-**Configuration Resolution:** The job automatically resolves configurations using:
-1. Named configuration from `send_data[:configuration_name]` if present
-2. Default configuration from credentials/environment variables
-
-For custom resolution logic, override the configuration resolution:
-
-```ruby
-class CustomWhatsappMessageJob < ApplicationJob
-  include FlowChat::Whatsapp::SendJobSupport
-
-  def perform(send_data)
-    perform_whatsapp_send(send_data)
+# Add configuration validation
+class ConfigurationValidator
+  def self.validate!
+    validate_environment_variables!
+    validate_gateway_configuration!
+    validate_session_configuration!
   end
 
   private
 
-  def resolve_whatsapp_configuration(send_data)
-    # Custom logic to resolve configuration
-    tenant_id = ...
-    FlowChat::Whatsapp::Configuration.get("tenant_#{tenant_id}")
+  def self.validate_environment_variables!
+    required_vars = %w[
+      WHATSAPP_ACCESS_TOKEN
+      WHATSAPP_PHONE_NUMBER_ID
+      WHATSAPP_VERIFY_TOKEN
+    ]
+
+    missing = required_vars.select { |var| ENV[var].blank? }
+    raise "Missing environment variables: #{missing.join(', ')}" if missing.any?
+  end
+
+  def self.validate_gateway_configuration!
+    # Validate gateway-specific configuration
+  end
+
+  def self.validate_session_configuration!
+    # Validate session store connectivity
+    FlowChat::Config.cache.write("test_key", "test_value")
+    FlowChat::Config.cache.delete("test_key")
+  rescue => e
+    raise "Session store configuration invalid: #{e.message}"
   end
 end
-```
 
-### Queue Configuration
-
-```ruby
-# config/application.rb
-config.active_job.queue_adapter = :sidekiq
-
-# config/initializers/flowchat.rb
-FlowChat::Config.whatsapp.background_job_class = 'WhatsappMessageJob'
-```
-
-## Instrumentation Configuration
-
-### Basic Setup
-
-```ruby
-# Enable instrumentation
-FlowChat.setup_instrumentation!
-```
-
-### Custom Event Subscribers
-
-```ruby
-# Subscribe to specific events
-ActiveSupport::Notifications.subscribe("flow.execution.end.flow_chat") do |event|
-  # Custom handling
-  ExternalMonitoring.track_flow_execution(
-    event.payload[:flow_name], 
-    event.duration
-  )
-end
-
-# Subscribe to all FlowChat events
-ActiveSupport::Notifications.subscribe(/\.flow_chat$/) do |name, start, finish, id, payload|
-  CustomLogger.log_event(name, payload.merge(duration: finish - start))
+# Run validation on startup
+Rails.application.config.after_initialize do
+  ConfigurationValidator.validate! if Rails.env.production?
 end
 ```
 
-## Configuration Validation
-
-FlowChat validates configuration at runtime and provides helpful error messages:
-
-FlowChat validates configuration at runtime and provides helpful error messages for missing or invalid configurations. 
+This configuration guide covers all aspects of FlowChat setup. For platform-specific configuration details, see the individual platform guides. 
