@@ -4,7 +4,7 @@ module FlowChat
   class Processor
     include FlowChat::Instrumentation
 
-    attr_reader :custom_middleware, :context
+    attr_reader :custom_middleware_builder, :context
 
     def initialize(controller, enable_simulator: nil)
       FlowChat.logger.debug { "Processor: Initializing processor for controller #{controller.class.name}" }
@@ -12,7 +12,7 @@ module FlowChat
       @context = FlowChat::Context.new
       @context["controller"] = controller
       @context["enable_simulator"] = enable_simulator.nil? ? (defined?(Rails) && Rails.env.local?) : enable_simulator
-      @custom_middleware = ::Middleware::Builder.new(name: "processor.custom_middleware")
+      @custom_middleware_builder = ::Middleware::Builder.new(name: "processor.custom_middleware_builder")
       @session_options = FlowChat::Config.session
 
       FlowChat.logger.debug { "Processor: Simulator mode #{@context["enable_simulator"] ? "enabled" : "disabled"}" }
@@ -49,9 +49,14 @@ module FlowChat
     end
 
     def use_middleware(middleware)
+      if block_given?
+        yield custom_middleware_builder
+        return self 
+      end
+
       raise "Middleware must be a class" unless middleware.is_a?(Class)
       FlowChat.logger.debug { "Processor: Adding custom middleware: #{middleware.name}" }
-      @custom_middleware.use middleware
+      custom_middleware_builder.use middleware
       self
     end
 
@@ -133,9 +138,9 @@ module FlowChat
 
         if @gateway_class.respond_to?(:configure_middleware_stack)
           FlowChat.logger.debug { "Processor: Using platform specific middleware configuration" }
-          @gateway_class.configure_middleware_stack(b, custom_middleware)
+          @gateway_class.configure_middleware_stack(b, custom_middleware_builder)
         else
-          b.use custom_middleware
+          b.use custom_middleware_builder
           FlowChat.logger.debug { "Processor: Added custom middleware" }
         end
 
