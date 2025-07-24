@@ -60,12 +60,12 @@ class UssdRendererTest < Minitest::Test
     end
   end
 
-  def test_media_uses_path_when_url_not_present
+  def test_media_requires_url
     media = {type: :image, path: "/local/image.jpg"}
     renderer = FlowChat::Ussd::Renderer.new("Local file:", media: media)
     result = renderer.render
 
-    expected = "📷 Image: /local/image.jpg\n\nLocal file:"
+    expected = "📷 Image: \n\nLocal file:"
     assert_equal expected, result
   end
 

@@ -67,6 +67,11 @@ module FlowChat
       # Middleware events
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
+
+      # Conversation management events (for Intercom and similar platforms)
+      CONVERSATION_ASSIGNED = "conversation.assigned"
+      CONVERSATION_TAGGED = "conversation.tagged"
+      CONVERSATION_STATE_CHANGED = "conversation.state_changed"
     end
   end
 end

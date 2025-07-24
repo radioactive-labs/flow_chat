@@ -31,7 +31,7 @@ module FlowChat
         return unless media.present?
 
         {
-          url: media[:url] || media[:path],
+          url: media[:url],
           type: media[:type] || :image,
           caption: media[:caption]
         }.compact

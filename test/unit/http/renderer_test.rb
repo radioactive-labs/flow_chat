@@ -40,7 +40,7 @@ class HttpRendererTest < Minitest::Test
     result = renderer.render
 
     assert_equal "Local image:", result[:message]
-    assert_equal "/local/image.jpg", result[:media][:url]
+    assert_nil result[:media][:url]
     assert_equal :image, result[:media][:type]
     assert_nil result[:media][:caption]
   end

@@ -29,7 +29,7 @@ module FlowChat
 
       def build_media_message
         media_type = media[:type] || :image
-        url = media[:url] || media[:path]
+        url = media[:url]
         filename = media[:filename]
 
         case media_type.to_sym
@@ -105,7 +105,7 @@ module FlowChat
 
       def build_media_header
         media_type = media[:type] || :image
-        url = media[:url] || media[:path]
+        url = media[:url]
         filename = media[:filename]
 
         case media_type.to_sym

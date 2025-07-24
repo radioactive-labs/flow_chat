@@ -97,15 +97,19 @@ Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic 
 - `ussd/gateway/nalo.rb` - USSD platform integration
 - `whatsapp/gateway/cloud_api.rb` - WhatsApp Business API integration
 - `http/gateway/simple.rb` - HTTP/JSON API integration
+- `intercom/gateway/intercom_api.rb` - Intercom customer support integration
 
 ### Session Management (`session/`)
 - `middleware.rb` - Session boundary and ID generation
 - `rails_session_store.rb` - Rails session integration
 - `cache_session_store.rb` - Rails cache integration
 
-### Platform-Specific (`ussd/`, `whatsapp/`, `http/`)
+### Platform-Specific (`ussd/`, `whatsapp/`, `http/`, `intercom/`)
 - `renderer.rb` - Platform-specific response formatting
 - `middleware/` - Platform-specific processing logic
+- `intercom/client.rb` - Intercom REST API integration
+- `intercom/configuration.rb` - Intercom credentials and settings
+- `intercom/conversation_manager.rb` - Generic conversation management utilities
 
 ### Testing (`test/`)
 - `test_helper.rb` - Test setup with mock Rails environment
@@ -138,6 +142,54 @@ config.use_url_isolation  # tenant1.app.com vs tenant2.app.com
 config.use_cross_platform_sessions  # Share sessions between USSD/WhatsApp
 config.use_durable_sessions  # Use user_id instead of request_id
 ```
+
+### Intercom Integration
+
+FlowChat provides comprehensive Intercom integration for customer support workflows with proper webhook validation and API client functionality.
+
+#### Configuration
+```ruby
+# Rails credentials (config/credentials.yml.enc)
+intercom:
+  access_token: "your_intercom_access_token"
+  client_secret: "your_intercom_client_secret"
+  skip_signature_validation: false  # Optional: disable webhook validation for testing
+
+# Or environment variables
+INTERCOM_ACCESS_TOKEN=your_intercom_access_token
+INTERCOM_CLIENT_SECRET=your_intercom_client_secret
+INTERCOM_SKIP_SIGNATURE_VALIDATION=false
+```
+
+#### Gateway Setup
+```ruby
+# Basic Intercom gateway setup
+config.use_gateway FlowChat::Intercom::Gateway::IntercomApi
+config.use_session_config(boundaries: [:conversation], identifier: :conversation_id)
+```
+
+#### Webhook Setup
+1. Add your HTTPS endpoint URL in Intercom Developer Hub → Configure → Webhooks
+2. Intercom validates your endpoint with HEAD request (handled automatically)
+3. Webhook notifications are validated using X-Hub-Signature with client_secret
+
+#### API Usage
+```ruby
+# Generic API usage for conversation management
+client = FlowChat::Intercom::Client.new(config)
+conversation_manager = FlowChat::Intercom::ConversationManager.new(client, conversation_id)
+
+# Business logic defines workflow (tags, assignments, etc.)
+conversation_manager.assign_conversation(admin_id)  # Use actual admin ID from Intercom
+conversation_manager.add_tag("AI_HANDLING")
+conversation_manager.update_state("open")
+conversation_manager.update_priority("not_priority")
+```
+
+#### Error Handling
+- Rate limiting: `RateLimitError` with retry-after information
+- Authentication: `ConfigurationError` for invalid tokens
+- HTTP errors: Proper handling for 401, 403, 404, 429, 5xx responses
 
 ## Instrumentation
 

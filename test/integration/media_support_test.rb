@@ -1,6 +1,60 @@
+# frozen_string_literal: true
+
+# Module: MediaSupportTest
+#
+# Purpose:
+# Integration tests for multimedia message handling across different platforms,
+# demonstrating how FlowChat processes and renders images, videos, audio files,
+# documents, and other media types in platform-specific formats.
+#
+# Coverage:
+# - Image message handling (JPEG, PNG, GIF)
+# - Video message processing (MP4, AVI)
+# - Audio file support (MP3, OGG, voice notes)
+# - Document handling (PDF, DOCX, spreadsheets)
+# - Location message processing
+# - Contact card handling
+# - Platform-specific media rendering
+# - Button and quick reply support
+#
+# Platform Differences:
+# - WhatsApp: Full media support with specific type fields
+# - HTTP: Media URLs with MIME type metadata
+# - USSD: Text-only fallback for media messages
+# - Intercom: Rich media embedding in conversations
+#
+# Key Test Scenarios:
+# - Media type detection from file extensions
+# - Proper MIME type assignment
+# - Caption/description handling with media
+# - Fallback text for unsupported platforms
+# - Media URL validation and processing
+# - Interactive elements (buttons, quick replies)
+#
+# Media Message Structure:
+# - Image: [:image, url, {caption: "..."}]
+# - Video: [:video, url, {caption: "..."}]
+# - Audio: [:audio, url, {}]
+# - Document: [:document, url, {filename: "..."}]
+# - Location: [:location, {latitude: ..., longitude: ..., name: "..."}]
+#
+# Renderer Behavior:
+# - USSD: Converts all media to text descriptions
+# - WhatsApp: Formats as Cloud API media messages
+# - HTTP: Returns structured JSON with media metadata
+#
+# Special Considerations:
+# - Media URLs must be publicly accessible
+# - File size limits vary by platform
+# - Some platforms require HTTPS URLs
+# - USSD cannot display media, only text descriptions
+# - Location data requires latitude/longitude coordinates
+# - Button interactions may have platform-specific limits
+
 require "test_helper"
 
 class MediaSupportTest < Minitest::Test
+  include FlowChat::TestSupport::TestFlows
   def setup
     @ussd_context = FlowChat::Context.new
     @ussd_context.session = create_test_session_store
@@ -24,7 +78,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_whatsapp_ask_with_media_shows_media_prompt
     @whatsapp_context.input = nil
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(app)
@@ -38,7 +92,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_whatsapp_ask_with_media_processes_user_input
     @whatsapp_context.input = "I love it!"
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
     flow = MediaTestFlow.new(app)
     result = flow.test_ask_with_image
 
@@ -47,7 +101,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_whatsapp_say_with_media_shows_media_message
     @whatsapp_context.input = nil
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       flow = MediaTestFlow.new(app)
@@ -62,7 +116,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_whatsapp_media_with_validation_error
     @whatsapp_context.input = "12"  # Invalid age
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(app)
@@ -77,7 +131,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_whatsapp_sticker_without_caption
     @whatsapp_context.input = nil
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       flow = MediaTestFlow.new(app)
@@ -96,7 +150,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_ussd_ask_with_media_includes_url_in_text
     @ussd_context.input = nil
-    app = FlowChat::Ussd::App.new(@ussd_context)
+    app = FlowChat::App.new(@ussd_context)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(app)
@@ -110,7 +164,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_ussd_ask_with_media_processes_user_input
     @ussd_context.input = "Great product!"
-    app = FlowChat::Ussd::App.new(@ussd_context)
+    app = FlowChat::App.new(@ussd_context)
     flow = MediaTestFlow.new(app)
     result = flow.test_ask_with_image
 
@@ -118,7 +172,7 @@ class MediaSupportTest < Minitest::Test
   end
 
   def test_ussd_say_with_media_includes_url_in_text
-    app = FlowChat::Ussd::App.new(@ussd_context)
+    app = FlowChat::App.new(@ussd_context)
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
       flow = MediaTestFlow.new(app)
@@ -132,7 +186,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_ussd_media_with_validation_error_includes_media_url
     @ussd_context.input = "12"  # Invalid age
-    app = FlowChat::Ussd::App.new(@ussd_context)
+    app = FlowChat::App.new(@ussd_context)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(app)
@@ -146,7 +200,7 @@ class MediaSupportTest < Minitest::Test
   end
 
   def test_ussd_all_media_types_have_correct_icons
-    app = FlowChat::Ussd::App.new(@ussd_context)
+    app = FlowChat::App.new(@ussd_context)
 
     # Test all media types
     media_types = [
@@ -178,7 +232,7 @@ class MediaSupportTest < Minitest::Test
     media_hash = {type: :image, url: "https://example.com/product.jpg"}
 
     # WhatsApp - should get prompt with media attribute
-    whatsapp_app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    whatsapp_app = FlowChat::App.new(@whatsapp_context)
     whatsapp_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_cross_platform_ask(media_hash)
@@ -188,7 +242,7 @@ class MediaSupportTest < Minitest::Test
     assert_equal "https://example.com/product.jpg", whatsapp_error.media[:url]
 
     # USSD - now also uses raw message + media attribute (architectural unification)
-    ussd_app = FlowChat::Ussd::App.new(@ussd_context)
+    ussd_app = FlowChat::App.new(@ussd_context)
     ussd_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(ussd_app)
       flow.test_cross_platform_ask(media_hash)
@@ -200,7 +254,7 @@ class MediaSupportTest < Minitest::Test
 
   def test_flow_without_media_works_normally_on_both_platforms
     # WhatsApp
-    whatsapp_app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    whatsapp_app = FlowChat::App.new(@whatsapp_context)
     whatsapp_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(whatsapp_app)
       flow.test_ask_without_media
@@ -209,7 +263,7 @@ class MediaSupportTest < Minitest::Test
     assert_nil whatsapp_error.media
 
     # USSD
-    ussd_app = FlowChat::Ussd::App.new(@ussd_context)
+    ussd_app = FlowChat::App.new(@ussd_context)
     ussd_error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(ussd_app)
       flow.test_ask_without_media
@@ -224,7 +278,7 @@ class MediaSupportTest < Minitest::Test
   def test_media_with_complex_workflow
     # Test media support in a more complex workflow with screens
     @whatsapp_context.input = nil
-    app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+    app = FlowChat::App.new(@whatsapp_context)
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
       flow = MediaTestFlow.new(app)
@@ -237,8 +291,8 @@ class MediaSupportTest < Minitest::Test
     assert_equal "https://example.com/step1.jpg", error.media[:url]
   end
 
-  def test_media_url_vs_path_handling
-    whatsapp_app = FlowChat::Whatsapp::App.new(@whatsapp_context)
+  def test_media_url_handling
+    whatsapp_app = FlowChat::App.new(@whatsapp_context)
 
     # Test with URL
     error1 = assert_raises(FlowChat::Interrupt::Prompt) do
@@ -246,13 +300,6 @@ class MediaSupportTest < Minitest::Test
       flow.test_media_with_url
     end
     assert_equal "https://example.com/image.jpg", error1.media[:url]
-
-    # Test with path (should be treated as URL in the prompt system)
-    error2 = assert_raises(FlowChat::Interrupt::Prompt) do
-      flow = MediaTestFlow.new(whatsapp_app)
-      flow.test_media_with_path
-    end
-    assert_equal "/local/path/image.jpg", error2.media[:url]
   end
 
   private
@@ -283,109 +330,4 @@ class MediaSupportTest < Minitest::Test
   end
 end
 
-# ============================================================================
-# TEST FLOW CLASS
-# ============================================================================
-
-class MediaTestFlow < FlowChat::Flow
-  def test_ask_with_image
-    app.screen(:product_feedback) do |prompt|
-      prompt.ask "What do you think of this product?", media: {
-        type: :image,
-        url: "https://example.com/help.jpg"
-      }
-    end
-  end
-
-  def test_say_with_document
-    app.screen(:send_document) do |prompt|
-      prompt.say "Here's your receipt:", media: {
-        type: :document,
-        url: "https://example.com/receipt.pdf",
-        filename: "receipt.pdf"
-      }
-    end
-  end
-
-  def test_ask_with_validation
-    app.screen(:age_verification) do |prompt|
-      prompt.ask "Enter your age:",
-        media: {type: :image, url: "https://example.com/age_verification.jpg"},
-        validate: ->(input) { "Must be 18 or older" unless input.to_i >= 18 },
-        transform: ->(input) { input.to_i }
-    end
-  end
-
-  def test_say_sticker
-    app.screen(:send_sticker) do |prompt|
-      prompt.say "Thanks for your order!", media: {
-        type: :sticker,
-        url: "https://example.com/happy.webp"
-      }
-    end
-  end
-
-  def test_say_with_media_type(type, url)
-    # Use a unique screen name for each test to avoid duplication
-    screen_name = "send_media_#{type}_#{url.gsub(/[^a-zA-Z0-9]/, "_")}"
-    app.screen(screen_name.to_sym) do |prompt|
-      prompt.say "Check this out:", media: {
-        type: type,
-        url: url
-      }
-    end
-  end
-
-  def test_cross_platform_ask(media_hash)
-    app.screen(:cross_platform_test) do |prompt|
-      prompt.ask "Rate this product:", media: media_hash
-    end
-  end
-
-  def test_ask_without_media
-    app.screen(:name_input) do |prompt|
-      prompt.ask "What's your name?"
-    end
-  end
-
-  def complex_media_workflow
-    step1 = app.screen(:step1) do |prompt|
-      prompt.ask "Step 1: Choose your preference", media: {
-        type: :image,
-        url: "https://example.com/step1.jpg"
-      }
-    end
-
-    step2 = app.screen(:step2) do |prompt|
-      prompt.ask "Step 2: Confirm your choice: #{step1}", media: {
-        type: :document,
-        url: "https://example.com/confirmation.pdf"
-      }
-    end
-
-    app.screen(:final_message) do |prompt|
-      prompt.say "Workflow complete! You chose: #{step1}, confirmed: #{step2}", media: {
-        type: :video,
-        url: "https://example.com/thank_you.mp4"
-      }
-    end
-  end
-
-  def test_media_with_url
-    app.screen(:url_test) do |prompt|
-      prompt.ask "Test with URL:", media: {
-        type: :image,
-        url: "https://example.com/image.jpg"
-      }
-    end
-  end
-
-  def test_media_with_path
-    app.screen(:path_test) do |prompt|
-      prompt.ask "Test with path:", media: {
-        type: :image,
-        url: "/local/path/image.jpg"  # Use url instead of path for consistency
-      }
-    end
-  end
-end
+# MediaTestFlow is now available from test_helper.rb via FlowChat::TestSupport::TestFlows

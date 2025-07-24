@@ -14,6 +14,10 @@ require "ostruct"
 # Load test support files
 require_relative "support/base_test_job"
 require_relative "support/test_whatsapp_job"
+require_relative "support/test_flows/choice_test_flow"
+require_relative "support/test_flows/simple_flows"
+require_relative "support/test_flows/whatsapp_test_flow"
+require_relative "support/test_flows/media_test_flow"
 
 # Use a more readable test reporter
 Minitest::Reporters.use! [Minitest::Reporters::DefaultReporter.new(color: true)]
@@ -96,6 +100,10 @@ module TestHelpers
       def clear
         @data.clear
       end
+
+      def destroy
+        @data.clear
+      end
     end.new
   end
 
@@ -119,6 +127,10 @@ module TestHelpers
       end
 
       def clear
+        @data.clear
+      end
+
+      def destroy
         @data.clear
       end
     end

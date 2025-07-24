@@ -1,3 +1,37 @@
+# frozen_string_literal: true
+
+# Module: SessionMiddlewareTest
+#
+# Purpose:
+# Tests the FlowChat::Session::Middleware component which is responsible for managing
+# session lifecycle, ID generation, and session boundaries across different platforms
+# and gateways.
+#
+# Coverage:
+# - Session ID generation based on configured boundaries (flow, platform, gateway, url)
+# - Session identifier types (msisdn, request_id, user_id) and their platform defaults
+# - Phone number hashing for privacy protection
+# - URL-based session isolation for multi-tenancy support
+# - Session store integration and context management
+# - Instrumentation event generation for session lifecycle
+#
+# Key Test Scenarios:
+# - Boundary combinations and their effect on session ID structure
+# - Platform-specific identifier defaults (USSD uses request_id, WhatsApp uses msisdn)
+# - Hash identifier security for sensitive data like phone numbers
+# - URL boundary handling including path sanitization and length limits
+# - Edge cases like empty identifiers and missing request data
+#
+# Session ID Format:
+# Session IDs are constructed by joining boundary values with colons:
+# "{flow_name}:{platform}:{gateway}:{identifier}"
+#
+# Special Considerations:
+# - The middleware must handle concurrent requests safely
+# - Session IDs must be deterministic for the same input parameters
+# - URL boundaries require special handling for multi-tenant applications
+# - Phone number hashing uses SHA256 truncated to 8 characters for privacy
+
 require "test_helper"
 
 class SessionMiddlewareTest < Minitest::Test

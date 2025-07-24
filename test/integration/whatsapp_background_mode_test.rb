@@ -1,3 +1,37 @@
+# frozen_string_literal: true
+
+# Module: WhatsappBackgroundModeIntegrationTest
+#
+# Purpose:
+# Integration tests for WhatsApp's background message processing mode, which allows
+# FlowChat to handle WhatsApp webhooks asynchronously by enqueueing message sending
+# to a background job queue instead of responding synchronously.
+#
+# Coverage:
+# - Background job integration using SendJobSupport module
+# - Multi-step flow execution with session persistence across job boundaries
+# - Error handling during flow processing in background mode
+# - Mode override via simulator_mode parameter for development/testing
+# - Webhook signature validation and security
+#
+# Architecture:
+# In background mode, the flow executes synchronously but message sending is deferred:
+# 1. Webhook received → Flow processes → Job enqueued → HTTP 200 returned
+# 2. Background job executes → Sends message via WhatsApp API
+#
+# Key Test Scenarios:
+# - Complete flow execution with background job enqueueing
+# - Session state persistence between multiple webhook requests
+# - Error propagation when flows fail during processing
+# - Simulator mode override for local development
+# - Integration with Rails' job queue system
+#
+# Special Considerations:
+# - Uses mock job implementation (TestWhatsappSendJob) for testing
+# - Sessions must persist across webhook requests for conversational continuity
+# - Simulator mode allows bypassing background jobs for interactive testing
+# - Webhook signatures are validated using HMAC-SHA256 with app secret
+
 require "test_helper"
 
 class WhatsappBackgroundModeIntegrationTest < Minitest::Test
@@ -14,22 +48,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
     end
   end
 
-  # Test flow for integration testing
-  class TestWhatsappFlow < FlowChat::Flow
-    def main_page
-      name = app.screen(:name) do |prompt|
-        if app.input && !app.input.empty?
-          prompt.ask "Hello #{app.input}! What can I help you with?",
-            transform: ->(input) { input.strip.downcase }
-        else
-          prompt.ask "Welcome! What's your name?",
-            transform: ->(input) { input.strip.titleize }
-        end
-      end
-
-      app.say "Thanks #{name}! Your request has been processed."
-    end
-  end
+  include FlowChat::TestSupport::TestFlows
 
   def setup
     @mock_config = FlowChat::Whatsapp::Configuration.new("test_config")
@@ -80,26 +99,13 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
           )
 
           # Create processor with the mock controller
-          processor = FlowChat::Whatsapp::Processor.new(context["controller"]) do |config|
+          processor = FlowChat::Processor.new(context["controller"]) do |config|
             config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
             config.use_session_store FlowChat::Session::CacheSessionStore
           end
 
           # Process the webhook by running the flow
           processor.run(TestWhatsappFlow, :main_page)
-
-          puts "Jobs performed: #{TestWhatsappSendJob.performed_jobs.length}"
-          puts "Jobs: #{TestWhatsappSendJob.performed_jobs.inspect}"
-
-          # Check what was actually called
-          puts "Actual calls: #{actual_calls.inspect}"
-          puts "Number of calls: #{actual_calls.length}"
-          if actual_calls.length > 0
-            puts "First call: #{actual_calls[0].inspect}"
-            if actual_calls.length > 1
-              puts "Second call: #{actual_calls[1].inspect}"
-            end
-          end
         end
       end
     end
@@ -139,7 +145,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
             body: create_text_message_payload("", "wamid.test1")
           )
 
-          processor1 = FlowChat::Whatsapp::Processor.new(context1["controller"]) do |config|
+          processor1 = FlowChat::Processor.new(context1["controller"]) do |config|
             config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
             config.use_session_store mock_session_store
           end
@@ -152,7 +158,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
             body: create_text_message_payload("John", "wamid.test2")
           )
 
-          processor2 = FlowChat::Whatsapp::Processor.new(context2["controller"]) do |config|
+          processor2 = FlowChat::Processor.new(context2["controller"]) do |config|
             config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
             config.use_session_store mock_session_store
           end
@@ -181,6 +187,10 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
       FlowChat::Config.whatsapp.stub(:background_job_class, "WhatsappBackgroundModeIntegrationTest::TestWhatsappSendJob") do
         # Create a flow that raises an error
         error_flow = Class.new(FlowChat::Flow) do
+          def self.name
+            "ErrorFlow"
+          end
+
           def main_page
             raise StandardError, "Flow processing error"
           end
@@ -191,7 +201,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
           body: create_text_message_payload("Hello", "wamid.error_test")
         )
 
-        processor = FlowChat::Whatsapp::Processor.new(context["controller"]) do |config|
+        processor = FlowChat::Processor.new(context["controller"]) do |config|
           config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
           config.use_session_store FlowChat::Session::CacheSessionStore
         end
@@ -230,7 +240,7 @@ class WhatsappBackgroundModeIntegrationTest < Minitest::Test
         )
 
         # Enable simulator mode for this processor
-        processor = FlowChat::Whatsapp::Processor.new(context["controller"], enable_simulator: true) do |config|
+        processor = FlowChat::Processor.new(context["controller"], enable_simulator: true) do |config|
           config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, @mock_config
           config.use_session_store FlowChat::Session::CacheSessionStore
         end

@@ -214,12 +214,12 @@ class WhatsappRendererTest < Minitest::Test
     assert_equal "choices must be a Hash", error.message
   end
 
-  def test_media_uses_path_fallback
+  def test_media_requires_url
     media = {type: :image, path: "/local/image.jpg"}
     renderer = FlowChat::Whatsapp::Renderer.new("Local image", media: media)
     result = renderer.render
 
-    assert_equal "/local/image.jpg", result[2][:url]
+    assert_nil result[2][:url]
   end
 
   def test_unsupported_media_type_raises_error

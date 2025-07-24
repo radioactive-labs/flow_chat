@@ -1,23 +1,46 @@
+# frozen_string_literal: true
+
+# Module: ChoiceMapperTest
+#
+# Purpose:
+# End-to-end tests for the USSD ChoiceMapper middleware, which automatically converts
+# choice-based prompts into numbered lists for USSD's numeric-only input constraints,
+# and maps user's numeric selections back to the original choice values.
+#
+# Coverage:
+# - Automatic conversion of hash choices to numbered format (1, 2, 3...)
+# - Mapping storage in session for reverse lookup
+# - Invalid choice handling and error messages
+# - Multi-step flows with changing choice sets
+# - Integration with different processor configurations
+#
+# Architecture:
+# The ChoiceMapper sits in the USSD middleware stack and intercepts:
+# 1. Outgoing: Converts {"Poor" => "Poor", "Good" => "Good"} to {"1" => "Poor", "2" => "Good"}
+# 2. Incoming: Maps user input "2" back to "Good" before flow processing
+#
+# Key Test Scenarios:
+# - Initial choice presentation with automatic numbering
+# - Valid numeric selection mapped to original value
+# - Invalid selection handling with error message
+# - Choice mapping persistence across multiple screens
+# - Comparison with non-USSD platforms that don't use ChoiceMapper
+#
+# USSD Constraints:
+# - Users can only input numbers on most USSD platforms
+# - Choices must be presented as numbered lists
+# - Original choice values must be preserved for flow logic
+#
+# Special Considerations:
+# - Choice mappings are stored in session under "ussd.choice_mapping"
+# - Mappings are cleared and recreated for each new choice prompt
+# - Non-USSD platforms (WhatsApp, HTTP) bypass this middleware entirely
+
 require "test_helper"
+require_relative "../support/test_helpers"
 
 class ChoiceMapperTest < Minitest::Test
-  # Simple test flow that focuses on choice selection
-  class ChoiceTestFlow < FlowChat::Flow
-    def main_page
-      # Test select with array choices
-      satisfaction = app.screen(:satisfaction) do |prompt|
-        prompt.select "Rate our service:", ["Poor", "Good", "Excellent"]
-      end
-
-      # Test yes/no question
-      recommend = app.screen(:recommend) do |prompt|
-        prompt.yes? "Would you recommend us?"
-      end
-
-      # Return the collected data
-      app.say "Thanks! Rating: #{satisfaction}, Recommend: #{recommend}"
-    end
-  end
+  include FlowChat::TestSupport::TestHelpers
 
   def setup
     @controller = mock_controller
@@ -124,7 +147,7 @@ class ChoiceMapperTest < Minitest::Test
     session_store_class = create_session_store_class
     mock_gateway = create_mock_gateway
 
-    processor = FlowChat::Whatsapp::Processor.new(@controller) do |config|
+    processor = FlowChat::Processor.new(@controller) do |config|
       config.use_gateway mock_gateway
       config.use_session_store session_store_class
     end
@@ -134,7 +157,7 @@ class ChoiceMapperTest < Minitest::Test
 
     # Step 1: Get rating question
     context.input = nil
-    result = processor.run(ChoiceTestFlow, :main_page)
+    result = processor.run(FlowChat::TestSupport::TestFlows::ChoiceTestFlow, :main_page)
 
     assert_equal :prompt, result[0]
     assert_includes result[1], "Rate our service"
@@ -145,82 +168,9 @@ class ChoiceMapperTest < Minitest::Test
 
     # Step 2: Select using actual choice value (WhatsApp style)
     context.input = "Good"  # Direct value, not number
-    processor.run(ChoiceTestFlow, :main_page)
+    processor.run(FlowChat::TestSupport::TestFlows::ChoiceTestFlow, :main_page)
 
     # This won't work as expected due to session ID issue, but shows the concept
     # In real use, the session would persist correctly
-  end
-
-  private
-
-  def create_session_store_instance
-    Class.new do
-      def initialize
-        @data = {}
-      end
-
-      def get(key)
-        @data[key.to_s]
-      end
-
-      def set(key, value)
-        @data[key.to_s] = value
-      end
-
-      def delete(key)
-        @data.delete(key.to_s)
-      end
-
-      def clear
-        @data.clear
-      end
-    end.new
-  end
-
-  def create_session_store_class
-    Class.new do
-      def initialize(context = nil)
-        @data = {}
-        @context = context
-      end
-
-      def get(key)
-        @data[key.to_s]
-      end
-
-      def set(key, value)
-        @data[key.to_s] = value
-      end
-
-      def delete(key)
-        @data.delete(key.to_s)
-      end
-
-      def clear
-        @data.clear
-      end
-    end
-  end
-
-  def create_mock_gateway
-    Class.new do
-      def initialize(app)
-        @app = app
-        @session_id = "test_session_#{rand(10000)}"  # Fixed session ID per instance
-      end
-
-      def call(context)
-        # Set up request context like a real gateway would
-        context["request.id"] = @session_id  # Use same session ID throughout test
-        context["request.message_id"] = SecureRandom.uuid
-        context["request.timestamp"] = Time.current.iso8601
-        context["request.gateway"] = :test_gateway
-        context["request.network"] = nil
-        context["request.msisdn"] = "+256700123456"
-
-        # Return the middleware result directly for testing
-        @app.call(context)
-      end
-    end
   end
 end

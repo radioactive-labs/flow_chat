@@ -195,7 +195,7 @@ end
 
 ### Platform Guides
 - [**USSD Development**](docs/platforms/ussd.md) - USSD-specific features and examples
-- [**WhatsApp Development**](docs/platforms/whatsapp.md) 🚧 - WhatsApp Business API integration
+- [**WhatsApp Development**](docs/platforms/whatsapp.md) - WhatsApp Business API integration
 - [**HTTP Development**](docs/platforms/http.md) 🚧 - API endpoints and webhooks
 - [**Multi-Platform Apps**](docs/platforms/multi-platform.md) 🚧 - Building unified experiences
 

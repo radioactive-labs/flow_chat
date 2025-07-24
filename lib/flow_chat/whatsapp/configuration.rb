@@ -29,7 +29,7 @@ module FlowChat
 
         config = new(nil)
 
-        if defined?(Rails) && Rails.application.credentials.whatsapp
+        if defined?(Rails) && Rails.respond_to?(:application) && Rails.application&.credentials&.whatsapp
           FlowChat.logger.debug { "WhatsApp::Configuration: Loading from Rails credentials" }
           credentials = Rails.application.credentials.whatsapp
           config.access_token = credentials[:access_token]
