@@ -127,6 +127,16 @@ Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic 
 
 ## Configuration Patterns
 
+### Global Configuration
+```ruby
+# Logger injection into middleware stack (defaults to true in Rails development)
+FlowChat::Config.inject_middleware_logger = true
+
+# Other global configs
+FlowChat::Config.logger = Rails.logger
+FlowChat::Config.combine_validation_error_with_message = true
+```
+
 ### Session Configuration
 ```ruby
 config.use_session_config(

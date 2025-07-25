@@ -229,7 +229,7 @@ The middleware stack is built dynamically based on gateway capabilities:
 
 ```ruby
 def create_middleware_stack
-  ::Middleware::Builder.new(name: @gateway_class.name) do |b|
+  middleware_stack = ::Middleware::Builder.new(name: @gateway_class.name) do |b|
     # Gateway always comes first
     b.use @gateway_class, *@gateway_args
     
@@ -246,6 +246,11 @@ def create_middleware_stack
     # Executor always goes last
     b.use FlowChat::Executor
   end
+  
+  # Conditionally inject logger based on configuration
+  middleware_stack.inject_logger(FlowChat.logger) if FlowChat::Config.inject_middleware_logger
+  
+  middleware_stack
 end
 ```
 
@@ -417,6 +422,7 @@ FlowChat uses a flexible configuration system:
 # Global configuration
 FlowChat::Config.logger = Rails.logger
 FlowChat::Config.cache = Rails.cache
+FlowChat::Config.inject_middleware_logger = true  # Default: true in Rails development
 
 # Platform-specific configuration
 FlowChat::Config.ussd.pagination_page_size = 160

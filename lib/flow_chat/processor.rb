@@ -130,7 +130,7 @@ module FlowChat
     def create_middleware_stack
       raise ArgumentError, "Gateway is required. Call use_gateway(gateway_class, *args) before running." unless @gateway_class
 
-      ::Middleware::Builder.new(name: @gateway_class.name) do |b|
+      middleware_stack = ::Middleware::Builder.new(name: @gateway_class.name) do |b|
         # Gateway always comes first
         b.use @gateway_class, *@gateway_args
         # Session middleware next. We need to setup our session identifiers
@@ -147,7 +147,11 @@ module FlowChat
         # Executor always goes last.
         # Nothing can execute after it.
         b.use FlowChat::Executor
-      end.inject_logger(FlowChat.logger)
+      end
+      
+      middleware_stack.inject_logger(FlowChat.logger) if FlowChat::Config.inject_middleware_logger
+
+      middleware_stack
     end
   end
 end
