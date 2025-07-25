@@ -127,6 +127,11 @@ module FlowChat
             context["request.user_email"] = user_email
             context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
+            
+            context["intercom.client"] = @client
+            context["intercom.user"] = user
+            context["intercom.conversation"] = conversation
+            
             # Strip HTML tags from message body
             raw_body = latest_message[:body] || ""
             context.input = raw_body.gsub(/<[^>]*>/, "").strip

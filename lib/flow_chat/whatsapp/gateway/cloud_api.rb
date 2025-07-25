@@ -155,6 +155,9 @@ module FlowChat
             context["request.contact_name"] = contact_name
             context["request.timestamp"] = message["timestamp"]
 
+            context["whatsapp.client"] = @client
+            context["whatsapp.message"] = message
+
             # Extract message content based on type
             extract_message_content!(message, context)
 
