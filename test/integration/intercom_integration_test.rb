@@ -231,6 +231,13 @@ class IntercomIntegrationTest < Minitest::Test
       nil
     end
 
+    # Mock response for streaming
+    response = FlowChat::TestSupport::MockResponse.new
+    controller.instance_variable_set(:@response, response)
+    def controller.response
+      @response
+    end
+
     context.instance_variable_set(:@controller, controller)
     def context.controller
       @controller

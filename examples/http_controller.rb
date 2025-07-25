@@ -58,7 +58,7 @@ class WelcomeFlow < FlowChat::Flow
       prompt.ask "Nice to meet you, #{name}! How old are you?",
         validate: ->(input) {
           return "Please enter a number" unless input.match?(/^\d+$/)
-          return "Age must be between 1 and 120" unless (1..120).include?(input.to_i)
+          return "Age must be between 1 and 120" unless (1..120).cover?(input.to_i)
           nil
         },
         transform: ->(input) { input.to_i }

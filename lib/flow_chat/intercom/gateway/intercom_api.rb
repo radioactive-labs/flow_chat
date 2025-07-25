@@ -149,8 +149,6 @@ module FlowChat
             case handler_mode
             when :inline
               handle_message_inline(context, controller)
-            when :background
-              handle_message_background(context, controller)
             when :simulator
               # Return early from simulator mode to preserve the JSON response
               return handle_message_simulator(context, controller)
@@ -161,16 +159,14 @@ module FlowChat
         end
 
         def determine_message_handler(context)
-          # Check if simulator mode was already detected and set in context
+          # Use simulator mode if enabled, otherwise always use inline
           if context["simulator_mode"]
             FlowChat.logger.debug { "IntercomApi: Using simulator message handler" }
-            return :simulator
+            :simulator
+          else
+            FlowChat.logger.debug { "IntercomApi: Using inline message handler" }
+            :inline
           end
-
-          # Default to inline processing (can be configured like WhatsApp later)
-          mode = :inline
-          FlowChat.logger.debug { "IntercomApi: Using #{mode} message handling mode" }
-          mode
         end
 
         # Validate webhook signature to ensure request comes from Intercom
@@ -276,21 +272,6 @@ module FlowChat
           if response
             _type, prompt, choices, media = response
             rendered_message = render_response(prompt, choices, media)
-            result = @client.send_message(context["request.conversation_id"], rendered_message)
-            context["intercom.message_result"] = result
-          end
-        end
-
-        def handle_message_background(context, controller)
-          # Process the flow synchronously (maintaining controller context)
-          response = @app.call(context)
-
-          if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-
-            # For now, implement background processing similar to WhatsApp
-            # This could be enhanced to use actual background jobs later
             result = @client.send_message(context["request.conversation_id"], rendered_message)
             context["intercom.message_result"] = result
           end

@@ -51,16 +51,14 @@ module FlowChat
         private
 
         def determine_message_handler(context)
-          # Check if simulator mode was already detected and set in context
+          # Use simulator mode if enabled, otherwise always use inline
           if context["simulator_mode"]
             FlowChat.logger.debug { "CloudApi: Using simulator message handler" }
-            return :simulator
+            :simulator
+          else
+            FlowChat.logger.debug { "CloudApi: Using inline message handler" }
+            :inline
           end
-
-          # Use global WhatsApp configuration
-          mode = FlowChat::Config.whatsapp.message_handling_mode
-          FlowChat.logger.debug { "CloudApi: Using #{mode} message handling mode" }
-          mode
         end
 
         def handle_verification(context)
@@ -179,8 +177,6 @@ module FlowChat
             case handler_mode
             when :inline
               handle_message_inline(context, controller)
-            when :background
-              handle_message_background(context, controller)
             when :simulator
               # Return early from simulator mode to preserve the JSON response
               return handle_message_simulator(context, controller)
@@ -309,37 +305,6 @@ module FlowChat
             rendered_message = render_response(prompt, choices, media)
             result = @client.send_message(context["request.msisdn"], rendered_message)
             context["whatsapp.message_result"] = result
-          end
-        end
-
-        def handle_message_background(context, controller)
-          # Process the flow synchronously (maintaining controller context)
-          response = @app.call(context)
-
-          if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-
-            # Queue only the response delivery asynchronously
-            send_data = {
-              msisdn: context["request.msisdn"],
-              response: rendered_message,
-              config_name: @config.name
-            }
-
-            # Get job class from configuration
-            job_class_name = FlowChat::Config.whatsapp.background_job_class
-
-            # Enqueue background job for sending only
-            begin
-              job_class = job_class_name.constantize
-              job_class.perform_later(send_data)
-            rescue NameError
-              # Fallback to inline sending if no job system
-              Rails.logger.warn "Background mode requested but no #{job_class_name} found. Falling back to inline sending."
-              result = @client.send_message(context["request.msisdn"], rendered_message)
-              context["whatsapp.message_result"] = result
-            end
           end
         end
 

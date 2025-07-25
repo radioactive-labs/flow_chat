@@ -34,9 +34,7 @@ FlowChat::Config.ussd.pagination_back_text = "Back"    # Previous page text
 ### WhatsApp Configuration
 
 ```ruby
-# WhatsApp processing mode
-FlowChat::Config.whatsapp.message_handling_mode = :inline    # :inline, :background, :simulator
-FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+# WhatsApp API configuration
 FlowChat::Config.whatsapp.api_base_url = "https://graph.facebook.com/v22.0"
 ```
 
@@ -230,9 +228,7 @@ Rails.application.configure do
     # USSD production settings
     FlowChat::Config.ussd.pagination_page_size = 140  # Conservative for compatibility
     
-    # WhatsApp production settings
-    FlowChat::Config.whatsapp.message_handling_mode = :background
-    FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+    # WhatsApp uses inline by default
     
     # Disable simulator in production
     FlowChat::Config.simulator_secret = nil
@@ -436,9 +432,7 @@ Sidekiq.configure_client do |config|
   config.redis = { url: ENV["REDIS_URL"] }
 end
 
-# WhatsApp background processing
-FlowChat::Config.whatsapp.message_handling_mode = :background
-FlowChat::Config.whatsapp.background_job_class = "WhatsappMessageJob"
+# WhatsApp uses inline responses by defaul
 ```
 
 ### Database Connection Configuration

@@ -109,7 +109,6 @@ class ConfigTest < Minitest::Test
 
     # Session config should not have other config methods
     refute_respond_to FlowChat::Config.session, :pagination_page_size
-    refute_respond_to FlowChat::Config.session, :message_handling_mode
   end
 
   def test_whatsapp_config_object_accessible
@@ -122,73 +121,7 @@ class ConfigTest < Minitest::Test
   def test_whatsapp_config_defaults
     whatsapp_config = FlowChat::Config.whatsapp
 
-    assert_equal :inline, whatsapp_config.message_handling_mode
-    assert_equal "WhatsappMessageJob", whatsapp_config.background_job_class
-  end
-
-  def test_whatsapp_config_setter_methods
-    original_mode = FlowChat::Config.whatsapp.message_handling_mode
-    original_job_class = FlowChat::Config.whatsapp.background_job_class
-
-    begin
-      # Test setters work
-      FlowChat::Config.whatsapp.message_handling_mode = :background
-      FlowChat::Config.whatsapp.background_job_class = "CustomJob"
-
-      assert_equal :background, FlowChat::Config.whatsapp.message_handling_mode
-      assert_equal "CustomJob", FlowChat::Config.whatsapp.background_job_class
-    ensure
-      # Restore original values
-      FlowChat::Config.whatsapp.message_handling_mode = original_mode
-      FlowChat::Config.whatsapp.background_job_class = original_job_class
-    end
-  end
-
-  def test_whatsapp_mode_validation
-    config = FlowChat::Config::WhatsappConfig.new
-
-    # Valid modes should work
-    config.message_handling_mode = :inline
-    assert_equal :inline, config.message_handling_mode
-
-    config.message_handling_mode = :background
-    assert_equal :background, config.message_handling_mode
-
-    config.message_handling_mode = :simulator
-    assert_equal :simulator, config.message_handling_mode
-
-    # String modes should be converted to symbols
-    config.message_handling_mode = "inline"
-    assert_equal :inline, config.message_handling_mode
-
-    # Invalid modes should raise error
-    error = assert_raises(ArgumentError) do
-      config.message_handling_mode = :invalid_mode
-    end
-    assert_includes error.message, "Invalid message handling mode: invalid_mode"
-    assert_includes error.message, "Valid modes: inline, background, simulator"
-  end
-
-  def test_whatsapp_mode_helper_methods
-    config = FlowChat::Config::WhatsappConfig.new
-
-    # Test inline mode
-    config.message_handling_mode = :inline
-    assert config.inline_mode?
-    refute config.background_mode?
-    refute config.simulator_mode?
-
-    # Test background mode
-    config.message_handling_mode = :background
-    refute config.inline_mode?
-    assert config.background_mode?
-    refute config.simulator_mode?
-
-    # Test simulator mode
-    config.message_handling_mode = :simulator
-    refute config.inline_mode?
-    refute config.background_mode?
-    assert config.simulator_mode?
+    assert_equal "https://graph.facebook.com/v22.0", whatsapp_config.api_base_url
   end
 
   def test_whatsapp_config_singleton_instance
@@ -200,10 +133,6 @@ class ConfigTest < Minitest::Test
   end
 
   def test_whatsapp_config_separation
-    # General config should not have WhatsApp methods
-    refute_respond_to FlowChat::Config, :message_handling_mode
-    refute_respond_to FlowChat::Config, :background_job_class
-
     # WhatsApp config should not have general methods
     refute_respond_to FlowChat::Config.whatsapp, :logger
     refute_respond_to FlowChat::Config.whatsapp, :cache
@@ -288,6 +217,5 @@ class ConfigTest < Minitest::Test
     # HTTP config should not have other config methods
     refute_respond_to FlowChat::Config.http, :pagination_page_size
     refute_respond_to FlowChat::Config.http, :boundaries
-    refute_respond_to FlowChat::Config.http, :message_handling_mode
   end
 end

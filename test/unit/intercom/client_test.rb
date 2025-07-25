@@ -530,9 +530,9 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
     stub_request(:get, "https://api.intercom.io/admins")
       .to_return(status: 403, body: {"error" => "Forbidden"}.to_json)
 
-    result = @client.list_admins
-
-    assert_nil result
+    assert_raises(FlowChat::Intercom::ConfigurationError) do
+      @client.list_admins
+    end
   end
 
   def test_build_reply_payload_text

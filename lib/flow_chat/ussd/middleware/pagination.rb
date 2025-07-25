@@ -21,7 +21,6 @@ module FlowChat
           if intercept?
             FlowChat.logger.info { "Ussd::Pagination: Intercepting request for pagination handling - session #{session_id}" }
             type, prompt = handle_intercepted_request
-            [type, prompt, []]
           else
             # Clear pagination state for new flows
             if pagination_state.present?
@@ -41,8 +40,8 @@ module FlowChat
               end
             end
 
-            [type, prompt, []]
           end
+          [type, prompt, []]
         end
 
         private

@@ -43,14 +43,14 @@ module FlowChat
           # Create pagination middleware with app that returns long content
           app = ->(ctx) {
             # Return content that exceeds page size (140 chars)
-            long_content = "Please select an option from the menu below:\n\n" +
-              "1. Check account balance and transaction history\n" +
-              "2. Transfer money to another account\n" +
-              "3. Pay bills and utilities\n" +
-              "4. Buy airtime and data bundles\n" +
-              "5. View and manage savings accounts\n" +
-              "6. Apply for loans and credit\n" +
-              "7. Update profile information\n" +
+            long_content = "Please select an option from the menu below:\n\n" \
+              "1. Check account balance and transaction history\n" \
+              "2. Transfer money to another account\n" \
+              "3. Pay bills and utilities\n" \
+              "4. Buy airtime and data bundles\n" \
+              "5. View and manage savings accounts\n" \
+              "6. Apply for loans and credit\n" \
+              "7. Update profile information\n" \
               "8. Contact customer support"
 
             [:prompt, long_content, [], nil]
@@ -89,14 +89,14 @@ module FlowChat
           @context["request.input"] = "#"  # Default pagination next option
 
           # Set up pagination state from a previous paginated response
-          long_content = "Please select an option from the menu below:\n\n" +
-            "1. Check account balance and transaction history\n" +
-            "2. Transfer money to another account\n" +
-            "3. Pay bills and utilities\n" +
-            "4. Buy airtime and data bundles\n" +
-            "5. View and manage savings accounts\n" +
-            "6. Apply for loans and credit\n" +
-            "7. Update profile information\n" +
+          long_content = "Please select an option from the menu below:\n\n" \
+            "1. Check account balance and transaction history\n" \
+            "2. Transfer money to another account\n" \
+            "3. Pay bills and utilities\n" \
+            "4. Buy airtime and data bundles\n" \
+            "5. View and manage savings accounts\n" \
+            "6. Apply for loans and credit\n" \
+            "7. Update profile information\n" \
             "8. Contact customer support"
 
           @context.session.set("ussd.pagination", {
@@ -141,14 +141,14 @@ module FlowChat
           @context["request.input"] = "0"  # Default pagination back option
 
           # Set up pagination state from page 2
-          long_content = "Please select an option from the menu below:\n\n" +
-            "1. Check account balance and transaction history\n" +
-            "2. Transfer money to another account\n" +
-            "3. Pay bills and utilities\n" +
-            "4. Buy airtime and data bundles\n" +
-            "5. View and manage savings accounts\n" +
-            "6. Apply for loans and credit\n" +
-            "7. Update profile information\n" +
+          long_content = "Please select an option from the menu below:\n\n" \
+            "1. Check account balance and transaction history\n" \
+            "2. Transfer money to another account\n" \
+            "3. Pay bills and utilities\n" \
+            "4. Buy airtime and data bundles\n" \
+            "5. View and manage savings accounts\n" \
+            "6. Apply for loans and credit\n" \
+            "7. Update profile information\n" \
             "8. Contact customer support"
 
           @context.session.set("ussd.pagination", {
@@ -194,14 +194,14 @@ module FlowChat
           @context["request.input"] = "1"  # User selects option 1
 
           # Set up pagination state - user is on a paginated menu
-          long_content = "Please select an option from the menu below:\n\n" +
-            "1. Check account balance and transaction history\n" +
-            "2. Transfer money to another account\n" +
-            "3. Pay bills and utilities\n" +
-            "4. Buy airtime and data bundles\n" +
-            "5. View and manage savings accounts\n" +
-            "6. Apply for loans and credit\n" +
-            "7. Update profile information\n" +
+          long_content = "Please select an option from the menu below:\n\n" \
+            "1. Check account balance and transaction history\n" \
+            "2. Transfer money to another account\n" \
+            "3. Pay bills and utilities\n" \
+            "4. Buy airtime and data bundles\n" \
+            "5. View and manage savings accounts\n" \
+            "6. Apply for loans and credit\n" \
+            "7. Update profile information\n" \
             "8. Contact customer support"
 
           @context.session.set("ussd.pagination", {
@@ -247,16 +247,16 @@ module FlowChat
           @context["request.input"] = "#"  # Next page
 
           # Set up pagination state - user is on page 2 of 3
-          long_content = "Please select an option from the menu below:\n\n" +
-            "1. Check account balance and transaction history\n" +
-            "2. Transfer money to another account\n" +
-            "3. Pay bills and utilities\n" +
-            "4. Buy airtime and data bundles\n" +
-            "5. View and manage savings accounts\n" +
-            "6. Apply for loans and credit\n" +
-            "7. Update profile information\n" +
-            "8. Contact customer support\n" +
-            "9. View recent transactions\n" +
+          long_content = "Please select an option from the menu below:\n\n" \
+            "1. Check account balance and transaction history\n" \
+            "2. Transfer money to another account\n" \
+            "3. Pay bills and utilities\n" \
+            "4. Buy airtime and data bundles\n" \
+            "5. View and manage savings accounts\n" \
+            "6. Apply for loans and credit\n" \
+            "7. Update profile information\n" \
+            "8. Contact customer support\n" \
+            "9. View recent transactions\n" \
             "10. Change PIN"
 
           @context.session.set("ussd.pagination", {
@@ -301,10 +301,10 @@ module FlowChat
           @context["request.input"] = "999"  # Invalid choice (not a menu option or pagination control)
 
           # Set up pagination state
-          long_content = "Please select an option from the menu below:\n\n" +
-            "1. Check account balance\n" +
-            "2. Transfer money\n" +
-            "3. Pay bills\n" +
+          long_content = "Please select an option from the menu below:\n\n" \
+            "1. Check account balance\n" \
+            "2. Transfer money\n" \
+            "3. Pay bills\n" \
             "4. Buy airtime"
 
           @context.session.set("ussd.pagination", {
@@ -352,12 +352,12 @@ module FlowChat
 
           # App returns long content with media that needs pagination
           app = ->(ctx) {
-            long_content = "Welcome! Here are your options:\n\n" +
-              "1. Check account balance and recent transactions\n" +
-              "2. Transfer money to friends and family\n" +
-              "3. Pay utility bills and services\n" +
-              "4. Buy airtime and data bundles\n" +
-              "5. View and manage your savings\n" +
+            long_content = "Welcome! Here are your options:\n\n" \
+              "1. Check account balance and recent transactions\n" \
+              "2. Transfer money to friends and family\n" \
+              "3. Pay utility bills and services\n" \
+              "4. Buy airtime and data bundles\n" \
+              "5. View and manage your savings\n" \
               "6. Apply for loans and credit facilities"
 
             # Return with media
