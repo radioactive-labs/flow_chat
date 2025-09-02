@@ -49,29 +49,6 @@ class IntercomIntegrationTest < Minitest::Test
       }.to_json
   end
 
-  def test_configuration_to_client_integration
-    # Test that configuration properly flows through to client
-    client = FlowChat::Intercom::Client.new(@config)
-
-    # Mock API call
-    stub_request(:post, "https://api.intercom.io/conversations/test_conv/reply")
-      .with(
-        headers: {
-          "Authorization" => "Bearer test_access_token",
-          "Content-Type" => "application/json",
-          "Accept" => "application/json",
-          "Intercom-Version" => "2.11"
-        }
-      )
-      .to_return(status: 200, body: {"id" => "msg_123"}.to_json)
-
-    # Send message
-    result = client.reply_to_conversation("test_conv", "Test message")
-
-    refute_nil result
-    assert_equal "msg_123", result["id"]
-  end
-
   def test_client_to_conversation_manager_integration
     # Test that client methods work properly with conversation manager
     client = FlowChat::Intercom::Client.new(@config)

@@ -276,8 +276,7 @@ module FlowChat
           response = @app.call(context)
           if response
             _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-            result = @client.send_message(context["request.conversation_id"], rendered_message)
+            result = @client.send_message(context["request.conversation_id"], prompt, choices: choices, media: media)
             context["intercom.message_result"] = result
 
             # Instrument message sent

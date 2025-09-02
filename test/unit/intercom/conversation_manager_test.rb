@@ -287,7 +287,7 @@ class FlowChat::Intercom::ConversationManagerTest < Minitest::Test
   def test_send_reply_text_success
     message = "Hello there!"
 
-    @client.expect(:send_message, {"id" => "msg_123"}, [@conversation_id, [:text, message, {}]])
+    @client.expect(:send_message, {"id" => "msg_123"}, [@conversation_id, message])
 
     result = @manager.send_reply(message)
 
@@ -297,7 +297,7 @@ class FlowChat::Intercom::ConversationManagerTest < Minitest::Test
   def test_send_reply_note_success
     message = "Internal note"
 
-    @client.expect(:send_message, {"id" => "msg_123"}, [@conversation_id, [:note, message, {}]])
+    @client.expect(:send_message, {"id" => "msg_123"}, [@conversation_id, message])
 
     result = @manager.send_reply(message, type: :note)
 
@@ -307,7 +307,7 @@ class FlowChat::Intercom::ConversationManagerTest < Minitest::Test
   def test_send_reply_failure
     message = "Hello there!"
 
-    @client.expect(:send_message, nil, [@conversation_id, [:text, message, {}]])
+    @client.expect(:send_message, nil, [@conversation_id, message])
 
     result = @manager.send_reply(message)
 

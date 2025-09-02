@@ -98,7 +98,10 @@ class WhatsappClientTest < Minitest::Test
       {
         title: "Section 1",
         rows: [
-          {id: "row1", title: "Row 1", description: "Description 1"}
+          {id: "row1", title: "Row 1", description: "Description 1"},
+          {id: "row2", title: "Row 2", description: "Description 2"},
+          {id: "row3", title: "Row 3", description: "Description 3"},
+          {id: "row4", title: "Row 4", description: "Description 4"}
         ]
       }
     ]

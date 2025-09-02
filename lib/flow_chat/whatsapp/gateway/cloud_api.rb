@@ -304,20 +304,19 @@ module FlowChat
         def handle_message_inline(context, controller)
           response = @app.call(context)
           if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-            result = @client.send_message(context["request.msisdn"], rendered_message)
+            type, prompt, choices, media = response
+            result = @client.send_message(context["request.msisdn"], prompt, choices: choices, media: media)
             context["whatsapp.message_result"] = result
 
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
               to: context["request.msisdn"],
               session_id: context["request.id"],
-              message: rendered_message,
-              message_type: (_type == :prompt) ? "prompt" : "terminal",
+              message: prompt,
+              message_type: (type == :prompt) ? "prompt" : "terminal",
               gateway: :whatsapp_cloud_api,
               platform: :whatsapp,
-              content_length: rendered_message.to_s.length,
+              content_length: prompt.to_s.length,
               timestamp: context["request.timestamp"]
             })
           end
@@ -327,12 +326,12 @@ module FlowChat
           response = @app.call(context)
 
           if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
+            _, prompt, choices, media = response
+            response_data = render_response(prompt, choices, media)
 
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via WhatsApp API
-            message_payload = @client.build_message_payload(rendered_message, context["request.msisdn"])
+            message_payload = @client.build_message_payload(response_data, context["request.msisdn"])
 
             simulator_response = {
               mode: "simulator",

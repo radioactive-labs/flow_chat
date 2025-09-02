@@ -27,7 +27,7 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
 
   def test_send_message_text_response
     conversation_id = "conv_123"
-    response = [:text, "Hello, how can I help?", {}]
+    prompt = "Hello, how can I help?"
 
     expected_payload = {
       message_type: "comment",
@@ -45,7 +45,7 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
       )
       .to_return(status: 200, body: mock_api_response.to_json)
 
-    result = @client.send_message(conversation_id, response)
+    result = @client.send_message(conversation_id, prompt)
 
     assert_equal mock_api_response, result
     assert_equal "msg_456", result["id"]
@@ -53,10 +53,10 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
 
   def test_send_message_note_response
     conversation_id = "conv_123"
-    response = [:note, "Internal note for admins", {}]
+    prompt = "Internal note for admins"
 
     expected_payload = {
-      message_type: "note",
+      message_type: "comment",
       type: "admin",
       admin_id: "test_admin_id",
       body: "Internal note for admins"
@@ -71,14 +71,14 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
       )
       .to_return(status: 200, body: mock_api_response.to_json)
 
-    result = @client.send_message(conversation_id, response)
+    result = @client.send_message(conversation_id, prompt)
 
     assert_equal mock_api_response, result
   end
 
   def test_send_message_unknown_type_defaults_to_comment
     conversation_id = "conv_123"
-    response = [:unknown_type, "Some content", {}]
+    prompt = "Some content"
 
     expected_payload = {
       message_type: "comment",
@@ -96,7 +96,7 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
       )
       .to_return(status: 200, body: mock_api_response.to_json)
 
-    result = @client.send_message(conversation_id, response)
+    result = @client.send_message(conversation_id, prompt)
 
     assert_equal mock_api_response, result
   end
@@ -123,31 +123,6 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
     assert_raises(Net::OpenTimeout) do
       @client.send_message(conversation_id, response)
     end
-  end
-
-  def test_reply_to_conversation
-    conversation_id = "conv_123"
-    text = "This is a text reply"
-
-    expected_payload = {
-      message_type: "comment",
-      type: "admin",
-      admin_id: "test_admin_id",
-      body: text
-    }
-
-    mock_api_response = {"id" => "msg_reply", "type" => "comment"}
-
-    stub_request(:post, "https://api.intercom.io/conversations/#{conversation_id}/reply")
-      .with(
-        body: expected_payload.to_json,
-        headers: @config.api_headers
-      )
-      .to_return(status: 200, body: mock_api_response.to_json)
-
-    result = @client.reply_to_conversation(conversation_id, text)
-
-    assert_equal mock_api_response, result
   end
 
   def test_assign_conversation_to_admin

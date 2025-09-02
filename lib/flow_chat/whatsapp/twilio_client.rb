@@ -18,10 +18,13 @@ module FlowChat
       # @param to [String] Phone number in E.164 format
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
-      def send_message(to, response)
+      def send_message(to, prompt, choices: nil, media: nil)
+        FlowChat.logger.info { "Twilio::Client: Sending message to #{to}" }
+        FlowChat.logger.debug { "Twilio::Client: Message content: '#{prompt.to_s.truncate(100)}'" }
+
+        # Use renderer to convert to structured response
+        response = FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
         type, content, _ = response
-        FlowChat.logger.info { "Twilio::Client: Sending #{type} message to #{to}" }
-        FlowChat.logger.debug { "Twilio::Client: Message content: '#{content.to_s.truncate(100)}'" }
 
         result = instrument(Events::MESSAGE_SENT, {
           to: to,
@@ -49,7 +52,7 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_text(to, text)
         FlowChat.logger.debug { "Twilio::Client: Sending text message to #{to}" }
-        send_message(to, [:text, text, {}])
+        send_message(to, text)
       end
 
       # Build message payload for Twilio API
@@ -132,7 +135,8 @@ module FlowChat
       # @return [Hash] API response
       def send_image(to, image_url, caption = nil)
         FlowChat.logger.debug { "Twilio::Client: Sending image to #{to}" }
-        send_message(to, [:media_image, caption, {url: image_url}])
+        media = {type: :image, url: image_url}
+        send_message(to, caption, media: media)
       end
 
       # Send document message
@@ -142,7 +146,8 @@ module FlowChat
       # @return [Hash] API response
       def send_document(to, document_url, caption = nil)
         FlowChat.logger.debug { "Twilio::Client: Sending document to #{to}" }
-        send_message(to, [:media_document, caption, {url: document_url}])
+        media = {type: :document, url: document_url}
+        send_message(to, caption, media: media)
       end
 
       private

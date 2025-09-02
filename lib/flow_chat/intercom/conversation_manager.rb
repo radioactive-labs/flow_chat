@@ -186,7 +186,7 @@ module FlowChat
         FlowChat.logger.debug { "Intercom::ConversationManager: Sending #{type} reply to conversation #{@conversation_id}" }
 
         begin
-          result = @client.send_message(@conversation_id, [type, message, {}])
+          result = @client.send_message(@conversation_id, message)
 
           if result
             FlowChat.logger.debug { "Intercom::ConversationManager: Successfully sent reply" }

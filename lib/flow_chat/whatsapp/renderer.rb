@@ -30,19 +30,46 @@ module FlowChat
       def build_media_message
         media_type = media[:type] || :image
         url = media[:url]
+        id = media[:id]
         filename = media[:filename]
 
         case media_type.to_sym
         when :image
-          [:media_image, "", {url: url, caption: message}]
+          options = {}
+          options[:url] = url if url
+          options[:id] = id if id
+          options[:caption] = message if message.present?
+          [:media_image, "", options]
         when :document
-          [:media_document, "", {url: url, caption: message, filename: filename}]
+          options = {}
+          options[:url] = url if url
+          options[:id] = id if id
+          options[:caption] = message if message.present?
+          options[:filename] = filename if filename
+          [:media_document, "", options]
         when :audio
-          [:media_audio, "", {url: url, caption: message}]
+          options = {}
+          options[:url] = url if url
+          options[:id] = id if id
+          options[:caption] = message if message.present?
+          [:media_audio, "", options]
         when :video
-          [:media_video, "", {url: url, caption: message}]
+          options = {}
+          options[:url] = url if url
+          options[:id] = id if id
+          options[:caption] = message if message.present?
+          [:media_video, "", options]
         when :sticker
-          [:media_sticker, "", {url: url}] # Stickers don't support captions
+          options = {}
+          options[:url] = url if url
+          options[:id] = id if id
+          [:media_sticker, "", options] # Stickers don't support captions
+        when :template
+          [:template, "", {
+            template_name: media[:template_name],
+            components: media[:components] || [],
+            language: media[:language] || "en_US"
+          }]
         else
           raise ArgumentError, "Unsupported media type: #{media_type}"
         end

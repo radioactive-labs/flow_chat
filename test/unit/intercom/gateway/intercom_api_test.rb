@@ -127,7 +127,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     setup_post_request_with_webhook_and_app_call(webhook_body)
 
     @app.expect(:call, [:text, "Thank you for your message!", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg_123"}, ["conv_123", [:text, "Thank you for your message!", {}]])
+    @mock_client.expect(:send_message, {"id" => "sent_msg_123"}, ["conv_123", "Thank you for your message!"], choices: nil, media: nil)
 
     @gateway.call(@context)
 
@@ -145,7 +145,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     setup_post_request_with_webhook_and_app_call(webhook_body)
 
     @app.expect(:call, [:text, "I understand your concern", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg_456"}, ["conv_123", [:text, "I understand your concern", {}]])
+    @mock_client.expect(:send_message, {"id" => "sent_msg_456"}, ["conv_123", "I understand your concern"], choices: nil, media: nil)
 
     @gateway.call(@context)
 
@@ -210,7 +210,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Add mock expectations since valid signature allows webhook processing to continue
     @app.expect(:call, [:text, "Test response", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", [:text, "Test response", {}]])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Test response"], choices: nil, media: nil)
     @context.controller.expect(:head, nil, [:ok])
 
     @gateway.call(@context)
@@ -241,7 +241,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Add mock expectations since signature validation is disabled, webhook should process
     @app.expect(:call, [:text, "Test response", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", [:text, "Test response", {}]])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Test response"], choices: nil, media: nil)
     @context.controller.expect(:head, nil, [:ok])
 
     @gateway.call(@context)
@@ -321,7 +321,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     setup_post_request_with_webhook(webhook_body)
 
     @app.expect(:call, [:text, "Regular response", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", [:text, "Regular response", {}]])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Regular response"], choices: nil, media: nil)
 
     @gateway.call(@context)
 

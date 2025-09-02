@@ -31,10 +31,13 @@ module FlowChat
       # @param conversation_id [String] Conversation ID
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
-      def send_message(conversation_id, response)
+      def send_message(conversation_id, prompt, choices: nil, media: nil)
+        FlowChat.logger.info { "Intercom::Client: Sending message to conversation #{conversation_id}" }
+        FlowChat.logger.debug { "Intercom::Client: Message content: '#{prompt.to_s.truncate(100)}'" }
+
+        # Use renderer to convert to structured response
+        response = FlowChat::Intercom::Renderer.new(prompt, choices: choices, media: media).render
         type, content, _ = response
-        FlowChat.logger.info { "Intercom::Client: Sending #{type} message to conversation #{conversation_id}" }
-        FlowChat.logger.debug { "Intercom::Client: Message content: '#{content.to_s.truncate(100)}'" }
 
         result = instrument(Events::MESSAGE_SENT, {
           to: conversation_id,
@@ -54,15 +57,6 @@ module FlowChat
         end
 
         result
-      end
-
-      # Send a text reply to a conversation
-      # @param conversation_id [String] Conversation ID
-      # @param text [String] Message text
-      # @return [Hash] API response or nil on error
-      def reply_to_conversation(conversation_id, text)
-        FlowChat.logger.debug { "Intercom::Client: Sending text reply to conversation #{conversation_id}" }
-        send_message(conversation_id, [:text, text, {}])
       end
 
       # Assign a conversation to an admin or team

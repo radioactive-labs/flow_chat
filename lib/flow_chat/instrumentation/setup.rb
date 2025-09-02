@@ -2,7 +2,7 @@ module FlowChat
   module Instrumentation
     module Setup
       class << self
-        attr_accessor :log_subscriber, :metrics_collector
+        attr_accessor :log_subscriber
 
         # Initialize instrumentation with default subscribers
         def initialize!

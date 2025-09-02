@@ -24,13 +24,6 @@ class IntercomController < ApplicationController
     # Run the customer support flow
     processor.run CustomerSupportFlow, :handle_conversation
   end
-
-  # GET /intercom/webhook?hub.mode=subscribe&hub.challenge=...
-  # Handle Intercom webhook verification
-  def webhook
-    # The gateway automatically handles both POST (webhooks) and GET (verification)
-    webhook
-  end
 end
 
 # Example flow for handling customer conversations via Intercom
