@@ -19,10 +19,13 @@ module FlowChat
       # @param to [String] Phone number in E.164 format
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
-      def send_message(to, response)
-        type, content, _ = response
-        FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
-        FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
+      def send_message(to, prompt, choices: nil, media: nil)
+        FlowChat.logger.info { "WhatsApp::Client: Sending message to #{to}" }
+        FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{prompt.to_s.truncate(100)}'" }
+
+        # Use renderer to convert to structured response
+        response = FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
+        type, content, _options = response
 
         result = instrument(Events::MESSAGE_SENT, {
           to: to,
@@ -50,7 +53,7 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_text(to, text)
         FlowChat.logger.debug { "WhatsApp::Client: Sending text message to #{to}" }
-        send_message(to, [:text, text, {}])
+        send_message(to, text)
       end
 
       # Send interactive buttons
@@ -60,7 +63,8 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_buttons(to, text, buttons)
         FlowChat.logger.debug { "WhatsApp::Client: Sending interactive buttons to #{to} with #{buttons.size} buttons" }
-        send_message(to, [:interactive_buttons, text, {buttons: buttons}])
+        choices = buttons.each_with_object({}) { |button, hash| hash[button[:id]] = button[:title] }
+        send_message(to, text, choices: choices)
       end
 
       # Send interactive list
@@ -72,7 +76,9 @@ module FlowChat
       def send_list(to, text, sections, button_text = "Choose")
         total_items = sections.sum { |section| section[:rows]&.size || 0 }
         FlowChat.logger.debug { "WhatsApp::Client: Sending interactive list to #{to} with #{sections.size} sections, #{total_items} total items" }
-        send_message(to, [:interactive_list, text, {sections: sections, button_text: button_text}])
+        choices = {}
+        sections.each { |section| section[:rows]&.each { |row| choices[row[:id]] = row[:title] } }
+        send_message(to, text, choices: choices)
       end
 
       # Send a template message
@@ -98,7 +104,8 @@ module FlowChat
       # @return [Hash] API response
       def send_image(to, image_url_or_id, caption = nil, mime_type = nil)
         FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? "URL" : "Media ID"}" }
-        send_media_message(to, :image, image_url_or_id, caption: caption, mime_type: mime_type)
+        media = {type: :image, url: image_url_or_id}
+        send_message(to, caption, media: media)
       end
 
       # Send document message

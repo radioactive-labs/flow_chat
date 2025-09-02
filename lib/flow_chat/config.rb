@@ -8,7 +8,7 @@ module FlowChat
     # When false, only the validation error message is shown to the user.
     mattr_accessor :combine_validation_error_with_message, default: true
     # When true, inject logger into middleware stack. Defaults to true in Rails development.
-    mattr_accessor :inject_middleware_logger, default: (defined?(Rails) && Rails.env.development?)
+    mattr_accessor :inject_middleware_logger, default: defined?(Rails) && Rails.env.development?
 
     # Session configuration object
     def self.session

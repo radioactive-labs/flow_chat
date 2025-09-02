@@ -14,9 +14,9 @@ FlowChat provides comprehensive WhatsApp Business API integration with support f
 
 ## 🚀 Quick Start
 
-### 1. Basic Setup
+FlowChat supports two WhatsApp gateway options:
 
-Create a WhatsApp controller:
+### Option 1: Meta Cloud API (Recommended)
 
 ```ruby
 # app/controllers/whatsapp_controller.rb
@@ -37,11 +37,33 @@ class WhatsappController < ApplicationController
 end
 ```
 
-### 2. Add Route
+### Option 2: Twilio WhatsApp API
+
+```ruby
+# app/controllers/whatsapp_twilio_controller.rb
+class WhatsappTwilioController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Whatsapp::Gateway::Twilio
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  rescue => e
+    Rails.logger.error "Twilio WhatsApp webhook error: #{e.message}"
+    head :internal_server_error
+  end
+end
+```
+
+### 2. Add Routes
 
 ```ruby
 # config/routes.rb
-post '/whatsapp/webhook', to: 'whatsapp#webhook'
+post '/whatsapp/webhook', to: 'whatsapp#webhook'            # Meta Cloud API
+post '/whatsapp/twilio/webhook', to: 'whatsapp_twilio#webhook'  # Twilio API
 ```
 
 ### 3. Create a Flow
@@ -95,7 +117,9 @@ end
 
 ## 🔧 Configuration
 
-### Option 1: Rails Credentials (Recommended)
+### Meta Cloud API Configuration
+
+#### Option 1: Rails Credentials (Recommended)
 
 ```bash
 rails credentials:edit
@@ -112,7 +136,7 @@ whatsapp:
   skip_signature_validation: false  # Set to true only for development
 ```
 
-### Option 2: Environment Variables
+#### Option 2: Environment Variables
 
 ```bash
 export WHATSAPP_ACCESS_TOKEN="your_access_token"
@@ -124,18 +148,66 @@ export WHATSAPP_BUSINESS_ACCOUNT_ID="your_business_account_id"
 export WHATSAPP_SKIP_SIGNATURE_VALIDATION="false"
 ```
 
+### Twilio WhatsApp Configuration
+
+#### Option 1: Rails Credentials (Recommended)
+
+```bash
+rails credentials:edit
+```
+
+```yaml
+twilio_whatsapp:
+  account_sid: "your_twilio_account_sid"
+  auth_token: "your_twilio_auth_token"
+  phone_number: "+15551234567"  # Your Twilio WhatsApp number
+  skip_signature_validation: false  # Set to true only for development
+```
+
+#### Option 2: Environment Variables
+
+```bash
+export TWILIO_ACCOUNT_SID="your_twilio_account_sid"
+export TWILIO_AUTH_TOKEN="your_twilio_auth_token"
+export TWILIO_WHATSAPP_PHONE_NUMBER="+15551234567"
+export TWILIO_WHATSAPP_SKIP_SIGNATURE_VALIDATION="false"
+```
+
+### Gateway Comparison
+
+| Feature | Meta Cloud API | Twilio |
+|---------|----------------|--------|
+| **Interactive Elements** | Native buttons/lists | Text fallback |
+| **Webhook Format** | JSON | Form-encoded |
+| **Signature Validation** | X-Hub-Signature-256 (SHA256) | X-Twilio-Signature (SHA1) |
+| **Response Format** | JSON | TwiML XML |
+| **Setup Complexity** | Moderate (Meta Business) | Simple (Twilio account) |
+| **Features** | Full WhatsApp features | Basic messaging |
+| **Cost** | Per conversation | Per message |
+
 ### Option 3: Programmatic Configuration
 
 ```ruby
-config = FlowChat::Whatsapp::Configuration.new(:my_account)
-config.access_token = "your_access_token"
-config.phone_number_id = "your_phone_number_id"
-config.verify_token = "your_verify_token"
-config.app_secret = "your_app_secret"
-config.skip_signature_validation = false
+# Meta Cloud API
+cloud_config = FlowChat::Whatsapp::Configuration.new(:my_account)
+cloud_config.access_token = "your_access_token"
+cloud_config.phone_number_id = "your_phone_number_id"
+cloud_config.verify_token = "your_verify_token"
+cloud_config.app_secret = "your_app_secret"
 
 processor = FlowChat::Processor.new(self) do |config|
-  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, cloud_config
+  config.use_session_store FlowChat::Session::CacheSessionStore
+end
+
+# Twilio WhatsApp
+twilio_config = FlowChat::Whatsapp::TwilioConfiguration.new(:twilio_account)
+twilio_config.account_sid = "your_account_sid"
+twilio_config.auth_token = "your_auth_token"
+twilio_config.phone_number = "+15551234567"
+
+processor = FlowChat::Processor.new(self) do |config|
+  config.use_gateway FlowChat::Whatsapp::Gateway::Twilio, twilio_config
   config.use_session_store FlowChat::Session::CacheSessionStore
 end
 ```
@@ -1249,9 +1321,12 @@ end
 
 ### Core Classes
 
-- `FlowChat::Whatsapp::Gateway::CloudApi` - Main gateway implementation
-- `FlowChat::Whatsapp::Client` - Direct API client for out-of-band messaging
-- `FlowChat::Whatsapp::Configuration` - Configuration management
+- `FlowChat::Whatsapp::Gateway::CloudApi` - Meta Cloud API gateway implementation
+- `FlowChat::Whatsapp::Gateway::Twilio` - Twilio WhatsApp gateway implementation
+- `FlowChat::Whatsapp::Client` - Meta Cloud API client for out-of-band messaging
+- `FlowChat::Whatsapp::TwilioClient` - Twilio API client for out-of-band messaging
+- `FlowChat::Whatsapp::Configuration` - Meta Cloud API configuration management
+- `FlowChat::Whatsapp::TwilioConfiguration` - Twilio configuration management
 - `FlowChat::Whatsapp::Renderer` - Message rendering logic
 
 ### Client Methods

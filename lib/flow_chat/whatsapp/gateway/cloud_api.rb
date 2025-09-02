@@ -267,7 +267,7 @@ module FlowChat
           case message_type
           when "text"
             content = message.dig("text", "body")
-            context.input = content
+            context.input = content.presence
             FlowChat.logger.debug { "CloudApi: Text message content: '#{content}'" }
           when "interactive"
             # Handle button/list replies
@@ -308,6 +308,18 @@ module FlowChat
             rendered_message = render_response(prompt, choices, media)
             result = @client.send_message(context["request.msisdn"], rendered_message)
             context["whatsapp.message_result"] = result
+
+            # Instrument message sent
+            instrument(Events::MESSAGE_SENT, {
+              to: context["request.msisdn"],
+              session_id: context["request.id"],
+              message: rendered_message,
+              message_type: (_type == :prompt) ? "prompt" : "terminal",
+              gateway: :whatsapp_cloud_api,
+              platform: :whatsapp,
+              content_length: rendered_message.to_s.length,
+              timestamp: context["request.timestamp"]
+            })
           end
         end
 
@@ -379,7 +391,15 @@ module FlowChat
         end
 
         def parse_request_body(request)
-          @body ||= JSON.parse(request.body.read)
+          return @body if @body
+
+          if request.body.nil?
+            FlowChat.logger.debug { "CloudApi: Request body is nil, returning empty hash" }
+            @body = {}
+          else
+            request.body.rewind if request.body.respond_to?(:rewind)
+            @body = JSON.parse(request.body.read)
+          end
         end
 
         def render_response(prompt, choices, media)

@@ -12,6 +12,7 @@ require "active_support/core_ext/numeric/time"
 require "ostruct"
 
 # Load test support files
+require_relative "support/mocks"
 require_relative "support/base_test_job"
 require_relative "support/test_flows/choice_test_flow"
 require_relative "support/test_flows/simple_flows"

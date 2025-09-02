@@ -15,6 +15,12 @@ module FlowChat
           params = context.controller.request.params
           request = context.controller.request
 
+          # Validate request method
+          unless request.get? || request.post?
+            context.controller.head :bad_request
+            return
+          end
+
           # Extract basic request information
           context["request.id"] = params["session_id"] || SecureRandom.uuid
           context["request.msisdn"] = FlowChat::PhoneNumberUtil.to_e164(params["msisdn"])
@@ -27,7 +33,7 @@ module FlowChat
           context["request.method"] = request.method
           context["request.path"] = request.path
           context["request.user_agent"] = request.user_agent
-          context.input = params["input"] || params["message"]
+          context.input = params["input"].presence
 
           # Instrument message received when user provides input
           if context.input.present?

@@ -178,6 +178,40 @@ config.use_gateway FlowChat::Intercom::Gateway::IntercomApi
 config.use_session_config(boundaries: [:conversation], identifier: :conversation_id)
 ```
 
+### Twilio WhatsApp Integration
+
+FlowChat provides Twilio WhatsApp integration as an alternative to the Cloud API gateway, using Twilio's messaging infrastructure.
+
+#### Configuration
+```ruby
+# Rails credentials (config/credentials.yml.enc)
+twilio_whatsapp:
+  account_sid: "your_twilio_account_sid"
+  auth_token: "your_twilio_auth_token"
+  phone_number: "+15551234567"  # Your Twilio WhatsApp number
+  skip_signature_validation: false  # Optional: disable webhook validation for testing
+
+# Or environment variables
+TWILIO_ACCOUNT_SID=your_twilio_account_sid
+TWILIO_AUTH_TOKEN=your_twilio_auth_token
+TWILIO_WHATSAPP_PHONE_NUMBER=+15551234567
+TWILIO_WHATSAPP_SKIP_SIGNATURE_VALIDATION=false
+```
+
+#### Gateway Setup
+```ruby
+# Twilio WhatsApp gateway setup
+config.use_gateway FlowChat::Whatsapp::Gateway::Twilio
+config.use_session_config(boundaries: [:flow], identifier: :msisdn)
+```
+
+#### Key Differences from Cloud API
+- Uses Twilio's messaging API with WhatsApp addressing format (`whatsapp:+1234567890`)
+- Webhook signature validation uses X-Twilio-Signature with SHA1 HMAC
+- Interactive buttons/lists fall back to numbered text options
+- Returns TwiML responses directly from webhook (no separate API calls)
+- Requires Twilio account with WhatsApp Business API access
+
 #### Webhook Setup
 1. Add your HTTPS endpoint URL in Intercom Developer Hub → Configure → Webhooks
 2. Intercom validates your endpoint with HEAD request (handled automatically)

@@ -41,9 +41,9 @@ module FlowChat
 
       # Update the session options directly
       @session_options = @session_options.dup
-      @session_options.boundaries = Array(boundaries) if !boundaries.nil?
-      @session_options.hash_identifiers = hash_identifiers if !hash_identifiers.nil?
-      @session_options.identifier = identifier if !identifier.nil?
+      @session_options.boundaries = Array(boundaries) unless boundaries.nil?
+      @session_options.hash_identifiers = hash_identifiers unless hash_identifiers.nil?
+      @session_options.identifier = identifier unless identifier.nil?
 
       self
     end
@@ -148,7 +148,7 @@ module FlowChat
         # Nothing can execute after it.
         b.use FlowChat::Executor
       end
-      
+
       middleware_stack.inject_logger(FlowChat.logger) if FlowChat::Config.inject_middleware_logger
 
       middleware_stack

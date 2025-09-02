@@ -11,8 +11,16 @@ class HttpSimpleGatewayTest < Minitest::Test
       @last_render = options
     end
 
+    # Add head method to controller mock
+    @controller.define_singleton_method(:head) do |status|
+      @last_head_status = status
+    end
+
     # Add method to retrieve last render for testing
     @controller.define_singleton_method(:last_render) { @last_render }
+
+    # Add method to retrieve last head status for testing
+    @controller.define_singleton_method(:last_head_status) { @last_head_status }
 
     @mock_app = lambda { |ctx| [:prompt, "Test response", {"1" => "Option 1"}, nil] }
     @gateway = FlowChat::Http::Gateway::Simple.new(@mock_app)
@@ -35,6 +43,8 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     # Add the missing request methods to the mock
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/http/webhook" }
     @controller.request.define_singleton_method(:user_agent) { "TestAgent/1.0" }
 
@@ -54,6 +64,8 @@ class HttpSimpleGatewayTest < Minitest::Test
   def test_call_generates_defaults_when_missing
     @controller.request.params = {}
     @controller.request.define_singleton_method(:method) { "GET" }
+    @controller.request.define_singleton_method(:get?) { true }
+    @controller.request.define_singleton_method(:post?) { false }
     @controller.request.define_singleton_method(:path) { "/" }
     @controller.request.define_singleton_method(:user_agent) { "Browser/1.0" }
 
@@ -71,6 +83,8 @@ class HttpSimpleGatewayTest < Minitest::Test
       "input" => "Test message"
     }
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
@@ -83,6 +97,8 @@ class HttpSimpleGatewayTest < Minitest::Test
   def test_call_renders_json_response
     @controller.request.params = {"input" => "Test"}
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
@@ -114,6 +130,8 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     @controller.request.params = {"input" => "Show image"}
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
@@ -135,6 +153,8 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     @controller.request.params = {"input" => "bye"}
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
@@ -155,6 +175,8 @@ class HttpSimpleGatewayTest < Minitest::Test
       "input" => "Test"
     }
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
@@ -178,6 +200,8 @@ class HttpSimpleGatewayTest < Minitest::Test
   def test_instrumentation_events
     @controller.request.params = {"input" => "Test message"}
     @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
     @controller.define_singleton_method(:render) { |options| }

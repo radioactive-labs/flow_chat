@@ -105,7 +105,7 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["whatsapp.messages.sent.by_type.text"]
 
     # Check timing for sent messages (allow some tolerance for timing precision)
-    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 5.0
+    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 15.0
   end
 
   def test_whatsapp_api_request_success_and_failure

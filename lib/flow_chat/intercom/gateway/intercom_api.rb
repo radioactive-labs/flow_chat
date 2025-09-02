@@ -127,14 +127,14 @@ module FlowChat
             context["request.user_email"] = user_email
             context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
-            
+
             context["intercom.client"] = @client
             context["intercom.user"] = user
             context["intercom.conversation"] = conversation
-            
+
             # Strip HTML tags from message body
             raw_body = latest_message[:body] || ""
-            context.input = raw_body.gsub(/<[^>]*>/, "").strip
+            context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence
 
             # Use instrumentation for message received
             instrument(Events::MESSAGE_RECEIVED, {
@@ -279,6 +279,17 @@ module FlowChat
             rendered_message = render_response(prompt, choices, media)
             result = @client.send_message(context["request.conversation_id"], rendered_message)
             context["intercom.message_result"] = result
+
+            # Instrument message sent
+            instrument(Events::MESSAGE_SENT, {
+              to: context["request.user_id"],
+              conversation_id: context["request.conversation_id"],
+              message: prompt,
+              gateway: :intercom_api,
+              platform: :intercom,
+              content_length: prompt.to_s.length,
+              timestamp: context["request.timestamp"]
+            })
           end
         end
 
