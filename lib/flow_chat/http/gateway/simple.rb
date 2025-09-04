@@ -33,7 +33,7 @@ module FlowChat
           context["request.method"] = request.method
           context["request.path"] = request.path
           context["request.user_agent"] = request.user_agent
-          context.input = params["input"].presence
+          context.input = params["input"].presence || ""
 
           # Instrument message received when user provides input
           if context.input.present?

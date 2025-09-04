@@ -267,7 +267,7 @@ module FlowChat
           case message_type
           when "text"
             content = message.dig("text", "body")
-            context.input = content.presence
+            context.input = content.presence || ""
             FlowChat.logger.debug { "CloudApi: Text message content: '#{content}'" }
           when "interactive"
             # Handle button/list replies

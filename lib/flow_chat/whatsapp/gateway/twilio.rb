@@ -209,13 +209,8 @@ module FlowChat
           FlowChat.logger.debug { "Twilio: Extracting content from webhook params" }
 
           # Handle text content
-          if params["Body"] && !params["Body"].empty?
-            context.input = params["Body"]
-            FlowChat.logger.debug { "Twilio: Text message content: '#{params["Body"]}'" }
-          else
-            # Explicitly set to nil for empty/missing Body
-            context.input = nil
-          end
+          FlowChat.logger.debug { "Twilio: Text message content: '#{params["Body"]}'" }
+          context.input = params["Body"].presence || ""
 
           # Handle media content
           num_media = params["NumMedia"].to_i

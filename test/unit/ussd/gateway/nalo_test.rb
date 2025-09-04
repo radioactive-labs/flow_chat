@@ -44,7 +44,7 @@ class UssdNaloGatewayTest < Minitest::Test
 
     @gateway.call(@context)
 
-    assert_nil @context.input
+    assert_equal "", @context.input
     assert_equal "test_session_456", @context["request.id"]
   end
 
@@ -56,7 +56,7 @@ class UssdNaloGatewayTest < Minitest::Test
 
     @gateway.call(@context)
 
-    assert_nil @context.input
+    assert_equal "", @context.input
     assert_equal "test_session_789", @context["request.id"]
   end
 

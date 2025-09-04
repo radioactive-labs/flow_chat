@@ -23,7 +23,7 @@ module FlowChat
           context["request.platform"] = :ussd
           context["request.network"] = nil
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response
-          context.input = params["USERDATA"].presence
+          context.input = params["USERDATA"].presence || ""
 
           # Instrument message received when user provides input using new scalable approach
           if context.input.present?

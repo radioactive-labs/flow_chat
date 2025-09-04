@@ -134,7 +134,7 @@ module FlowChat
 
             # Strip HTML tags from message body
             raw_body = latest_message[:body] || ""
-            context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence
+            context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence || ""
 
             # Use instrumentation for message received
             instrument(Events::MESSAGE_RECEIVED, {
