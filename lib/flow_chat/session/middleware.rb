@@ -52,6 +52,14 @@ module FlowChat
           return session_id
         end
 
+        # Check for custom session ID proc
+        if @session_options.session_id_proc
+          FlowChat.logger.debug { "Session::Middleware: Using custom session ID proc" }
+          session_id = @session_options.session_id_proc.call(context)
+          FlowChat.logger.debug { "Session::Middleware: Generated custom session ID: #{session_id}" }
+          return session_id
+        end
+
         FlowChat.logger.debug { "Session::Middleware: Building session ID for platform=#{platform}, gateway=#{gateway}, flow=#{flow_name}" }
 
         # Get identifier based on configuration

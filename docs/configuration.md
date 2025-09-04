@@ -96,6 +96,39 @@ config.use_session_config(boundaries: [:flow, :platform])         # "survey_flow
 config.use_session_config(boundaries: [:flow, :url])              # "survey_flow:tenant1.app.com:user123"
 ```
 
+### Custom Session ID Generation
+
+For complete control over session ID format, use a block:
+
+```ruby
+# Custom session ID with proc/block
+config.use_session_config do |context|
+  # Access full context for custom logic
+  user_phone = context["request.msisdn"]
+  flow_name = context["flow.name"]
+  gateway = context["request.gateway"]
+  timestamp = Time.current.strftime("%Y%m%d")
+  
+  # Return your custom session ID
+  "#{flow_name}_#{gateway}_#{timestamp}_#{hash_phone(user_phone)}"
+end
+
+# Multi-tenant example
+config.use_session_config do |context|
+  tenant_id = extract_tenant(context)
+  user_id = context["request.user_id"] || context["request.msisdn"]
+  "tenant_#{tenant_id}_user_#{user_id.hash.abs}"
+end
+
+# API-based session IDs
+config.use_session_config do |context|
+  api_key = context.controller.request.headers["X-API-Key"]
+  "api_#{Digest::SHA256.hexdigest(api_key)[0,8]}_#{context['request.id']}"
+end
+```
+
+**Note**: When using a custom proc, it takes precedence over all boundary and identifier settings. The proc receives the full FlowChat context and should return a string session ID.
+
 ### Session Identifiers
 
 Choose what identifies a user session:

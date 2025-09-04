@@ -121,6 +121,28 @@ class ProcessorTest < Minitest::Test
     assert_equal @processor, result
   end
 
+  def test_use_session_config_with_block
+    custom_proc = lambda { |context| "custom_session_#{context['request.id']}" }
+
+    result = @processor.use_session_config(&custom_proc)
+
+    session_options = @processor.instance_variable_get(:@session_options)
+    assert_equal custom_proc, session_options.session_id_proc
+    assert_equal @processor, result
+  end
+
+  def test_use_session_config_with_block_overrides_previous_config
+    # First set regular config
+    @processor.use_session_config(boundaries: [:flow], identifier: :msisdn)
+    
+    # Then override with proc
+    custom_proc = lambda { |context| "always_custom" }
+    @processor.use_session_config(&custom_proc)
+
+    session_options = @processor.instance_variable_get(:@session_options)
+    assert_equal custom_proc, session_options.session_id_proc
+  end
+
   def test_use_cross_platform_sessions
     result = @processor.use_cross_platform_sessions
 

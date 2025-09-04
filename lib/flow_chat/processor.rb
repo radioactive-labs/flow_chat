@@ -36,14 +36,20 @@ module FlowChat
       self
     end
 
-    def use_session_config(boundaries: nil, hash_identifiers: nil, identifier: nil)
-      FlowChat.logger.debug { "Processor: Configuring session config: boundaries=#{boundaries.inspect}, hash_identifiers=#{hash_identifiers}, identifier=#{identifier}" }
-
-      # Update the session options directly
-      @session_options = @session_options.dup
-      @session_options.boundaries = Array(boundaries) unless boundaries.nil?
-      @session_options.hash_identifiers = hash_identifiers unless hash_identifiers.nil?
-      @session_options.identifier = identifier unless identifier.nil?
+    def use_session_config(boundaries: nil, hash_identifiers: nil, identifier: nil, &block)
+      if block_given?
+        FlowChat.logger.debug { "Processor: Configuring session config with custom proc" }
+        @session_options = @session_options.dup
+        @session_options.session_id_proc = block
+      else
+        FlowChat.logger.debug { "Processor: Configuring session config: boundaries=#{boundaries.inspect}, hash_identifiers=#{hash_identifiers}, identifier=#{identifier}" }
+        
+        # Update the session options directly
+        @session_options = @session_options.dup
+        @session_options.boundaries = Array(boundaries) unless boundaries.nil?
+        @session_options.hash_identifiers = hash_identifiers unless hash_identifiers.nil?
+        @session_options.identifier = identifier unless identifier.nil?
+      end
 
       self
     end

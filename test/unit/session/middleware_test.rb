@@ -551,6 +551,68 @@ class SessionMiddlewareTest < Minitest::Test
     refute_nil session_id
   end
 
+  def test_custom_session_id_proc_overrides_default_behavior
+    @session_options.session_id_proc = lambda do |context|
+      "custom_#{context['request.msisdn']}_#{context['flow.name']}"
+    end
+
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    middleware.call(@context)
+
+    session_id = @context["session.id"]
+    assert_equal "custom_+256700123456_test_flow", session_id
+  end
+
+  def test_custom_session_id_proc_receives_full_context
+    received_context = nil
+    @session_options.session_id_proc = lambda do |context|
+      received_context = context
+      "test_session_id"
+    end
+
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    middleware.call(@context)
+
+    refute_nil received_context
+    assert_equal @context, received_context
+    assert_equal "+256700123456", received_context["request.msisdn"]
+    assert_equal "test_flow", received_context["flow.name"]
+  end
+
+  def test_custom_session_id_proc_takes_precedence_over_boundaries
+    @session_options.boundaries = [:flow, :platform, :gateway]
+    @session_options.session_id_proc = lambda { |context| "always_the_same" }
+
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    middleware.call(@context)
+
+    session_id = @context["session.id"]
+    assert_equal "always_the_same", session_id
+  end
+
+  def test_explicit_session_id_overrides_custom_proc
+    @session_options.session_id_proc = lambda { |context| "proc_result" }
+    @context["session.id"] = "explicit_override"
+
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    middleware.call(@context)
+
+    session_id = @context["session.id"]
+    assert_equal "explicit_override", session_id
+  end
+
+  def test_fallback_to_default_when_no_proc_set
+    @session_options.session_id_proc = nil
+    @session_options.boundaries = [:flow]
+    @session_options.identifier = :request_id
+
+    middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)
+    middleware.call(@context)
+
+    session_id = @context["session.id"]
+    assert_equal "test_flow:request_123", session_id
+  end
+
   private
 
   def refute_ends_with(string, suffix)

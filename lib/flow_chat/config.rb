@@ -31,7 +31,7 @@ module FlowChat
     end
 
     class SessionConfig
-      attr_accessor :boundaries, :hash_identifiers, :identifier
+      attr_accessor :boundaries, :hash_identifiers, :identifier, :session_id_proc
 
       def initialize
         # Session boundaries control how session IDs are constructed
@@ -47,6 +47,9 @@ module FlowChat
         # :msisdn = durable sessions (durable across timeouts)
         # :request_id = ephemeral sessions (new session each time)
         @identifier = nil
+
+        # Proc for custom session ID generation (overrides default behavior when set)
+        @session_id_proc = nil
       end
     end
 
