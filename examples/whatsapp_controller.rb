@@ -6,7 +6,7 @@ class WhatsappController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
+    processor = FlowChat::Processor.new(self, enable_simulator: Rails.env.development?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
@@ -25,7 +25,7 @@ class CustomWhatsappController < ApplicationController
   def webhook
     custom_config = build_whatsapp_config
 
-    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
+    processor = FlowChat::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, custom_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end

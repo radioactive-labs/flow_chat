@@ -5,7 +5,7 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       # Use Rails session for USSD (shorter sessions)
       config.use_session_store FlowChat::Session::RailsSessionStore
@@ -194,7 +194,7 @@ class UssdController < ApplicationController
     FlowChat::Config.ussd.pagination_next_option = "#"
     FlowChat::Config.ussd.pagination_back_option = "*"
 
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       config.use_session_store FlowChat::Session::RailsSessionStore
     end
@@ -228,7 +228,7 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       config.use_session_store FlowChat::Session::RailsSessionStore
       config.use_middleware LoggingMiddleware  # Add custom logging
@@ -252,7 +252,7 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       # Use cache store for longer session persistence
       config.use_session_store FlowChat::Session::CacheSessionStore

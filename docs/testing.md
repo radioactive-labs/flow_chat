@@ -270,7 +270,7 @@ Your WhatsApp processor automatically handles simulator mode:
 ```ruby
 class WhatsappController < ApplicationController
   def webhook
-    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
+    processor = FlowCha::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
@@ -287,7 +287,7 @@ HTTP endpoints work automatically with the simulator:
 ```ruby
 class HttpController < ApplicationController  
   def webhook
-    processor = FlowChat::Http::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
       config.use_session_store FlowChat::Session::CacheSessionStore
     end

@@ -29,7 +29,7 @@ class HttpController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    processor = FlowChat::Http::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
       config.use_session_store FlowChat::Session::CacheSessionStore
 
