@@ -2,7 +2,7 @@ module FlowChat
   module PhoneNumberUtil
     class << self
       def to_e164(phone_number)
-        return phone_number if phone_number.nil? || phone_number.empty?
+        return "" if phone_number.nil? || phone_number.empty?
 
         begin
           # Try to load phonelib without Rails dependency

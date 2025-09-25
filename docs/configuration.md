@@ -35,7 +35,7 @@ FlowChat::Config.ussd.pagination_back_text = "Back"    # Previous page text
 
 ```ruby
 # WhatsApp API configuration
-FlowChat::Config.whatsapp.api_base_url = "https://graph.facebook.com/v22.0"
+FlowChat::Config.whatsapp.api_base_url = "https://graph.facebook.com/v23.0"
 ```
 
 ### HTTP Configuration

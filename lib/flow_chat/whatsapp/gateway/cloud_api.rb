@@ -145,6 +145,14 @@ module FlowChat
             phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
             message_id = message["id"]
             contact_name = contact&.dig("profile", "name")
+            business_phone_number = value.dig("metadata", "display_phone_number")
+            business_phone_number_id = value.dig("metadata", "phone_number_id")
+
+            # Validate that webhook is for our configured phone number
+            if business_phone_number_id != @config.phone_number_id
+              FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
+              return controller.head :forbidden
+            end
 
             context["request.id"] = phone_number
             context["request.msisdn"] = phone_number
@@ -154,6 +162,9 @@ module FlowChat
             context["request.message_id"] = message_id
             context["request.contact_name"] = contact_name
             context["request.timestamp"] = message["timestamp"]
+
+            context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
+            context["whatsapp.business.phone_number_id"] = business_phone_number_id
 
             context["whatsapp.client"] = @client
             context["whatsapp.message"] = message

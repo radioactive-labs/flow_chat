@@ -121,7 +121,7 @@ class ConfigTest < Minitest::Test
   def test_whatsapp_config_defaults
     whatsapp_config = FlowChat::Config.whatsapp
 
-    assert_equal "https://graph.facebook.com/v22.0", whatsapp_config.api_base_url
+    assert_equal "https://graph.facebook.com/v23.0", whatsapp_config.api_base_url
   end
 
   def test_whatsapp_config_singleton_instance
