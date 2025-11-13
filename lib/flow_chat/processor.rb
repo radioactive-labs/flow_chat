@@ -4,7 +4,7 @@ module FlowChat
   class Processor
     include FlowChat::Instrumentation
 
-    attr_reader :custom_middleware_builder, :context
+    attr_reader :custom_middleware_builder, :context, :async_job_class
 
     def initialize(controller, enable_simulator: nil)
       FlowChat.logger.debug { "Processor: Initializing processor for controller #{controller.class.name}" }
@@ -14,6 +14,7 @@ module FlowChat
       @context["enable_simulator"] = enable_simulator.nil? ? (defined?(Rails) && Rails.env.local?) : enable_simulator
       @custom_middleware_builder = ::Middleware::Builder.new(name: "processor.custom_middleware_builder")
       @session_options = FlowChat::Config.session
+      @async_job_class = nil
 
       FlowChat.logger.debug { "Processor: Simulator mode #{@context["enable_simulator"] ? "enabled" : "disabled"}" }
 
@@ -87,6 +88,16 @@ module FlowChat
       )
     end
 
+    def use_async(job_class)
+      FlowChat.logger.debug { "Processor: Configuring async processing with job class #{job_class.name}" }
+      @async_job_class = job_class
+      self
+    end
+
+    def async_enabled?
+      !@async_job_class.nil?
+    end
+
     def run(flow_class, action, **options)
       # Instrument flow execution (this will log via LogSubscriber)
       instrument(Events::FLOW_EXECUTION_START, {
@@ -95,6 +106,7 @@ module FlowChat
         processor_type: self.class.name
       })
 
+      @context["processor"] = self
       @context["flow.name"] = flow_class.name.underscore
       @context["flow.class"] = flow_class
       @context["flow.action"] = action

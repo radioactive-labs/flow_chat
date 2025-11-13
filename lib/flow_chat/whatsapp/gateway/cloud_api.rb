@@ -10,6 +10,7 @@ module FlowChat
     module Gateway
       class CloudApi
         include FlowChat::Instrumentation
+        include FlowChat::GatewayAsyncSupport
 
         attr_reader :context
 
@@ -24,25 +25,28 @@ module FlowChat
 
         def call(context)
           @context = context
-          controller = context.controller
-          request = controller.request
+          @controller = context.controller
+          request = @controller.request
 
           FlowChat.logger.debug { "CloudApi: Processing #{request.request_method} request to #{request.path}" }
 
-          # Handle webhook verification
-          if request.get? && request.params["hub.mode"] == "subscribe"
-            FlowChat.logger.info { "CloudApi: Handling webhook verification request" }
-            return handle_verification(context)
+          # Skip webhook-specific handling in background mode
+          unless in_background?
+            # Handle webhook verification
+            if request.get? && request.params["hub.mode"] == "subscribe"
+              FlowChat.logger.info { "CloudApi: Handling webhook verification request" }
+              return handle_verification(context)
+            end
           end
 
           # Handle webhook messages
           if request.post?
-            FlowChat.logger.info { "CloudApi: Handling webhook message" }
+            FlowChat.logger.info { "CloudApi: Handling webhook message (background: #{in_background?})" }
             return handle_webhook(context)
           end
 
           FlowChat.logger.warn { "CloudApi: Invalid request method or parameters - returning bad request" }
-          controller.head :bad_request
+          @controller.head :bad_request
         end
 
         # Expose client for out-of-band messaging
@@ -62,8 +66,7 @@ module FlowChat
         end
 
         def handle_verification(context)
-          controller = context.controller
-          params = controller.request.params
+          params = @controller.request.params
 
           verify_token = @config.verify_token
           provided_token = params["hub.verify_token"]
@@ -78,7 +81,7 @@ module FlowChat
               platform: :whatsapp
             })
 
-            controller.render plain: challenge
+            @controller.render plain: challenge
           else
             # Use instrumentation for webhook verification failure
             instrument(Events::WEBHOOK_FAILED, {
@@ -86,20 +89,18 @@ module FlowChat
               platform: :whatsapp
             })
 
-            controller.head :forbidden
+            @controller.head :forbidden
           end
         end
 
         def handle_webhook(context)
-          controller = context.controller
-
           # Parse body
           begin
-            parse_request_body(controller.request)
+            parse_request_body(@controller.request)
             FlowChat.logger.debug { "CloudApi: Successfully parsed webhook request body" }
           rescue JSON::ParserError => e
             FlowChat.logger.error { "CloudApi: Failed to parse webhook body: #{e.message}" }
-            return controller.head :bad_request
+            return @controller.head :bad_request
           end
 
           # Check for simulator mode parameter in request (before validation)
@@ -110,10 +111,10 @@ module FlowChat
             context["simulator_mode"] = true
           end
 
-          # Validate webhook signature for security (skip for simulator mode)
-          unless is_simulator_mode || valid_webhook_signature?(controller.request)
+          # Validate webhook signature for security (skip for simulator mode and background)
+          unless in_background? || is_simulator_mode || valid_webhook_signature?(@controller.request)
             FlowChat.logger.warn { "CloudApi: Invalid webhook signature received - rejecting request" }
-            return controller.head :unauthorized
+            return @controller.head :unauthorized
           end
 
           FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }
@@ -122,19 +123,19 @@ module FlowChat
           entry = @body.dig("entry", 0)
           unless entry
             FlowChat.logger.debug { "CloudApi: No entry found in webhook body - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           changes = entry.dig("changes", 0)
           unless changes
             FlowChat.logger.debug { "CloudApi: No changes found in webhook entry - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           value = changes["value"]
           unless value
             FlowChat.logger.debug { "CloudApi: No value found in webhook changes - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           # Handle incoming messages
@@ -151,7 +152,7 @@ module FlowChat
             # Validate that webhook is for our configured phone number
             if business_phone_number_id != @config.phone_number_id
               FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
-              return controller.head :forbidden
+              return @controller.head :forbidden
             end
 
             context["request.id"] = phone_number
@@ -184,16 +185,24 @@ module FlowChat
 
             FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
 
-            # Determine message handling mode
-            handler_mode = determine_message_handler(context)
+            # Determine routing: async enqueue, background execute, or inline
+            if should_enqueue_async?
+              # Webhook with async enabled → enqueue job and return immediately
+              enqueue_async_job
+              return @controller.head :ok
+            else
+              # Background OR inline → process message
+              # Determine message handling mode (simulator vs inline)
+              handler_mode = determine_message_handler(context)
 
-            # Process the message based on handling mode
-            case handler_mode
-            when :inline
-              handle_message_inline(context, controller)
-            when :simulator
-              # Return early from simulator mode to preserve the JSON response
-              return handle_message_simulator(context, controller)
+              # Process the message based on handling mode
+              case handler_mode
+              when :inline
+                handle_message_inline(context, @controller)
+              when :simulator
+                # Return early from simulator mode to preserve the JSON response
+                return handle_message_simulator(context, @controller)
+              end
             end
           end
 
@@ -204,7 +213,7 @@ module FlowChat
             FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
           end
 
-          controller.head :ok
+          @controller.head :ok
         end
 
         # Validate webhook signature to ensure request comes from WhatsApp
@@ -373,8 +382,7 @@ module FlowChat
           return false unless simulator_secret && !simulator_secret.empty?
 
           # Check for simulator cookie
-          request = context.controller.request
-          simulator_cookie = request.cookies["flowchat_simulator"]
+          simulator_cookie = @controller.request.cookies["flowchat_simulator"]
           return false unless simulator_cookie
 
           # Verify the cookie is a valid HMAC signature

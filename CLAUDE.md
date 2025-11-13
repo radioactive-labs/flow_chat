@@ -45,8 +45,16 @@ FlowChat is a Rails framework for building conversational interfaces across mult
 
 #### Session (`lib/flow_chat/session/`)
 - Configurable session boundaries: `:flow`, `:platform`, `:gateway`, `:url`
-- Session store: `CacheSessionStore`
+- Session stores: `CacheSessionStore`
 - Session IDs generated based on boundaries and identifiers
+
+#### Async Background Processing (`lib/flow_chat/async_job.rb`, `gateway_async_support.rb`)
+- Decouple flow processing from webhook request-response cycles
+- Base class: `FlowChat::AsyncJob` for creating background jobs
+- `BackgroundController` mimics controller interface in background context
+- `GatewayAsyncSupport` concern for gateways to detect and enqueue async jobs
+- Automatic detection: async enqueue, background execute, or inline processing
+- Supported gateways: WhatsApp Cloud API, Intercom API, HTTP Simple (not USSD)
 
 ### Middleware Stack Architecture
 
@@ -83,6 +91,39 @@ end
 #### Multi-Platform Support
 Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic `app.screen()` calls.
 
+#### Async Background Processing
+Enable background processing for long-running flows to decouple webhook response times from flow execution:
+
+```ruby
+# Create custom job class
+class MyFlowJob < FlowChat::AsyncJob
+  def execute(controller)
+    # Access params from reconstructed request
+    # e.g., controller.params[:user_id]
+
+    processor = FlowChat::Processor.new(controller) do |config|
+      config.use_gateway(FlowChat::Whatsapp::Gateway::CloudApi)
+      config.use_session_store(FlowChat::Session::CacheSessionStore)
+    end
+    processor.run(MyFlow, :start)
+  end
+end
+
+# Configure processor with async
+processor = FlowChat::Processor.new(self) do |config|
+  config.use_gateway(FlowChat::Whatsapp::Gateway::CloudApi)
+  config.use_session_store(FlowChat::Session::CacheSessionStore)
+  config.use_async(MyFlowJob)  # Enable async processing
+end
+```
+
+When async is enabled:
+- Webhook requests return immediately (< 100ms)
+- Flow processing happens in background job
+- All request params available via `controller.params` in background
+- Automatic detection prevents double-enqueueing in background context
+- See [docs/async-background-processing.md](docs/async-background-processing.md) for complete guide
+
 ## File Structure
 
 ### Core Library (`lib/flow_chat/`)
@@ -92,12 +133,15 @@ Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic 
 - `executor.rb` - Flow execution and interrupt handling
 - `context.rb` - Request context management
 - `config.rb` - Global configuration
+- `async_job.rb` - Background processing base class and controllers
+- `gateway_async_support.rb` - Async detection and enqueueing concern for gateways
 
 ### Platform Gateways
-- `ussd/gateway/nalo.rb` - USSD platform integration
-- `whatsapp/gateway/cloud_api.rb` - WhatsApp Business API integration
-- `http/gateway/simple.rb` - HTTP/JSON API integration
-- `intercom/gateway/intercom_api.rb` - Intercom customer support integration
+- `ussd/gateway/nalo.rb` - USSD platform integration (async not supported)
+- `whatsapp/gateway/cloud_api.rb` - WhatsApp Business API integration (async supported)
+- `http/gateway/simple.rb` - HTTP/JSON API integration (async supported)
+- `intercom/gateway/intercom_api.rb` - Intercom customer support integration (async supported)
+- All gateways include `GatewayAsyncSupport` concern for unified async handling
 
 ### Session Management (`session/`)
 - `middleware.rb` - Session boundary and ID generation

@@ -9,8 +9,9 @@ module FlowChat
     module Gateway
       class IntercomApi
         include FlowChat::Instrumentation
+        include FlowChat::GatewayAsyncSupport
 
-        attr_reader :context, :client
+        attr_reader :client
 
         def initialize(app, config = nil)
           @app = app
@@ -23,39 +24,40 @@ module FlowChat
 
         def call(context)
           @context = context
-          controller = context.controller
-          request = controller.request
+          @controller = context.controller
+          request = @controller.request
 
           FlowChat.logger.debug { "IntercomApi: Processing #{request.request_method} request to #{request.path}" }
 
-          # Handle webhook URL validation (HEAD request)
-          if request.head?
-            FlowChat.logger.info { "IntercomApi: Handling webhook URL validation request" }
-            return controller.head :ok
+          # Skip webhook-specific handling in background mode
+          unless in_background?
+            # Handle webhook URL validation (HEAD request)
+            if request.head?
+              FlowChat.logger.info { "IntercomApi: Handling webhook URL validation request" }
+              return @controller.head :ok
+            end
           end
 
           # Handle webhook notifications (POST request)
           if request.post?
-            FlowChat.logger.info { "IntercomApi: Handling webhook notification" }
+            FlowChat.logger.info { "IntercomApi: Handling webhook notification (background: #{in_background?})" }
             return handle_webhook(context)
           end
 
           FlowChat.logger.warn { "IntercomApi: Invalid request method or parameters - returning bad request" }
-          controller.head :bad_request
+          @controller.head :bad_request
         end
 
         private
 
         def handle_webhook(context)
-          controller = context.controller
-
           # Parse body
           begin
-            parse_request_body(controller.request)
+            parse_request_body(@controller.request)
             FlowChat.logger.debug { "IntercomApi: Successfully parsed webhook request body" }
           rescue JSON::ParserError => e
             FlowChat.logger.error { "IntercomApi: Failed to parse webhook body: #{e.message}" }
-            return controller.head :bad_request
+            return @controller.head :bad_request
           end
 
           # Check for simulator mode parameter in request (before validation)
@@ -66,10 +68,10 @@ module FlowChat
             context["simulator_mode"] = true
           end
 
-          # Validate webhook signature for security (skip for simulator mode)
-          unless is_simulator_mode || valid_webhook_signature?(controller.request)
+          # Validate webhook signature for security (skip for simulator mode and background)
+          unless in_background? || is_simulator_mode || valid_webhook_signature?(@controller.request)
             FlowChat.logger.warn { "IntercomApi: Invalid webhook signature received - rejecting request" }
-            return controller.head :unauthorized
+            return @controller.head :unauthorized
           end
 
           FlowChat.logger.debug { "IntercomApi: Webhook signature validation passed" }
@@ -78,20 +80,20 @@ module FlowChat
           event_type = @body["topic"]
           unless event_type
             FlowChat.logger.debug { "IntercomApi: No topic found in webhook body - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           # Only process conversation events we care about
           unless ["conversation.user.created", "conversation.user.replied"].include?(event_type)
             FlowChat.logger.debug { "IntercomApi: Ignoring event type '#{event_type}' - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           # Extract conversation data
           data_item = @body.dig("data", "item")
           unless data_item
             FlowChat.logger.debug { "IntercomApi: No data.item found in webhook body - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           # Process conversation event
@@ -103,14 +105,14 @@ module FlowChat
             user = conversation.dig("source", "author")
             unless user
               FlowChat.logger.error { "IntercomApi: No source.author found in conversation - this should not happen according to Intercom API" }
-              return controller.head :ok
+              return @controller.head :ok
             end
 
             # Get the latest message content
             latest_message = extract_latest_user_message(conversation, event_type)
             unless latest_message
               FlowChat.logger.debug { "IntercomApi: No user message content found - returning OK" }
-              return controller.head :ok
+              return @controller.head :ok
             end
 
             # Set up FlowChat context
@@ -147,20 +149,28 @@ module FlowChat
 
             FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
 
-            # Determine message handling mode (like WhatsApp)
-            handler_mode = determine_message_handler(context)
+            # Determine routing: async enqueue, background execute, or inline
+            if should_enqueue_async?
+              # Webhook with async enabled → enqueue job and return immediately
+              enqueue_async_job
+              return @controller.head :ok
+            else
+              # Background OR inline → process message
+              # Determine message handling mode (simulator vs inline)
+              handler_mode = determine_message_handler(context)
 
-            # Process the message based on handling mode
-            case handler_mode
-            when :inline
-              handle_message_inline(context, controller)
-            when :simulator
-              # Return early from simulator mode to preserve the JSON response
-              return handle_message_simulator(context, controller)
+              # Process the message based on handling mode
+              case handler_mode
+              when :inline
+                handle_message_inline(context, @controller)
+              when :simulator
+                # Return early from simulator mode to preserve the JSON response
+                return handle_message_simulator(context, @controller)
+              end
             end
           end
 
-          controller.head :ok
+          @controller.head :ok
         end
 
         def determine_message_handler(context)
@@ -315,7 +325,7 @@ module FlowChat
               }
             }
 
-            controller.render json: simulator_response
+            @controller.render json: simulator_response
             nil
           end
         end
@@ -333,8 +343,7 @@ module FlowChat
           return false unless simulator_secret && !simulator_secret.empty?
 
           # Check for simulator cookie
-          request = context.controller.request
-          simulator_cookie = request.cookies["flowchat_simulator"]
+          simulator_cookie = @controller.request.cookies["flowchat_simulator"]
           return false unless simulator_cookie
 
           # Verify the cookie is a valid HMAC signature

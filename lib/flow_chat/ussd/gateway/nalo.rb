@@ -3,6 +3,7 @@ module FlowChat
     module Gateway
       class Nalo
         include FlowChat::Instrumentation
+        include FlowChat::GatewayAsyncSupport
 
         attr_reader :context
 
@@ -10,9 +11,15 @@ module FlowChat
           @app = app
         end
 
+        # USSD does not support async processing due to synchronous protocol requirements
+        def async_supported?
+          false
+        end
+
         def call(context)
           @context = context
-          params = context.controller.request.params
+          @controller = context.controller
+          params = @controller.request.params
 
           context["request.id"] = params["USERID"]
           context["request.msisdn"] = FlowChat::PhoneNumberUtil.to_e164(params["MSISDN"])
@@ -49,7 +56,7 @@ module FlowChat
             timestamp: context["request.timestamp"]
           })
 
-          context.controller.render json: {
+          @controller.render json: {
             USERID: params["USERID"],
             MSISDN: params["MSISDN"],
             MSG: render_prompt(prompt, choices, media),

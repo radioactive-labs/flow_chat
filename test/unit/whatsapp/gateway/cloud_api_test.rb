@@ -517,6 +517,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -539,6 +544,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -564,6 +574,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -589,6 +604,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -614,6 +634,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -639,6 +664,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",

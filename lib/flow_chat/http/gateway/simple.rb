@@ -3,6 +3,7 @@ module FlowChat
     module Gateway
       class Simple
         include FlowChat::Instrumentation
+        include FlowChat::GatewayAsyncSupport
 
         attr_reader :context
 
@@ -12,19 +13,20 @@ module FlowChat
 
         def call(context)
           @context = context
-          params = context.controller.request.params
-          request = context.controller.request
+          @controller = context.controller
+          params = @controller.request.params
+          request = @controller.request
 
           # Validate request method
           unless request.get? || request.post?
-            context.controller.head :bad_request
+            @controller.head :bad_request
             return
           end
 
           # Extract basic request information
-          context["request.id"] = params["session_id"] || SecureRandom.uuid
+          context["request.id"] = params["session_id"].presence || SecureRandom.uuid
           context["request.msisdn"] = FlowChat::PhoneNumberUtil.to_e164(params["msisdn"])
-          context["request.user_id"] = params["user_id"] || context["request.msisdn"] || context["request.id"]
+          context["request.user_id"] = params["user_id"].presence || context["request.msisdn"].presence || context["request.id"]
           context["request.message_id"] = params["message_id"] || SecureRandom.uuid
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :http_simple
@@ -44,24 +46,32 @@ module FlowChat
             })
           end
 
-          # Process the request
-          type, prompt, choices, media = @app.call(context)
+          # Determine routing: async enqueue, background execute, or inline
+          if should_enqueue_async?
+            # HTTP request with async enabled → enqueue job and return immediately
+            enqueue_async_job
+            return @controller.render json: {status: "processing"}
+          else
+            # Background OR inline → process message
+            # Process the request
+            type, prompt, choices, media = @app.call(context)
 
-          # Instrument message sent
-          instrument(Events::MESSAGE_SENT, {
-            to: context["request.user_id"],
-            session_id: context["request.id"],
-            message: context.input || "",
-            message_type: (type == :prompt) ? "prompt" : "terminal",
-            gateway: :http_simple,
-            platform: :http,
-            content_length: prompt.to_s.length,
-            timestamp: context["request.timestamp"]
-          })
+            # Instrument message sent
+            instrument(Events::MESSAGE_SENT, {
+              to: context["request.user_id"],
+              session_id: context["request.id"],
+              message: context.input || "",
+              message_type: (type == :prompt) ? "prompt" : "terminal",
+              gateway: :http_simple,
+              platform: :http,
+              content_length: prompt.to_s.length,
+              timestamp: context["request.timestamp"]
+            })
 
-          # Render response as JSON
-          response_data = render_response(type, prompt, choices, media)
-          context.controller.render json: response_data
+            # Render response as JSON
+            response_data = render_response(type, prompt, choices, media)
+            @controller.render json: response_data
+          end
         end
 
         private

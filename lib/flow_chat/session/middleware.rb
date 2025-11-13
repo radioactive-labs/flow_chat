@@ -1,3 +1,5 @@
+require "digest"
+
 module FlowChat
   module Session
     class Middleware
@@ -149,7 +151,6 @@ module FlowChat
         # For long URLs, use first part + hash suffix instead of full hash
         url_identifier = url_parts.join("/").gsub(/[^a-zA-Z0-9._-]/, "_")
         if url_identifier.length > 50
-          require "digest"
           # Take first 41 chars + hash suffix to keep it manageable but recognizable
           first_part = url_identifier[0, 41]
           hash_suffix = Digest::SHA256.hexdigest(url_identifier)[0, 8]
@@ -161,7 +162,6 @@ module FlowChat
 
       def hash_identifier(identifier)
         # Use SHA256 but only take first 8 characters for reasonable session IDs
-        require "digest"
         Digest::SHA256.hexdigest(identifier.to_s)[0, 8]
       end
     end
