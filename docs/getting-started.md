@@ -99,7 +99,7 @@ class UssdController < ApplicationController
   def nalo_webhook
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       
       # Optional: Configure USSD-specific settings
       config.use_session_config(boundaries: [:flow, :platform])
@@ -141,7 +141,7 @@ class Api::ChatController < ApplicationController
   def message
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       
       # Session isolation per API user
       config.use_session_config(identifier: :user_id)

@@ -81,7 +81,7 @@ class UssdController < ApplicationController
   def process_request
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page
@@ -115,7 +115,7 @@ class ApiController < ApplicationController
   def chat
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page

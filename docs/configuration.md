@@ -57,7 +57,7 @@ processor = FlowChat::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo
   
   # Session configuration
-  config.use_session_store FlowChat::Session::RailsSessionStore
+  config.use_session_store FlowChat::Session::CacheSessionStore
   config.use_session_config(
     boundaries: [:flow, :platform, :gateway],
     identifier: :msisdn,
@@ -151,7 +151,7 @@ Choose where session data is stored:
 
 ```ruby
 # Built-in session stores
-config.use_session_store FlowChat::Session::RailsSessionStore    # Rails sessions
+config.use_session_store FlowChat::Session::CacheSessionStore    # Rails sessions
 config.use_session_store FlowChat::Session::CacheSessionStore   # Rails cache
 
 # Custom session store

@@ -12,7 +12,7 @@ class CustomSessionIdController < ApplicationController
   def ussd_endpoint
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       
       # Example 1: Custom session ID using block/proc
       config.use_session_config do |context|
@@ -51,7 +51,7 @@ class CustomSessionIdController < ApplicationController
   def http_endpoint
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       
       # Example 3: API session with custom expiration tracking
       config.use_session_config do |context|

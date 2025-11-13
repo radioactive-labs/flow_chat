@@ -29,7 +29,7 @@ class WhatsappApp < FlowChat::BaseApp; end
 # New approach (composition) - CURRENT
 processor = FlowChat::Processor.new(self) do |config|
   config.use_gateway FlowChat::Ussd::Gateway::Nalo        # Platform behavior
-  config.use_session_store FlowChat::Session::RailsSessionStore  # Session behavior
+  config.use_session_store FlowChat::Session::CacheSessionStore  # Session behavior
   config.use_middleware CustomLoggingMiddleware           # Custom behavior
 end
 ```
@@ -159,7 +159,7 @@ config.use_session_config(
 )
 
 # Session stores control where data is stored
-config.use_session_store FlowChat::Session::RailsSessionStore     # Rails sessions
+config.use_session_store FlowChat::Session::CacheSessionStore     # Rails sessions
 config.use_session_store FlowChat::Session::CacheSessionStore    # Rails cache
 config.use_session_store YourCompany::Session::DatabaseStore     # Custom store
 ```
@@ -296,7 +296,7 @@ Different storage backends for different use cases:
 
 ```ruby
 # Rails sessions (shorter-lived, good for testing)
-FlowChat::Session::RailsSessionStore
+FlowChat::Session::CacheSessionStore
 
 # Rails cache (longer-lived, good for production)
 FlowChat::Session::CacheSessionStore  

@@ -30,7 +30,7 @@ class UssdController < ApplicationController
   def process_request
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       
       # USSD-optimized session configuration
       config.use_session_config(
@@ -418,7 +418,7 @@ def process_request
 
   processor = FlowChat::Processor.new(self) do |config|
     config.use_gateway FlowChat::Ussd::Gateway::Nalo
-    config.use_session_store FlowChat::Session::RailsSessionStore
+    config.use_session_store FlowChat::Session::CacheSessionStore
   end
 
   processor.run MenuFlow, :main_menu
@@ -614,7 +614,7 @@ config.use_session_config(
 )
 
 # Implement session timeouts
-class SecureSessionStore < FlowChat::Session::RailsSessionStore
+class SecureSessionStore < FlowChat::Session::CacheSessionStore
   def get(key)
     data = super
     if data && session_expired?
