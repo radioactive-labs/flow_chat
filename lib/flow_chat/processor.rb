@@ -4,7 +4,7 @@ module FlowChat
   class Processor
     include FlowChat::Instrumentation
 
-    attr_reader :custom_middleware_builder, :context, :async_job_class
+    attr_reader :custom_middleware_builder, :context, :async_job_class, :async_job_params
 
     def initialize(controller, enable_simulator: nil)
       FlowChat.logger.debug { "Processor: Initializing processor for controller #{controller.class.name}" }
@@ -15,6 +15,7 @@ module FlowChat
       @custom_middleware_builder = ::Middleware::Builder.new(name: "processor.custom_middleware_builder")
       @session_options = FlowChat::Config.session
       @async_job_class = nil
+      @async_job_params = {}
 
       FlowChat.logger.debug { "Processor: Simulator mode #{@context["enable_simulator"] ? "enabled" : "disabled"}" }
 
@@ -88,9 +89,22 @@ module FlowChat
       )
     end
 
-    def use_async(job_class)
-      FlowChat.logger.debug { "Processor: Configuring async processing with job class #{job_class.name}" }
-      @async_job_class = job_class
+    def use_async(job_class = nil, **job_params)
+      # If no job class provided, use GenericAsyncJob with factory param
+      if job_class.nil?
+        unless job_params.key?(:factory)
+          raise ArgumentError, "When use_async is called without a job class, factory: parameter is required"
+        end
+
+        FlowChat.logger.debug { "Processor: Configuring async processing with GenericAsyncJob for factory '#{job_params[:factory]}'" }
+        @async_job_class = FlowChat::GenericAsyncJob
+        @async_job_params = job_params
+      else
+        FlowChat.logger.debug { "Processor: Configuring async processing with job class #{job_class.name} and params: #{job_params.inspect}" }
+        @async_job_class = job_class
+        @async_job_params = job_params
+      end
+
       self
     end
 

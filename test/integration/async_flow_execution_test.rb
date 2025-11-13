@@ -4,10 +4,11 @@ class AsyncFlowExecutionTest < Minitest::Test
   class TestAsyncJob < FlowChat::AsyncJob
     cattr_accessor :last_execution
 
-    def execute(controller)
+    def execute(controller, **job_params)
       # Store execution details for verification
       self.class.last_execution = {
         controller: controller,
+        job_params: job_params,
         executed: true
       }
 

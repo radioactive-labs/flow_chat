@@ -48,9 +48,10 @@ module FlowChat
         path: extract_path(@controller.request)
       }
 
-      # Enqueue user's job with request context
+      # Enqueue user's job with request context and job params
       processor.async_job_class.perform_later(
-        request_context: request_data
+        request_context: request_data,
+        **processor.async_job_params
       )
 
       FlowChat.logger.info { "#{self.class.name}: Background job enqueued successfully" }

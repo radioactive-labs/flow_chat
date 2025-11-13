@@ -229,12 +229,13 @@ class GatewayAsyncSupportTest < Minitest::Test
     processor
   end
 
-  def create_processor_with_async(job_class: nil)
+  def create_processor_with_async(job_class: nil, job_params: {})
     processor = Object.new
     def processor.async_enabled?
       true
     end
     processor.define_singleton_method(:async_job_class) { job_class }
+    processor.define_singleton_method(:async_job_params) { job_params }
     processor
   end
 end

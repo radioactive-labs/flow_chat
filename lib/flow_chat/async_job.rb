@@ -3,24 +3,26 @@ require "ostruct"
 
 module FlowChat
   # Base class for background flow processing jobs
-  # Users inherit from this and implement execute(controller)
+  # Users inherit from this and implement execute(controller, **job_params)
   class AsyncJob < (defined?(ApplicationJob) ? ApplicationJob : ActiveJob::Base)
-    def perform(request_context:)
-      FlowChat.logger.debug { "AsyncJob: Starting background job" }
+    def perform(request_context:, **job_params)
+      FlowChat.logger.debug { "AsyncJob: Starting background job with params: #{job_params.inspect}" }
 
       # Create BackgroundController from serialized request
       controller = BackgroundController.new(request_context)
 
       # User implements execute and calls processor.run themselves
-      execute(controller)
+      # Pass job_params as keyword arguments to execute
+      execute(controller, **job_params)
 
       FlowChat.logger.debug { "AsyncJob: Background job completed successfully" }
     end
 
     # Abstract method - user must implement
     # User builds processor AND calls processor.run themselves
-    def execute(controller)
-      raise NotImplementedError, "Subclasses must implement #execute(controller)"
+    # Job params from use_async(JobClass, key: value) are passed as keyword arguments
+    def execute(controller, **job_params)
+      raise NotImplementedError, "Subclasses must implement #execute(controller, **job_params)"
     end
   end
 

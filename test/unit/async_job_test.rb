@@ -2,10 +2,11 @@ require "test_helper"
 
 class AsyncJobTest < Minitest::Test
   class TestJob < FlowChat::AsyncJob
-    attr_reader :received_controller
+    attr_reader :received_controller, :received_job_params
 
-    def execute(controller)
+    def execute(controller, **job_params)
       @received_controller = controller
+      @received_job_params = job_params
     end
   end
 
@@ -48,6 +49,33 @@ class AsyncJobTest < Minitest::Test
 
     assert_equal "example.com", job.received_controller.request.host
     assert_equal "/webhooks/whatsapp", job.received_controller.request.path
+  end
+
+  def test_perform_passes_job_params_to_execute
+    request_data = {
+      params: {"user_id" => "123"},
+      method: "POST",
+      headers: {}
+    }
+
+    job = TestJob.new
+    job.perform(request_context: request_data, deployment_id: 456, flow_name: "TestFlow")
+
+    assert_equal 456, job.received_job_params[:deployment_id]
+    assert_equal "TestFlow", job.received_job_params[:flow_name]
+  end
+
+  def test_perform_works_with_no_job_params
+    request_data = {
+      params: {"user_id" => "123"},
+      method: "POST",
+      headers: {}
+    }
+
+    job = TestJob.new
+    job.perform(request_context: request_data)
+
+    assert_equal({}, job.received_job_params)
   end
 end
 

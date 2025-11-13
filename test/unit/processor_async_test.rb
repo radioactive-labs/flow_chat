@@ -2,7 +2,7 @@ require "test_helper"
 
 class ProcessorAsyncTest < Minitest::Test
   class TestAsyncJob < FlowChat::AsyncJob
-    def execute(controller)
+    def execute(controller, **job_params)
       # No-op for testing
     end
   end
@@ -62,6 +62,60 @@ class ProcessorAsyncTest < Minitest::Test
     # Access the context that was created
     context = processor.context
     assert_equal processor, context["processor"]
+  end
+
+  def test_use_async_accepts_job_params
+    processor = FlowChat::Processor.new(@controller)
+
+    result = processor.use_async(TestAsyncJob, deployment_id: 123, flow_name: "TestFlow")
+
+    assert_equal TestAsyncJob, processor.async_job_class
+    assert_equal 123, processor.async_job_params[:deployment_id]
+    assert_equal "TestFlow", processor.async_job_params[:flow_name]
+    assert_equal processor, result # Should return self for chaining
+  end
+
+  def test_async_job_params_defaults_to_empty_hash
+    processor = FlowChat::Processor.new(@controller)
+
+    assert_equal({}, processor.async_job_params)
+  end
+
+  def test_use_async_without_params_sets_empty_hash
+    processor = FlowChat::Processor.new(@controller)
+    processor.use_async(TestAsyncJob)
+
+    assert_equal({}, processor.async_job_params)
+  end
+
+  def test_use_async_without_job_class_requires_factory_param
+    processor = FlowChat::Processor.new(@controller)
+
+    error = assert_raises(ArgumentError) do
+      processor.use_async
+    end
+
+    assert_match /factory.*required/, error.message
+  end
+
+  def test_use_async_without_job_class_uses_generic_async_job
+    processor = FlowChat::Processor.new(@controller)
+
+    result = processor.use_async(factory: :whatsapp)
+
+    assert_equal FlowChat::GenericAsyncJob, processor.async_job_class
+    assert_equal :whatsapp, processor.async_job_params[:factory]
+    assert_equal processor, result # Should return self for chaining
+  end
+
+  def test_use_async_without_job_class_accepts_additional_params
+    processor = FlowChat::Processor.new(@controller)
+
+    processor.use_async(factory: :whatsapp, deployment_id: 123)
+
+    assert_equal FlowChat::GenericAsyncJob, processor.async_job_class
+    assert_equal :whatsapp, processor.async_job_params[:factory]
+    assert_equal 123, processor.async_job_params[:deployment_id]
   end
 
   private

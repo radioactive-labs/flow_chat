@@ -48,9 +48,17 @@ FlowChat is a Rails framework for building conversational interfaces across mult
 - Session stores: `CacheSessionStore`
 - Session IDs generated based on boundaries and identifiers
 
-#### Async Background Processing (`lib/flow_chat/async_job.rb`, `gateway_async_support.rb`)
+#### Factory Pattern (`lib/flow_chat/factory.rb`)
+- Centralized processor configuration system
+- Register configurations once, use everywhere
+- Methods: `register(name, &block)`, `execute(name, controller:)`
+- Eliminates duplication between webhook and background contexts
+- Works seamlessly with `GenericAsyncJob` for async processing
+
+#### Async Background Processing (`lib/flow_chat/async_job.rb`, `gateway_async_support.rb`, `generic_async_job.rb`)
 - Decouple flow processing from webhook request-response cycles
-- Base class: `FlowChat::AsyncJob` for creating background jobs
+- Base class: `FlowChat::AsyncJob` for custom background jobs
+- `GenericAsyncJob`: Built-in job that uses Factory pattern (no custom job needed)
 - `BackgroundController` mimics controller interface in background context
 - `GatewayAsyncSupport` concern for gateways to detect and enqueue async jobs
 - Automatic detection: async enqueue, background execute, or inline processing
@@ -91,38 +99,53 @@ end
 #### Multi-Platform Support
 Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic `app.screen()` calls.
 
-#### Async Background Processing
-Enable background processing for long-running flows to decouple webhook response times from flow execution:
+#### Factory Pattern with Async
+The recommended approach for async processing using centralized configuration:
 
 ```ruby
-# Create custom job class
-class MyFlowJob < FlowChat::AsyncJob
-  def execute(controller)
-    # Access params from reconstructed request
-    # e.g., controller.params[:user_id]
+# Register factory once in initializer
+FlowChat::Factory.register :whatsapp do |controller|
+  processor = FlowChat::Processor.new(controller) do |config|
+    config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+    config.use_session_store FlowChat::Session::CacheSessionStore
+    config.use_async(factory: :whatsapp)  # Self-referencing for async
+  end
+  processor.run(WhatsAppFlow, :start)
+end
 
-    processor = FlowChat::Processor.new(controller) do |config|
-      config.use_gateway(FlowChat::Whatsapp::Gateway::CloudApi)
-      config.use_session_store(FlowChat::Session::CacheSessionStore)
-    end
-    processor.run(MyFlow, :start)
+# Use in webhook controller - one line!
+FlowChat::Factory.execute(:whatsapp, controller: self)
+```
+
+**How it works:**
+1. Webhook calls `Factory.execute(:whatsapp)`
+2. Factory builds processor with `use_async(factory: :whatsapp)`
+3. Gateway enqueues `GenericAsyncJob` with `factory: :whatsapp` param
+4. Background job executes `Factory.execute(:whatsapp)` again
+5. Gateway detects background context and processes inline
+
+**Benefits:**
+- No custom job class needed (`GenericAsyncJob` handles it automatically)
+- Configuration defined once, works in both webhook and background contexts
+- Webhook returns immediately (< 100ms), flow processes in background
+- Automatic prevention of double-enqueueing
+
+See [docs/factory-pattern.md](docs/factory-pattern.md) and [docs/async-background-processing.md](docs/async-background-processing.md) for details.
+
+#### Custom Async Jobs
+For advanced cases, create custom job classes with job params:
+
+```ruby
+class MyFlowJob < FlowChat::AsyncJob
+  def execute(controller, **job_params)
+    deployment_id = job_params[:deployment_id]
+    # ... custom logic with job params
   end
 end
 
-# Configure processor with async
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_gateway(FlowChat::Whatsapp::Gateway::CloudApi)
-  config.use_session_store(FlowChat::Session::CacheSessionStore)
-  config.use_async(MyFlowJob)  # Enable async processing
-end
+# Use with job params
+config.use_async(MyFlowJob, deployment_id: 123)
 ```
-
-When async is enabled:
-- Webhook requests return immediately (< 100ms)
-- Flow processing happens in background job
-- All request params available via `controller.params` in background
-- Automatic detection prevents double-enqueueing in background context
-- See [docs/async-background-processing.md](docs/async-background-processing.md) for complete guide
 
 ## File Structure
 
@@ -133,7 +156,9 @@ When async is enabled:
 - `executor.rb` - Flow execution and interrupt handling
 - `context.rb` - Request context management
 - `config.rb` - Global configuration
+- `factory.rb` - Centralized processor configuration registry
 - `async_job.rb` - Background processing base class and controllers
+- `generic_async_job.rb` - Factory-based async job (no custom class needed)
 - `gateway_async_support.rb` - Async detection and enqueueing concern for gateways
 
 ### Platform Gateways

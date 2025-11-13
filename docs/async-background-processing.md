@@ -4,14 +4,48 @@ FlowChat supports asynchronous background processing to decouple flow execution 
 
 ## Quick Start
 
-### 1. Create Background Job
+### Option 1: Using Factory Pattern (Recommended)
 
-Create a job class that inherits from `FlowChat::AsyncJob`:
+The cleanest approach uses the Factory pattern for centralized configuration:
+
+```ruby
+# config/initializers/flow_chat.rb
+FlowChat::Factory.register :whatsapp do |controller|
+  processor = FlowChat::Processor.new(controller) do |config|
+    config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+    config.use_session_store FlowChat::Session::CacheSessionStore
+    config.use_session_config(boundaries: [:flow])
+    config.use_async(factory: :whatsapp)  # Self-referencing for async
+  end
+  processor.run(WhatsAppFlow, :start)
+end
+
+# app/controllers/webhooks_controller.rb
+class WebhooksController < ApplicationController
+  def whatsapp
+    FlowChat::Factory.execute(:whatsapp, controller: self)
+  end
+end
+```
+
+**Benefits:**
+- No custom job class needed
+- Configuration defined once in initializer
+- Works seamlessly in both webhook and background contexts
+
+See [Factory Pattern Documentation](factory-pattern.md) for more details.
+
+### Option 2: Custom Job Class
+
+For advanced use cases, create a custom job class:
 
 ```ruby
 # app/jobs/my_flow_job.rb
 class MyFlowJob < FlowChat::AsyncJob
-  def execute(controller)
+  def execute(controller, **job_params)
+    # Access job params passed from use_async
+    deployment_id = job_params[:deployment_id]
+
     # Build and run your processor
     processor = FlowChat::Processor.new(controller) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
@@ -22,20 +56,15 @@ class MyFlowJob < FlowChat::AsyncJob
     processor.run MyFlow, :start
   end
 end
-```
 
-### 2. Enable Async in Controller
-
-```ruby
 # app/controllers/webhooks_controller.rb
 class WebhooksController < ApplicationController
   def whatsapp
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
       config.use_session_store FlowChat::Session::CacheSessionStore
-      config.use_async MyFlowJob
+      config.use_async MyFlowJob, deployment_id: params[:deployment_id]
     end
-
     processor.run(MyFlow, :start)
   end
 end
@@ -80,6 +109,42 @@ Configure priorities:
   - [critical, 2]
   - [support_flows, 1]
   - [default, 1]
+```
+
+## Passing Parameters to Jobs
+
+### Job Params
+
+When using custom job classes, you can pass additional parameters via `use_async`:
+
+```ruby
+# In controller
+config.use_async(MyFlowJob, deployment_id: 123, flow_name: "SupportFlow")
+
+# In job execute method
+class MyFlowJob < FlowChat::AsyncJob
+  def execute(controller, **job_params)
+    deployment_id = job_params[:deployment_id]  # => 123
+    flow_name = job_params[:flow_name]          # => "SupportFlow"
+
+    # Use params for business logic
+    processor = FlowChat::Processor.new(controller) do |config|
+      # ... configuration
+    end
+    processor.run(MyFlow, :start)
+  end
+end
+```
+
+**Note:** Request params (from `controller.params`) are automatically available in the background job via the reconstructed `controller.params`. Job params are for additional data specific to job execution logic.
+
+### Factory with GenericAsyncJob
+
+When using `factory:` param, additional params are ignored by `GenericAsyncJob` but can be used by the factory:
+
+```ruby
+config.use_async(factory: :whatsapp, extra_data: "value")
+# extra_data is passed to perform but not used by GenericAsyncJob
 ```
 
 ## Gateway Support
@@ -152,9 +217,15 @@ FlowChat's async system automatically routes requests through one of three paths
 
 **AsyncJob**
 - Base class users inherit from
-- `perform(request_context:)` entry point
+- `perform(request_context:, **job_params)` entry point
 - Creates `BackgroundController` from serialized request
-- Calls user's `execute(controller)` method
+- Calls user's `execute(controller, **job_params)` method
+
+**GenericAsyncJob**
+- Built-in job that uses Factory pattern
+- Automatically used when `use_async(factory: :name)` is called
+- Executes registered factory in background context
+- Validates factory is registered before execution
 
 **BackgroundController**
 - Duck-types as Rails controller
