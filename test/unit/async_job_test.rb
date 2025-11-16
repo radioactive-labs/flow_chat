@@ -186,4 +186,87 @@ class BackgroundRequestTest < Minitest::Test
     assert_nil request.host
     assert_nil request.path
   end
+
+  def test_request_method_returns_uppercase_method
+    assert_equal "POST", @request.request_method
+
+    get_request = FlowChat::BackgroundRequest.new(method: "get")
+    assert_equal "GET", get_request.request_method
+
+    head_request = FlowChat::BackgroundRequest.new(method: "head")
+    assert_equal "HEAD", head_request.request_method
+  end
+
+  def test_head_predicate
+    refute @request.head?
+
+    head_request = FlowChat::BackgroundRequest.new(method: "HEAD")
+    assert head_request.head?
+
+    head_request_lowercase = FlowChat::BackgroundRequest.new(method: "head")
+    assert head_request_lowercase.head?
+  end
+
+  def test_body_returns_nil_when_no_body_content
+    assert_nil @request.body
+  end
+
+  def test_body_returns_readable_object_when_body_content_present
+    request = FlowChat::BackgroundRequest.new(
+      params: {},
+      body: '{"foo":"bar"}'
+    )
+
+    body = request.body
+    refute_nil body
+    assert_equal '{"foo":"bar"}', body.read
+  end
+
+  def test_body_read_returns_empty_string_after_first_read
+    request = FlowChat::BackgroundRequest.new(
+      params: {},
+      body: '{"foo":"bar"}'
+    )
+
+    body = request.body
+    assert_equal '{"foo":"bar"}', body.read
+    assert_equal "", body.read
+  end
+
+  def test_body_rewind_allows_re_reading
+    request = FlowChat::BackgroundRequest.new(
+      params: {},
+      body: '{"foo":"bar"}'
+    )
+
+    body = request.body
+    assert_equal '{"foo":"bar"}', body.read
+    body.rewind
+    assert_equal '{"foo":"bar"}', body.read
+  end
+
+  def test_user_agent_returns_header_value
+    assert_equal "Test/1.0", @request.user_agent
+  end
+
+  def test_user_agent_returns_nil_when_not_present
+    request = FlowChat::BackgroundRequest.new(params: {}, headers: {})
+    assert_nil request.user_agent
+  end
+
+  def test_remote_ip_returns_nil_when_not_provided
+    assert_nil @request.remote_ip
+  end
+
+  def test_remote_ip_returns_serialized_value
+    request = FlowChat::BackgroundRequest.new(
+      params: {},
+      remote_ip: "192.168.1.1"
+    )
+    assert_equal "192.168.1.1", request.remote_ip
+  end
+
+  def test_ssl_returns_false
+    refute @request.ssl?
+  end
 end

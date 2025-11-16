@@ -45,7 +45,9 @@ module FlowChat
         method: @controller.request.method,
         headers: extract_headers_for_background(@controller.request),
         host: extract_host(@controller.request),
-        path: extract_path(@controller.request)
+        path: extract_path(@controller.request),
+        body: extract_body_for_background(@controller.request),
+        remote_ip: extract_remote_ip(@controller.request)
       }
 
       # Enqueue user's job with request context and job params
@@ -78,6 +80,25 @@ module FlowChat
     # Extract path from request for URL boundary support
     def extract_path(request)
       request.path
+    rescue
+      nil
+    end
+
+    # Extract request body for background processing
+    # Override in gateways that need the request body
+    def extract_body_for_background(request)
+      return nil unless request.body
+
+      body_content = request.body.read
+      request.body.rewind  # Reset for subsequent reads
+      body_content
+    rescue
+      nil
+    end
+
+    # Extract remote IP from request
+    def extract_remote_ip(request)
+      request.remote_ip
     rescue
       nil
     end

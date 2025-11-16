@@ -68,7 +68,7 @@ module FlowChat
   # Request object for background jobs
   # Reconstructed from serialized webhook request data
   class BackgroundRequest
-    attr_reader :params, :method, :headers, :host, :path
+    attr_reader :params, :method, :headers, :host, :path, :remote_ip
 
     def initialize(request_data)
       @params = (request_data[:params] || {}).with_indifferent_access
@@ -76,8 +76,24 @@ module FlowChat
       @headers = OpenStruct.new(request_data[:headers] || {})
       @host = request_data[:host]
       @path = request_data[:path]
+      @body_content = request_data[:body]
+      @remote_ip = request_data[:remote_ip]
 
       FlowChat.logger.debug { "BackgroundRequest: Initialized with method=#{@method}, params keys=#{@params.keys.inspect}" }
+    end
+
+    # Rails request interface compatibility
+    def request_method
+      method.upcase
+    end
+
+    def user_agent
+      @headers["User-Agent"]
+    end
+
+    def ssl?
+      # Background jobs don't have SSL context
+      false
     end
 
     def post?
@@ -88,14 +104,37 @@ module FlowChat
       method.upcase == "GET"
     end
 
+    def head?
+      method.upcase == "HEAD"
+    end
+
     def body
-      # Background jobs don't have request body
-      nil
+      # Return StringIO-like object if body content exists
+      @body_content ? BackgroundRequestBody.new(@body_content) : nil
     end
 
     def cookies
       # Background jobs don't have cookies
       {}
+    end
+  end
+
+  # Body wrapper for BackgroundRequest
+  # Provides read() method that Rails expects
+  class BackgroundRequestBody
+    def initialize(content)
+      @content = content
+      @read = false
+    end
+
+    def read
+      return "" if @read
+      @read = true
+      @content
+    end
+
+    def rewind
+      @read = false
     end
   end
 end
