@@ -149,12 +149,37 @@ config.use_async(factory: :whatsapp, extra_data: "value")
 
 ## Gateway Support
 
-| Gateway | Async Support |
-|---------|--------------|
-| WhatsApp Cloud API | ✅ |
-| Intercom API | ✅ |
-| HTTP Simple | ✅ |
-| USSD Nalo | ❌ (synchronous protocol) |
+| Gateway | Async Support | Nil Response Handling |
+|---------|--------------|----------------------|
+| WhatsApp Cloud API | ✅ | ✅ Returns silently |
+| Intercom API | ✅ | ✅ Returns silently |
+| HTTP Simple | ✅ | ✅ Returns `{type: :skip}` JSON |
+| USSD Nalo | ❌ (synchronous protocol) | ❌ Requires immediate response |
+
+### Middleware Nil Response Handling
+
+Async-capable gateways support middleware that returns `nil` instead of a response tuple. This is useful for middleware that handles responses directly (e.g., `AgentHandoffMiddleware`):
+
+```ruby
+class AgentHandoffMiddleware
+  def call(context)
+    if should_handoff_to_agent?
+      # Middleware handles response directly
+      send_to_agent(context)
+      return nil  # Signal that response was handled
+    end
+
+    @app.call(context)  # Continue to next middleware
+  end
+end
+```
+
+When middleware returns `nil`:
+- **HTTP Simple**: Returns JSON response `{type: :skip, session_id, user_id, timestamp}`
+- **WhatsApp/Intercom**: Returns silently (message already sent by middleware)
+- **USSD**: Not supported - synchronous protocol requires immediate response
+
+**Note**: USSD cannot support middleware that returns nil because the USSD protocol requires an immediate synchronous response to every request.
 
 ## How It Works
 
@@ -235,10 +260,13 @@ FlowChat's async system automatically routes requests through one of three paths
 - `is_a?(FlowChat::BackgroundController)` returns true for detection
 
 **BackgroundRequest**
-- Reconstructs request interface from serialized data
-- Provides `params`, `method`, `headers` accessors
-- Implements `post?`, `get?` predicates
-- Returns nil for `body` and empty hash for `cookies`
+- Reconstructs full Rails request interface from serialized data
+- Provides `params`, `method`, `headers`, `host`, `path`, `remote_ip` accessors
+- HTTP method predicates: `post?`, `get?`, `head?`
+- Rails compatibility methods: `request_method`, `user_agent`, `ssl?`
+- Request body support: `body` returns object with `read()` and `rewind()` methods
+- Body content is serialized from webhook and reconstructed in background
+- Returns empty hash for `cookies` (not available in background context)
 
 **GatewayAsyncSupport**
 - Concern mixed into all gateways

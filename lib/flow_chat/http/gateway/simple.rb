@@ -54,7 +54,19 @@ module FlowChat
           else
             # Background OR inline → process message
             # Process the request
-            type, prompt, choices, media = @app.call(context)
+            response = @app.call(context)
+
+            # Handle nil response (e.g., from middleware that handles the response itself)
+            unless response
+              return @controller.render json: {
+                type: :skip,
+                session_id: context["request.id"],
+                user_id: context["request.user_id"],
+                timestamp: context["request.timestamp"]
+              }
+            end
+
+            type, prompt, choices, media = response
 
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
