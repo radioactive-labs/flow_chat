@@ -114,13 +114,6 @@ module FlowChat
               return @controller.head :ok
             end
 
-            # Get the latest message content
-            latest_message = extract_latest_user_message(conversation, event_type)
-            unless latest_message
-              FlowChat.logger.debug { "IntercomApi: No user message content found - returning OK" }
-              return @controller.head :ok
-            end
-
             # Set up FlowChat context
             user_id = user["id"] || user["user_id"]
             user_email = user["email"]
@@ -131,29 +124,42 @@ module FlowChat
             context["request.conversation_id"] = conversation_id
             context["request.gateway"] = :intercom_api
             context["request.platform"] = :intercom
-            context["request.message_id"] = latest_message[:id]
             context["request.user_email"] = user_email
             context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
+            context["request.intercom.topic"] = event_type
 
             context["intercom.client"] = @client
             context["intercom.user"] = user
             context["intercom.conversation"] = conversation
 
-            # Strip HTML tags from message body
-            raw_body = latest_message[:body] || ""
-            context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence || ""
+            # Try to extract latest message for user events
+            latest_message = extract_latest_user_message(conversation, event_type)
 
-            # Use instrumentation for message received
+            if latest_message
+              context["request.message_id"] = latest_message[:id]
+              # Strip HTML tags from message body
+              raw_body = latest_message[:body] || ""
+              context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence || ""
+              FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
+            elsif @allowed_webhook_topics.include?(event_type)
+              # No message but event is explicitly allowed - process without message
+              context.input = nil
+              FlowChat.logger.debug { "IntercomApi: Processing #{event_type} event without user message" }
+            else
+              # No message and event not in allowed topics - skip
+              # (This case shouldn't happen as we already filtered above, but safety check)
+              FlowChat.logger.error { "IntercomApi: No message found for unexpected event type '#{event_type}'" }
+              return @controller.head :ok
+            end
+
+            # Instrument message received (with or without message content)
             instrument(Events::MESSAGE_RECEIVED, {
               from: user_id,
               conversation_id: conversation_id,
               message: context.input,
-              event_type: event_type,
-              user_email: user_email
+              event_type: event_type
             })
-
-            FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
 
             # Determine routing: async enqueue, background execute, or inline
             if should_enqueue_async?

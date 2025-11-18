@@ -138,6 +138,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal :intercom_api, @context["request.gateway"]
     assert_equal :intercom, @context["request.platform"]
     assert_equal "Hello, I need help with my account", @context.input
+    assert_equal "conversation.user.created", @context["request.intercom.topic"]
   end
 
   def test_webhook_notification_conversation_user_replied
@@ -151,6 +152,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Verify latest message was extracted correctly
     assert_equal "I'm still having issues", @context.input
+    assert_equal "conversation.user.replied", @context["request.intercom.topic"]
   end
 
   def test_webhook_notification_ignored_event_type
@@ -182,18 +184,115 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_includes allowed_topics, "conversation.user.created"
     assert_includes allowed_topics, "conversation.user.replied"
     assert_includes allowed_topics, "conversation.admin.replied"
+  end
 
-    # Test that admin.replied is now processed (not ignored)
-    webhook_body = {
-      "topic" => "conversation.admin.replied",
-      "data" => {"item" => {"type" => "conversation"}}
-    }
-    setup_post_request_with_webhook(webhook_body)
+  def test_admin_event_with_nil_input
+    # Create gateway with additional admin topics
+    custom_gateway = FlowChat::Intercom::Gateway::IntercomApi.new(
+      @app,
+      @config,
+      ["conversation.admin.replied"]
+    )
+    custom_gateway.instance_variable_set(:@client, @mock_client)
 
-    # admin.replied doesn't have user messages, so it returns OK
-    @context.controller.expect(:head, nil, [:ok])
+    # Build webhook for admin.replied (no user message)
+    webhook_body = build_admin_replied_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    # App should be called with nil input for admin events
+    @app.expect(:call, [:text, "Admin event processed", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Admin event processed"], choices: nil, media: nil)
 
     custom_gateway.call(@context)
+
+    # Verify context was set correctly with nil input
+    assert_nil @context.input
+    assert_equal "conv_123", @context["request.conversation_id"]
+    assert_equal "conversation.admin.replied", @context["request.intercom.topic"]
+    assert_equal "user_456", @context["request.user_id"]
+  end
+
+  def test_admin_event_ignored_when_not_in_allowed_topics
+    # Create gateway WITHOUT admin topics (default topics only)
+    default_gateway = FlowChat::Intercom::Gateway::IntercomApi.new(
+      @app,
+      @config
+    )
+    default_gateway.instance_variable_set(:@client, @mock_client)
+
+    # Admin event should be ignored
+    webhook_body = build_admin_replied_webhook
+    setup_post_request_with_webhook(webhook_body)
+
+    @context.controller.expect(:head, nil, [:ok])
+
+    default_gateway.call(@context)
+
+    # App should NOT be called
+    assert @app.respond_to?(:verify)
+  end
+
+  def test_instrumentation_for_admin_event_with_nil_input
+    # Create gateway with admin topics
+    custom_gateway = FlowChat::Intercom::Gateway::IntercomApi.new(
+      @app,
+      @config,
+      ["conversation.admin.replied"]
+    )
+    custom_gateway.instance_variable_set(:@client, @mock_client)
+
+    # Build webhook for admin.replied
+    webhook_body = build_admin_replied_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    # Track instrumentation calls
+    instrumentation_events = []
+    custom_gateway.define_singleton_method(:instrument) do |event, data|
+      instrumentation_events << {event: event, data: data}
+    end
+
+    @app.expect(:call, [:text, "Admin event processed", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Admin event processed"], choices: nil, media: nil)
+
+    custom_gateway.call(@context)
+
+    # Verify MESSAGE_RECEIVED was instrumented with nil message and correct event type
+    message_received_event = instrumentation_events.find { |e| e[:event] == FlowChat::Instrumentation::Events::MESSAGE_RECEIVED }
+    assert message_received_event, "MESSAGE_RECEIVED event should be instrumented"
+    assert_equal "user_456", message_received_event[:data][:from]
+    assert_equal "conv_123", message_received_event[:data][:conversation_id]
+    assert_nil message_received_event[:data][:message]
+    assert_equal "conversation.admin.replied", message_received_event[:data][:event_type]
+
+    # Verify MESSAGE_SENT was instrumented
+    message_sent_event = instrumentation_events.find { |e| e[:event] == FlowChat::Instrumentation::Events::MESSAGE_SENT }
+    assert message_sent_event, "MESSAGE_SENT event should be instrumented"
+    assert_equal "user_456", message_sent_event[:data][:to]
+    assert_equal "conv_123", message_sent_event[:data][:conversation_id]
+  end
+
+  def test_instrumentation_for_user_event_with_message
+    webhook_body = build_conversation_created_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    # Track instrumentation calls
+    instrumentation_events = []
+    @gateway.define_singleton_method(:instrument) do |event, data|
+      instrumentation_events << {event: event, data: data}
+    end
+
+    @app.expect(:call, [:text, "User message processed", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "User message processed"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # Verify MESSAGE_RECEIVED was instrumented with message content and event type
+    message_received_event = instrumentation_events.find { |e| e[:event] == FlowChat::Instrumentation::Events::MESSAGE_RECEIVED }
+    assert message_received_event, "MESSAGE_RECEIVED event should be instrumented"
+    assert_equal "user_456", message_received_event[:data][:from]
+    assert_equal "conv_123", message_received_event[:data][:conversation_id]
+    assert_equal "Hello, I need help with my account", message_received_event[:data][:message]
+    assert_equal "conversation.user.created", message_received_event[:data][:event_type]
   end
 
   def test_default_webhook_topics_only
@@ -687,6 +786,54 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
                 "part_type" => "comment",
                 "body" => "I'm still having issues",
                 "author" => {"type" => "user"}
+              }
+            ]
+          }
+        }
+      }
+    }
+  end
+
+  def build_admin_replied_webhook
+    {
+      "topic" => "conversation.admin.replied",
+      "data" => {
+        "item" => {
+          "type" => "conversation",
+          "id" => "conv_123",
+          "source" => {
+            "type" => "conversation",
+            "id" => "3027934013",
+            "delivered_as" => "customer_initiated",
+            "subject" => "",
+            "body" => "Initial message from user",
+            "author" => {
+              "type" => "lead",
+              "id" => "user_456",
+              "name" => "John Doe",
+              "email" => "user@example.com"
+            },
+            "attachments" => [],
+            "url" => "http://example.com/",
+            "redacted" => false
+          },
+          "contacts" => {
+            "type" => "contact.list",
+            "contacts" => [
+              {
+                "type" => "contact",
+                "id" => "user_456",
+                "external_id" => "external_123"
+              }
+            ]
+          },
+          "conversation_parts" => {
+            "conversation_parts" => [
+              {
+                "id" => "part_1",
+                "part_type" => "comment",
+                "body" => "Admin response to the conversation",
+                "author" => {"type" => "admin", "id" => "admin_789"}
               }
             ]
           }
