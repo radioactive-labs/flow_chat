@@ -13,13 +13,19 @@ module FlowChat
 
         attr_reader :client
 
-        def initialize(app, config = nil)
+        # Default webhook topics to process
+        DEFAULT_WEBHOOK_TOPICS = ["conversation.user.created", "conversation.user.replied"].freeze
+
+        def initialize(app, config = nil, additional_webhook_topics = nil)
           @app = app
           @config = config || FlowChat::Intercom::Configuration.from_credentials
           @client = FlowChat::Intercom::Client.new(@config)
+          # Always include default topics, plus any additional ones
+          @allowed_webhook_topics = DEFAULT_WEBHOOK_TOPICS + Array(additional_webhook_topics)
 
           FlowChat.logger.info { "IntercomApi: Initialized Intercom API gateway" }
           FlowChat.logger.debug { "IntercomApi: Gateway configuration - API base URL: #{@config.api_base_url}" }
+          FlowChat.logger.debug { "IntercomApi: Allowed webhook topics: #{@allowed_webhook_topics.inspect}" }
         end
 
         def call(context)
@@ -84,8 +90,8 @@ module FlowChat
           end
 
           # Only process conversation events we care about
-          unless ["conversation.user.created", "conversation.user.replied"].include?(event_type)
-            FlowChat.logger.debug { "IntercomApi: Ignoring event type '#{event_type}' - returning OK" }
+          unless @allowed_webhook_topics.include?(event_type)
+            FlowChat.logger.debug { "IntercomApi: Ignoring event type '#{event_type}' (not in allowed topics) - returning OK" }
             return @controller.head :ok
           end
 

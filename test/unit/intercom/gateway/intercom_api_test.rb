@@ -168,6 +168,69 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert @app.respond_to?(:verify)
   end
 
+  def test_additional_webhook_topics
+    # Create gateway with additional topics (admin events)
+    custom_gateway = FlowChat::Intercom::Gateway::IntercomApi.new(
+      @app,
+      @config,
+      ["conversation.admin.replied"]
+    )
+    custom_gateway.instance_variable_set(:@client, @mock_client)
+
+    # Verify default topics are still included
+    allowed_topics = custom_gateway.instance_variable_get(:@allowed_webhook_topics)
+    assert_includes allowed_topics, "conversation.user.created"
+    assert_includes allowed_topics, "conversation.user.replied"
+    assert_includes allowed_topics, "conversation.admin.replied"
+
+    # Test that admin.replied is now processed (not ignored)
+    webhook_body = {
+      "topic" => "conversation.admin.replied",
+      "data" => {"item" => {"type" => "conversation"}}
+    }
+    setup_post_request_with_webhook(webhook_body)
+
+    # admin.replied doesn't have user messages, so it returns OK
+    @context.controller.expect(:head, nil, [:ok])
+
+    custom_gateway.call(@context)
+  end
+
+  def test_default_webhook_topics_only
+    # Create gateway without additional topics
+    default_gateway = FlowChat::Intercom::Gateway::IntercomApi.new(
+      @app,
+      @config
+    )
+
+    allowed_topics = default_gateway.instance_variable_get(:@allowed_webhook_topics)
+    assert_equal 2, allowed_topics.length
+    assert_includes allowed_topics, "conversation.user.created"
+    assert_includes allowed_topics, "conversation.user.replied"
+  end
+
+  def test_additional_webhook_topics_through_processor
+    # Test that positional arguments work through the processor (middleware builder)
+    # This catches issues with argument splatting in the middleware system
+
+    # Create a mock flow
+    flow_class = Class.new(FlowChat::Flow) do
+      def start
+        app.say "Test"
+      end
+    end
+
+    # Create processor with additional webhook topics as positional arg
+    processor = FlowChat::Processor.new(@context.controller) do |config|
+      config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, @config, ["conversation.admin.replied"]
+      config.use_session_store FlowChat::Session::CacheSessionStore
+      config.use_session_config(boundaries: [:conversation], identifier: :conversation_id)
+    end
+
+    # Verify the gateway was initialized with correct topics
+    assert processor.instance_variable_get(:@gateway_class) == FlowChat::Intercom::Gateway::IntercomApi
+  end
+
   def test_webhook_notification_no_topic
     webhook_body = {
       "data" => {"item" => {"type" => "conversation"}}

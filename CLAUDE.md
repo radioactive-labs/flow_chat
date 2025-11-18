@@ -242,10 +242,37 @@ INTERCOM_SKIP_SIGNATURE_VALIDATION=false
 
 #### Gateway Setup
 ```ruby
-# Basic Intercom gateway setup
+# Basic Intercom gateway setup (default webhook topics)
 config.use_gateway FlowChat::Intercom::Gateway::IntercomApi
 config.use_session_config(boundaries: [:conversation], identifier: :conversation_id)
+
+# With custom configuration
+intercom_config = FlowChat::Intercom::Configuration.get(:my_config)
+config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, intercom_config
+
+# Additional webhook topics (e.g., to include admin events)
+# Note: Default topics (user.created, user.replied) are always included
+config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, nil, [
+  "conversation.admin.assigned",
+  "conversation.admin.replied"
+]
+
+# Custom config AND additional webhook topics
+config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, intercom_config, [
+  "conversation.admin.assigned",
+  "conversation.admin.replied"
+]
 ```
+
+**Default Webhook Topics:**
+- `conversation.user.created` - New conversation started by user
+- `conversation.user.replied` - User replied in existing conversation
+
+**Additional Available Topics:**
+- `conversation.admin.assigned` - Admin assigned to conversation
+- `conversation.admin.replied` - Admin replied to conversation
+- `conversation.admin.closed` - Admin closed conversation
+- See [Intercom webhook docs](https://developers.intercom.com/docs/references/webhooks/webhook-models/) for full list
 
 #### Webhook Setup
 1. Add your HTTPS endpoint URL in Intercom Developer Hub → Configure → Webhooks
