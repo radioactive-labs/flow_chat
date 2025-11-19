@@ -392,7 +392,7 @@ module FlowChat
           data = JSON.parse(response.body)
           data["url"]
         else
-          Rails.logger.error "WhatsApp Media API error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: Media API error: #{response.body}" }
           nil
         end
       end
@@ -416,7 +416,7 @@ module FlowChat
         if response.is_a?(Net::HTTPSuccess)
           response.body
         else
-          Rails.logger.error "WhatsApp Media download error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: Media download error: #{response.body}" }
           nil
         end
       end
@@ -433,7 +433,7 @@ module FlowChat
         response = http.head(uri.path)
         response["content-type"]
       rescue => e
-        Rails.logger.warn "Could not detect MIME type for #{url}: #{e.message}"
+        FlowChat.logger.warn { "WhatsApp::Client: Could not detect MIME type for #{url}: #{e.message}" }
         nil
       end
 
