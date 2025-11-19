@@ -1,28 +1,64 @@
-require "active_job"
+begin
+  require "active_job"
+rescue LoadError
+  # ActiveJob not available - async features will not be available
+end
 require "ostruct"
 
 module FlowChat
   # Base class for background flow processing jobs
   # Users inherit from this and implement execute(controller, **job_params)
-  class AsyncJob < (defined?(ApplicationJob) ? ApplicationJob : ActiveJob::Base)
-    def perform(request_context:, **job_params)
-      FlowChat.logger.debug { "AsyncJob: Starting background job with params: #{job_params.inspect}" }
+  if defined?(ActiveJob::Base)
+    class AsyncJob < ActiveJob::Base
+      queue_as :default
 
-      # Create BackgroundController from serialized request
-      controller = BackgroundController.new(request_context)
+      def perform(request_context:, **job_params)
+        FlowChat.logger.debug { "AsyncJob: Starting background job with params: #{job_params.inspect}" }
 
-      # User implements execute and calls processor.run themselves
-      # Pass job_params as keyword arguments to execute
-      execute(controller, **job_params)
+        # Create BackgroundController from serialized request
+        controller = BackgroundController.new(request_context)
 
-      FlowChat.logger.debug { "AsyncJob: Background job completed successfully" }
+        # User implements execute and calls processor.run themselves
+        # Pass job_params as keyword arguments to execute
+        execute(controller, **job_params)
+
+        FlowChat.logger.debug { "AsyncJob: Background job completed successfully" }
+      end
+
+      # Abstract method - user must implement
+      # User builds processor AND calls processor.run themselves
+      # Job params from use_async(JobClass, key: value) are passed as keyword arguments
+      def execute(controller, **job_params)
+        raise NotImplementedError, "Subclasses must implement #execute(controller, **job_params)"
+      end
     end
+  else
+    # Fallback when ActiveJob is not available
+    class AsyncJob
+      def perform(request_context:, **job_params)
+        FlowChat.logger.debug { "AsyncJob: Starting background job with params: #{job_params.inspect}" }
 
-    # Abstract method - user must implement
-    # User builds processor AND calls processor.run themselves
-    # Job params from use_async(JobClass, key: value) are passed as keyword arguments
-    def execute(controller, **job_params)
-      raise NotImplementedError, "Subclasses must implement #execute(controller, **job_params)"
+        # Create BackgroundController from serialized request
+        controller = BackgroundController.new(request_context)
+
+        # User implements execute and calls processor.run themselves
+        # Pass job_params as keyword arguments to execute
+        execute(controller, **job_params)
+
+        FlowChat.logger.debug { "AsyncJob: Background job completed successfully" }
+      end
+
+      # Abstract method - user must implement
+      # User builds processor AND calls processor.run themselves
+      # Job params from use_async(JobClass, key: value) are passed as keyword arguments
+      def execute(controller, **job_params)
+        raise NotImplementedError, "Subclasses must implement #execute(controller, **job_params)"
+      end
+
+      # Stub perform_later for testing when ActiveJob is not available
+      def self.perform_later(args)
+        new.perform(**args)
+      end
     end
   end
 

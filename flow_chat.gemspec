@@ -36,4 +36,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "actionpack", ">= 6"
   spec.add_dependency "phonelib"
   spec.add_dependency "ibsciss-middleware", "~> 0.4.2"
+  spec.add_dependency "intercom", "~> 4.2"
 end

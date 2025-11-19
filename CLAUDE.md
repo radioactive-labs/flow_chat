@@ -279,23 +279,41 @@ config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, intercom_config, [
 2. Intercom validates your endpoint with HEAD request (handled automatically)
 3. Webhook notifications are validated using X-Hub-Signature with client_secret
 
-#### API Usage
-```ruby
-# Generic API usage for conversation management
-client = FlowChat::Intercom::Client.new(config)
-conversation_manager = FlowChat::Intercom::ConversationManager.new(client, conversation_id)
+#### FlowChat Client API
+The FlowChat Intercom client provides only the core methods needed by the gateway:
 
-# Business logic defines workflow (tags, assignments, etc.)
-conversation_manager.assign_conversation(admin_id)  # Use actual admin ID from Intercom
-conversation_manager.add_tag("AI_HANDLING")
-conversation_manager.update_state("open")
-conversation_manager.update_priority("not_priority")
+```ruby
+# Access within a flow via context
+client = context["intercom.client"]
+conversation_id = context["request.conversation_id"]
+
+# Send a message (used by gateway automatically)
+client.send_message(conversation_id, "Hello!", choices: nil, media: nil)
+
+# Assign conversation to admin (if needed by your flow)
+client.assign_conversation(conversation_id, admin_id, team_id: nil)
+```
+
+**Important:** For business logic (tags, state management, fetching conversations), use the official `intercom` gem directly in your application:
+
+```ruby
+# In your application code, use the official gem for business logic
+intercom = Intercom::Client.new(token: access_token)
+
+# Tag management
+intercom.tags.tag(name: "AI_HANDLING", conversations: [{id: conversation_id}])
+
+# State management
+intercom.conversations.reply(id: conversation_id, message_type: "closed")
+
+# Fetch conversation details
+conversation = intercom.conversations.find(id: conversation_id)
 ```
 
 #### Error Handling
 - Rate limiting: `RateLimitError` with retry-after information
 - Authentication: `ConfigurationError` for invalid tokens
-- HTTP errors: Proper handling for 401, 403, 404, 429, 5xx responses
+- API errors: Proper handling for Intercom gem exceptions (ResourceNotFound, UnauthorizedError, etc.)
 
 ## Instrumentation
 

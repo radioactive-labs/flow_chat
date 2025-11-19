@@ -105,7 +105,8 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
   def test_initialize_without_config_uses_credentials
     # Mock the Configuration.from_credentials method
     config_mock = FlowChat::TestSupport::SimpleMock.new
-    config_mock.expect(:app_id, "mock_app_id")
+    config_mock.expect(:access_token, "mock_access_token")
+    config_mock.expect(:admin_id, "mock_admin_id")
     config_mock.expect(:api_base_url, "https://api.intercom.io")
 
     FlowChat::Intercom::Configuration.stub(:from_credentials, config_mock) do

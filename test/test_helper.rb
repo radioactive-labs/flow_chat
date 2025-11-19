@@ -11,6 +11,13 @@ require "active_support/core_ext/enumerable"
 require "active_support/core_ext/numeric/time"
 require "ostruct"
 
+# Require ActiveJob for async tests
+begin
+  require "active_job"
+rescue LoadError
+  # ActiveJob not available
+end
+
 # Load test support files
 require_relative "support/mocks"
 require_relative "support/base_test_job"
