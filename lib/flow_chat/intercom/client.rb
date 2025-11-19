@@ -90,60 +90,6 @@ module FlowChat
         nil
       end
 
-      # Assign a conversation to an admin or team
-      # @param conversation_id [String] Conversation ID
-      # @param assignee_id [String] Admin ID to assign to (use 0 to unassign)
-      # @param team_id [String] Optional team ID
-      # @return [Hash] API response or nil on error
-      def assign_conversation(conversation_id, assignee_id, team_id: nil)
-        FlowChat.logger.info { "Intercom::Client: Assigning conversation #{conversation_id} to admin #{assignee_id}" }
-        FlowChat.logger.debug { "Intercom::Client: Team ID: #{team_id}" } if team_id
-
-        assignment_data = {
-          message_type: "assignment",
-          type: "admin"
-        }
-
-        # Set assignee (0 means unassign)
-        if assignee_id.to_s == "0"
-          assignment_data[:assignee_id] = 0
-          FlowChat.logger.debug { "Intercom::Client: Unassigning conversation from human agents" }
-        else
-          assignment_data[:admin_id] = assignee_id.to_s
-        end
-
-        # Set team if provided
-        assignment_data[:team_id] = team_id.to_s if team_id
-
-        result = instrument(Events::CONVERSATION_ASSIGNED, {
-          conversation_id: conversation_id,
-          assignee_id: assignee_id,
-          team_id: team_id,
-          platform: :intercom
-        }) do
-          # Use official gem's conversations.reply for assignment
-          reply = @intercom.conversations.reply(
-            id: conversation_id,
-            **assignment_data
-          )
-          reply.to_hash
-        end
-
-        if result
-          FlowChat.logger.debug { "Intercom::Client: Conversation assignment successful" }
-        else
-          FlowChat.logger.error { "Intercom::Client: Failed to assign conversation #{conversation_id}" }
-        end
-
-        result
-      rescue ::Intercom::ResourceNotFound => e
-        FlowChat.logger.error { "Intercom::Client: Conversation not found: #{e.message}" }
-        nil
-      rescue => e
-        FlowChat.logger.error { "Intercom::Client: Assignment failed: #{e.class.name}: #{e.message}" }
-        nil
-      end
-
       # Build reply payload for Intercom API
       # This method is exposed so the gateway can use it for simulator mode
       def build_reply_payload(response, conversation_id)

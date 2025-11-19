@@ -289,12 +289,11 @@ conversation_id = context["request.conversation_id"]
 
 # Send a message (used by gateway automatically)
 client.send_message(conversation_id, "Hello!", choices: nil, media: nil)
-
-# Assign conversation to admin (if needed by your flow)
-client.assign_conversation(conversation_id, admin_id, team_id: nil)
 ```
 
-**Important:** For business logic (tags, state management, fetching conversations), use the official `intercom` gem directly in your application:
+**Note:** Conversations are automatically assigned to the configured admin when messages are sent (Intercom's default behavior). Each admin can change this in their personal settings if desired.
+
+**Important:** For business logic (tags, assignment, state management, fetching conversations), use the official `intercom` gem directly in your application:
 
 ```ruby
 # In your application code, use the official gem for business logic
@@ -302,6 +301,9 @@ intercom = Intercom::Client.new(token: access_token)
 
 # Tag management
 intercom.tags.tag(name: "AI_HANDLING", conversations: [{id: conversation_id}])
+
+# Assignment (override default auto-assignment)
+intercom.conversations.reply(id: conversation_id, message_type: "assignment", admin_id: admin_id)
 
 # State management
 intercom.conversations.reply(id: conversation_id, message_type: "closed")
