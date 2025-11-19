@@ -685,3 +685,49 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     }
   end
 end
+
+class WhatsappCloudApiGatewayMiddlewareStackTest < Minitest::Test
+  def test_configure_middleware_stack_adds_choice_mapper
+    # Create a mock builder to track middleware registration
+    builder = MockMiddlewareBuilder.new
+    custom_middleware = Object.new
+
+    # Call the class method
+    FlowChat::Whatsapp::Gateway::CloudApi.configure_middleware_stack(builder, custom_middleware)
+
+    # Verify custom middleware was added first
+    assert_equal custom_middleware, builder.middlewares[0],
+      "Custom middleware should be added first"
+
+    # Verify ChoiceMapper was added second
+    assert_equal FlowChat::Whatsapp::Middleware::ChoiceMapper, builder.middlewares[1],
+      "ChoiceMapper should be added after custom middleware"
+  end
+
+  def test_configure_middleware_stack_order_matches_ussd_pattern
+    # WhatsApp should follow same pattern as USSD: custom middleware -> platform middleware
+    builder = MockMiddlewareBuilder.new
+    custom_middleware = Object.new
+
+    FlowChat::Whatsapp::Gateway::CloudApi.configure_middleware_stack(builder, custom_middleware)
+
+    # Verify order: custom first, then ChoiceMapper
+    assert_equal 2, builder.middlewares.length,
+      "Should have exactly 2 middlewares registered"
+    assert_equal custom_middleware, builder.middlewares[0]
+    assert_equal FlowChat::Whatsapp::Middleware::ChoiceMapper, builder.middlewares[1]
+  end
+
+  # Mock builder to track middleware registration
+  class MockMiddlewareBuilder
+    attr_reader :middlewares
+
+    def initialize
+      @middlewares = []
+    end
+
+    def use(middleware, *args)
+      @middlewares << middleware
+    end
+  end
+end

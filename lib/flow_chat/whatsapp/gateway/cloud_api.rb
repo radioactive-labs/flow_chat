@@ -423,6 +423,17 @@ module FlowChat
         def render_response(prompt, choices, media)
           FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
         end
+
+        # Configure WhatsApp-specific middleware stack
+        def self.configure_middleware_stack(builder, custom_middleware)
+          FlowChat.logger.debug { "CloudApi: Configuring WhatsApp middleware stack" }
+
+          builder.use custom_middleware
+          FlowChat.logger.debug { "CloudApi: Added custom middleware" }
+
+          builder.use FlowChat::Whatsapp::Middleware::ChoiceMapper
+          FlowChat.logger.debug { "CloudApi: Added Whatsapp::Middleware::ChoiceMapper" }
+        end
       end
     end
   end

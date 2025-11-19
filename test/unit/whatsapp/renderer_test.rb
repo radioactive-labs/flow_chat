@@ -9,19 +9,30 @@ class WhatsappRendererTest < Minitest::Test
   end
 
   def test_render_with_choices_as_buttons
-    choices = ["Option 1", "Option 2", "Option 3"].map.with_index { |c, i| [i + 1, c] }.to_h
+    # In the new architecture, middleware transforms choices before renderer sees them
+    # Middleware converts {1 => "Option 1", 2 => "Option 2"} to {"Option 1" => "Option 1", "Option 2" => "Option 2"}
+    # So renderer receives choices with generated IDs as keys
+    choices = {
+      "Option 1" => "Option 1",
+      "Option 2" => "Option 2",
+      "Option 3" => "Option 3"
+    }
     renderer = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices)
     result = renderer.render
 
+    # Renderer uses the keys (which are already WhatsApp-safe IDs) as button IDs
     expected_buttons = [
-      {id: "1", title: "Option 1"},
-      {id: "2", title: "Option 2"},
-      {id: "3", title: "Option 3"}
+      {id: "Option 1", title: "Option 1"},
+      {id: "Option 2", title: "Option 2"},
+      {id: "Option 3", title: "Option 3"}
     ]
 
     assert_equal :interactive_buttons, result[0]
     assert_equal "Choose:", result[1]
     assert_equal expected_buttons, result[2][:buttons]
+
+    # No mapping in renderer anymore - middleware handles mapping
+    assert_nil result[2][:mapping]
   end
 
   def test_render_with_choices_as_list
@@ -59,7 +70,13 @@ class WhatsappRendererTest < Minitest::Test
   end
 
   def test_render_media_with_buttons
-    choices = ["Like", "Dislike", "Share"]
+    # Middleware would have transformed array choices to ID-based hash
+    # e.g., ["Like", "Dislike", "Share"] -> {"Like" => "Like", "Dislike" => "Dislike", "Share" => "Share"}
+    choices = {
+      "Like" => "Like",
+      "Dislike" => "Dislike",
+      "Share" => "Share"
+    }
     media = {type: :image, url: "https://example.com/photo.jpg"}
 
     renderer = FlowChat::Whatsapp::Renderer.new(
@@ -69,10 +86,11 @@ class WhatsappRendererTest < Minitest::Test
     )
     result = renderer.render
 
+    # Renderer uses keys as IDs
     expected_buttons = [
-      {id: "0", title: "Like"},
-      {id: "1", title: "Dislike"},
-      {id: "2", title: "Share"}
+      {id: "Like", title: "Like"},
+      {id: "Dislike", title: "Dislike"},
+      {id: "Share", title: "Share"}
     ]
 
     expected_header = {
@@ -84,6 +102,9 @@ class WhatsappRendererTest < Minitest::Test
     assert_equal "What do you think?", result[1]
     assert_equal expected_buttons, result[2][:buttons]
     assert_equal expected_header, result[2][:header]
+
+    # No mapping in renderer anymore - middleware handles mapping
+    assert_nil result[2][:mapping]
   end
 
   def test_media_header_types
@@ -131,20 +152,29 @@ class WhatsappRendererTest < Minitest::Test
   end
 
   def test_hash_choices_with_media
-    choices = {"option1" => "First Option", "option2" => "Second Option"}
+    # Middleware would have transformed {"option1" => "First Option"}
+    # to {"First Option" => "First Option"}
+    choices = {
+      "First Option" => "First Option",
+      "Second Option" => "Second Option"
+    }
     media = {type: :image, url: "https://example.com/image.jpg"}
 
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices, media: media)
     result = renderer.render
 
+    # Renderer uses keys as IDs
     expected_buttons = [
-      {id: "option1", title: "First Option"},
-      {id: "option2", title: "Second Option"}
+      {id: "First Option", title: "First Option"},
+      {id: "Second Option", title: "Second Option"}
     ]
 
     assert_equal :interactive_buttons, result[0]
     assert_equal expected_buttons, result[2][:buttons]
     assert result[2][:header].present?
+
+    # No mapping in renderer anymore - middleware handles mapping
+    assert_nil result[2][:mapping]
   end
 
   def test_button_title_truncation
