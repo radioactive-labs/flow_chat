@@ -315,7 +315,7 @@ conversation = intercom.conversations.find(id: conversation_id)
 #### Error Handling
 - Rate limiting: `RateLimitError` with retry-after information
 - Authentication: `ConfigurationError` for invalid tokens
-- API errors: Proper handling for Intercom gem exceptions (ResourceNotFound, UnauthorizedError, etc.)
+- API errors: Proper handling for Intercom gem exceptions (ResourceNotFound, AuthenticationError, etc.)
 
 ## Instrumentation
 

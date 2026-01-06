@@ -75,7 +75,7 @@ module FlowChat
       rescue ::Intercom::ResourceNotFound => e
         FlowChat.logger.error { "Intercom::Client: Conversation not found: #{e.message}" }
         nil
-      rescue ::Intercom::UnauthorizedError => e
+      rescue ::Intercom::AuthenticationError => e
         FlowChat.logger.error { "Intercom::Client: Authentication failed - check access token" }
         raise ConfigurationError, "Invalid Intercom access token"
       rescue ::Intercom::RateLimitExceeded => e
