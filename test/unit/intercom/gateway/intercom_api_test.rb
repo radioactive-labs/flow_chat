@@ -139,7 +139,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal :intercom_api, @context["request.gateway"]
     assert_equal :intercom, @context["request.platform"]
     assert_equal "Hello, I need help with my account", @context.input
-    assert_equal "conversation.user.created", @context["request.intercom.topic"]
+    assert_equal "conversation.user.created", @context["intercom.topic"]
   end
 
   def test_webhook_notification_conversation_user_replied
@@ -153,7 +153,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Verify latest message was extracted correctly
     assert_equal "I'm still having issues", @context.input
-    assert_equal "conversation.user.replied", @context["request.intercom.topic"]
+    assert_equal "conversation.user.replied", @context["intercom.topic"]
   end
 
   def test_webhook_notification_ignored_event_type
@@ -209,7 +209,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     # Verify context was set correctly with nil input
     assert_nil @context.input
     assert_equal "conv_123", @context["request.conversation_id"]
-    assert_equal "conversation.admin.replied", @context["request.intercom.topic"]
+    assert_equal "conversation.admin.replied", @context["intercom.topic"]
     assert_equal "user_456", @context["request.user_id"]
   end
 

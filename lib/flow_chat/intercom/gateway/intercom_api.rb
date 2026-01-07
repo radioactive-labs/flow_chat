@@ -128,11 +128,11 @@ module FlowChat
             context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
             context["request.body"] = @body
-            context["request.intercom.topic"] = event_type
 
             context["intercom.client"] = @client
             context["intercom.user"] = user
             context["intercom.conversation"] = conversation
+            context["intercom.topic"] = event_type
 
             # Try to extract latest message for user events
             latest_message = extract_latest_user_message(conversation, event_type)
