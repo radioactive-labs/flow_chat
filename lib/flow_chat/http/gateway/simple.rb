@@ -31,11 +31,12 @@ module FlowChat
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :http_simple
           context["request.platform"] = :http
-          context["request.network"] = nil
-          context["request.method"] = request.method
-          context["request.path"] = request.path
-          context["request.user_agent"] = request.user_agent
           context["request.body"] = (params.respond_to?(:to_unsafe_h) ? params.to_unsafe_h : params.to_h).transform_keys(&:to_s)
+
+          # HTTP-specific request metadata
+          context["http.method"] = request.method
+          context["http.path"] = request.path
+          context["http.user_agent"] = request.user_agent
           context.input = params["input"].presence || ""
 
           # Instrument message received when user provides input

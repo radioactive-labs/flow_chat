@@ -55,9 +55,9 @@ class HttpSimpleGatewayTest < Minitest::Test
     assert_equal "+256700123456", @context["request.user_id"]
     assert_equal :http_simple, @context["request.gateway"]
     assert_equal :http, @context["request.platform"]
-    assert_equal "POST", @context["request.method"]
-    assert_equal "/http/webhook", @context["request.path"]
-    assert_equal "TestAgent/1.0", @context["request.user_agent"]
+    assert_equal "POST", @context["http.method"]
+    assert_equal "/http/webhook", @context["http.path"]
+    assert_equal "TestAgent/1.0", @context["http.user_agent"]
     assert_equal "Hello", @context.input
   end
 

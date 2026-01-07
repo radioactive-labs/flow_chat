@@ -28,7 +28,6 @@ module FlowChat
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :nalo
           context["request.platform"] = :ussd
-          context["request.network"] = nil
           context["request.body"] = (params.respond_to?(:to_unsafe_h) ? params.to_unsafe_h : params.to_h).transform_keys(&:to_s)
           # context["request.type"] = params["MSGTYPE"] ? :initial : :response
           context.input = params["USERDATA"].presence || ""

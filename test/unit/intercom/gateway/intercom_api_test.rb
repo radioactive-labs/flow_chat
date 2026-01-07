@@ -135,7 +135,6 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     # Verify context was set up correctly
     assert_equal "conv_123", @context["request.id"]
     assert_equal "user_456", @context["request.user_id"]
-    assert_equal "conv_123", @context["request.conversation_id"]
     assert_equal :intercom_api, @context["request.gateway"]
     assert_equal :intercom, @context["request.platform"]
     assert_equal "Hello, I need help with my account", @context.input
@@ -208,7 +207,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Verify context was set correctly with nil input
     assert_nil @context.input
-    assert_equal "conv_123", @context["request.conversation_id"]
+    assert_equal "conv_123", @context["request.id"]
     assert_equal "conversation.admin.replied", @context["intercom.topic"]
     assert_equal "user_456", @context["request.user_id"]
   end

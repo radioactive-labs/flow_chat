@@ -70,9 +70,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.test123", context["request.message_id"]
-    assert_equal "John Doe", context["request.contact_name"]
+    assert_equal "John Doe", context["whatsapp.contact.name"]
     assert_equal :whatsapp_cloud_api, context["request.gateway"]
-    assert_equal "1702891800", context["request.timestamp"]
+    refute_equal "1702891800", context["request.timestamp"] # Now uses Time.current instead of webhook timestamp
   end
 
   def test_post_request_button_response_processing

@@ -107,31 +107,25 @@ module FlowChat
             conversation = data_item
             conversation_id = conversation["id"]
 
-            # Get the user from source.author (should always exist according to Intercom API)
-            user = conversation.dig("source", "author")
-            unless user
-              FlowChat.logger.error { "IntercomApi: No source.author found in conversation - this should not happen according to Intercom API" }
+            # Get the user ID from contacts (always the actual user/contact)
+            # contacts.contacts[0] contains the actual user, not the admin
+            contact = conversation.dig("contacts", "contacts", 0)
+            unless contact
+              FlowChat.logger.error { "IntercomApi: No contact found in conversation" }
               return @controller.head :ok
             end
 
-            # Set up FlowChat context
-            user_id = user["id"] || user["user_id"]
-            user_email = user["email"]
-            user_name = user["name"]
+            # Get user ID from contact (most reliable)
+            user_id = contact["id"]
 
             context["request.id"] = conversation_id
             context["request.user_id"] = user_id
-            context["request.conversation_id"] = conversation_id
             context["request.gateway"] = :intercom_api
             context["request.platform"] = :intercom
-            context["request.user_email"] = user_email
-            context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
             context["request.body"] = @body
 
             context["intercom.client"] = @client
-            context["intercom.user"] = user
-            context["intercom.conversation"] = conversation
             context["intercom.topic"] = event_type
 
             # Try to extract latest message for user events
@@ -299,13 +293,13 @@ module FlowChat
           response = @app.call(context)
           if response
             _type, prompt, choices, media = response
-            result = @client.send_message(context["request.conversation_id"], prompt, choices: choices, media: media)
+            result = @client.send_message(context["request.id"], prompt, choices: choices, media: media)
             context["intercom.message_result"] = result
 
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
               to: context["request.user_id"],
-              conversation_id: context["request.conversation_id"],
+              conversation_id: context["request.id"],
               message: prompt,
               gateway: :intercom_api,
               platform: :intercom,
@@ -324,16 +318,15 @@ module FlowChat
 
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via Intercom API
-            message_payload = @client.build_reply_payload(rendered_message, context["request.conversation_id"])
+            message_payload = @client.build_reply_payload(rendered_message, context["request.id"])
 
             simulator_response = {
               mode: "simulator",
               webhook_processed: true,
               would_send: message_payload,
               message_info: {
-                to: context["request.conversation_id"],
+                to: context["request.id"],
                 user_id: context["request.user_id"],
-                user_email: context["request.user_email"],
                 timestamp: Time.now.iso8601
               }
             }

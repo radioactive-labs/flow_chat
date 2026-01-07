@@ -161,15 +161,13 @@ module FlowChat
             context["request.gateway"] = :whatsapp_cloud_api
             context["request.platform"] = :whatsapp
             context["request.message_id"] = message_id
-            context["request.contact_name"] = contact_name
-            context["request.timestamp"] = message["timestamp"]
+            context["request.timestamp"] = Time.current.iso8601
             context["request.body"] = @body
 
+            context["whatsapp.contact.name"] = contact_name
             context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
             context["whatsapp.business.phone_number_id"] = business_phone_number_id
-
             context["whatsapp.client"] = @client
-            context["whatsapp.message"] = message
 
             # Extract message content based on type
             extract_message_content!(message, context)
@@ -360,7 +358,7 @@ module FlowChat
               would_send: message_payload,
               message_info: {
                 to: context["request.msisdn"],
-                contact_name: context["request.contact_name"],
+                contact_name: context["whatsapp.contact.name"],
                 timestamp: Time.now.iso8601
               }
             }
