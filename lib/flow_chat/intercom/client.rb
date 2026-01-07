@@ -19,6 +19,8 @@ module FlowChat
     class Client
       include FlowChat::Instrumentation
 
+      attr_reader :intercom
+
       def initialize(config)
         @config = config
         @intercom = ::Intercom::Client.new(token: @config.access_token)
@@ -53,7 +55,7 @@ module FlowChat
           end
 
           # Send using official gem
-          reply = @intercom.conversations.reply(
+          reply = intercom.conversations.reply(
             id: conversation_id,
             type: "admin",
             admin_id: @config.admin_id.to_s,
