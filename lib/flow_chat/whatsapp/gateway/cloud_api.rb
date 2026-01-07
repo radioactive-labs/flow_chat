@@ -163,6 +163,7 @@ module FlowChat
             context["request.message_id"] = message_id
             context["request.contact_name"] = contact_name
             context["request.timestamp"] = message["timestamp"]
+            context["request.body"] = @body
 
             context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
             context["whatsapp.business.phone_number_id"] = business_phone_number_id

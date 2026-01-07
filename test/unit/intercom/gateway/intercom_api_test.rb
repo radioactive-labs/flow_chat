@@ -851,6 +851,36 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     )
   end
 
+  def test_sets_request_body_with_stringified_keys
+    webhook_body = build_conversation_created_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Response"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # Verify request.body is set
+    assert_kind_of Hash, @context["request.body"]
+
+    # Verify it contains the expected webhook structure
+    assert @context["request.body"]["topic"]
+    assert @context["request.body"]["data"]
+    assert_equal "conversation.user.created", @context["request.body"]["topic"]
+
+    # Verify all top-level keys are strings
+    @context["request.body"].keys.each do |key|
+      assert_kind_of String, key, "Expected all keys to be strings, but found #{key.class}"
+    end
+
+    # Verify nested keys are also strings
+    data = @context["request.body"]["data"]
+    assert_kind_of Hash, data
+    data.keys.each do |key|
+      assert_kind_of String, key, "Expected nested data keys to be strings, but found #{key.class}"
+    end
+  end
+
   def generate_valid_simulator_cookie
     # Mock FlowChat::Config.simulator_secret
     simulator_secret = "test_simulator_secret"

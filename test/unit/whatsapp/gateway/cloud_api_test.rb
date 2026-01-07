@@ -684,6 +684,39 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       }]
     }
   end
+
+  def test_sets_request_body_with_stringified_keys
+    webhook_payload = create_text_message_payload("Test message", "wamid.test999")
+
+    context = create_context_with_request(
+      method: :post,
+      body: webhook_payload
+    )
+
+    @gateway.call(context)
+
+    # Verify request.body is set
+    assert_kind_of Hash, context["request.body"]
+
+    # Verify it contains the expected webhook structure
+    assert context["request.body"]["entry"]
+    assert_kind_of Array, context["request.body"]["entry"]
+
+    # Verify nested structure has string keys
+    entry = context["request.body"]["entry"].first
+    assert_kind_of Hash, entry
+    assert entry["changes"]
+
+    # Verify all top-level keys are strings
+    context["request.body"].keys.each do |key|
+      assert_kind_of String, key, "Expected all keys to be strings, but found #{key.class}"
+    end
+
+    # Verify nested keys are also strings
+    entry.keys.each do |key|
+      assert_kind_of String, key, "Expected nested keys to be strings, but found #{key.class}"
+    end
+  end
 end
 
 class WhatsappCloudApiGatewayMiddlewareStackTest < Minitest::Test

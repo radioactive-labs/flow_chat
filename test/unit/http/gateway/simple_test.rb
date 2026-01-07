@@ -240,4 +240,36 @@ class HttpSimpleGatewayTest < Minitest::Test
       @gateway.define_singleton_method(:instrument, original_instrument)
     end
   end
+
+  def test_sets_request_body_with_stringified_keys
+    @controller.request.params = {
+      "session_id" => "test_session_123",
+      "msisdn" => "+256700123456",
+      "user_id" => "user_456",
+      "input" => "test input",
+      "custom_field" => "custom value"
+    }
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/test" }
+    @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
+
+    @gateway.call(@context)
+
+    # Verify request.body is set
+    assert_kind_of Hash, @context["request.body"]
+
+    # Verify it contains the expected params
+    assert_equal "test_session_123", @context["request.body"]["session_id"]
+    assert_equal "+256700123456", @context["request.body"]["msisdn"]
+    assert_equal "user_456", @context["request.body"]["user_id"]
+    assert_equal "test input", @context["request.body"]["input"]
+    assert_equal "custom value", @context["request.body"]["custom_field"]
+
+    # Verify all keys are strings
+    @context["request.body"].keys.each do |key|
+      assert_kind_of String, key, "Expected all keys to be strings, but found #{key.class}"
+    end
+  end
 end

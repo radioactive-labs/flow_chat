@@ -35,6 +35,7 @@ module FlowChat
           context["request.method"] = request.method
           context["request.path"] = request.path
           context["request.user_agent"] = request.user_agent
+          context["request.body"] = (params.respond_to?(:to_unsafe_h) ? params.to_unsafe_h : params.to_h).transform_keys(&:to_s)
           context.input = params["input"].presence || ""
 
           # Instrument message received when user provides input

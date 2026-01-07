@@ -127,6 +127,7 @@ module FlowChat
             context["request.user_email"] = user_email
             context["request.user_name"] = user_name
             context["request.timestamp"] = Time.now.iso8601
+            context["request.body"] = @body
             context["request.intercom.topic"] = event_type
 
             context["intercom.client"] = @client
