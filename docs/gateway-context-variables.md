@@ -7,10 +7,11 @@ This document describes all context variables set by each gateway in FlowChat.
 | Variable | USSD Nalo | HTTP Simple | WhatsApp Cloud API | Intercom API | Description |
 |----------|-----------|-------------|-------------------|--------------|-------------|
 | **Common Variables** |
-| `request.id` | ✓ Session ID | ✓ Session ID or UUID | ✓ Phone number | ✓ Conversation ID | Unique identifier for the session/conversation |
-| `request.user_id` | ✓ = msisdn | ✓ Flexible¹ | ✓ = msisdn | ✓ Contact ID² | User/contact identifier |
-| `request.msisdn` | ✓ | ✓ | ✓ | ✗ | E.164 phone number |
-| `request.message_id` | ✓ UUID | ✓ Param/UUID | ✓ WhatsApp ID | ✓ (optional) | Message identifier |
+| `request.id` | ✓ Session ID | ✓ From user_params | ✓ Phone number | ✓ Conversation ID | Unique identifier for the session/conversation |
+| `request.user_id` | ✓ = msisdn | ✓ From user_params | ✓ = msisdn | ✓ Contact ID | User/contact identifier |
+| `request.msisdn` | ✓ | ✓ (optional) | ✓ | ✗ | E.164 phone number |
+| `request.email` | ✗ | ✓ (optional) | ✗ | ✗ | User email |
+| `request.message_id` | ✓ UUID | ✓ UUID | ✓ WhatsApp ID | ✓ (optional) | Message identifier |
 | `request.timestamp` | ✓ Current | ✓ Current | ✓ Current³ | ✓ Current | ISO8601 timestamp |
 | `request.gateway` | ✓ `:nalo` | ✓ `:http_simple` | ✓ `:whatsapp_cloud_api` | ✓ `:intercom_api` | Gateway name |
 | `request.platform` | ✓ `:ussd` | ✓ `:http` | ✓ `:whatsapp` | ✓ `:intercom` | Platform type |

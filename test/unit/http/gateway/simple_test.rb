@@ -23,11 +23,30 @@ class HttpSimpleGatewayTest < Minitest::Test
     @controller.define_singleton_method(:last_head_status) { @last_head_status }
 
     @mock_app = lambda { |ctx| [:prompt, "Test response", {"1" => "Option 1"}, nil] }
-    @gateway = FlowChat::Http::Gateway::Simple.new(@mock_app)
+    @user_params = {
+      session_id: "test_session_123",
+      user_id: "user_456"
+    }
+    @gateway = FlowChat::Http::Gateway::Simple.new(@mock_app, @user_params)
   end
 
-  def test_initializes_with_app
+  def test_initializes_with_app_and_user_params
     assert_equal @mock_app, @gateway.instance_variable_get(:@app)
+    assert_equal @user_params, @gateway.instance_variable_get(:@user_params)
+  end
+
+  def test_requires_user_params
+    error = assert_raises(FlowChat::Http::ConfigurationError) do
+      FlowChat::Http::Gateway::Simple.new(@mock_app, {})
+    end
+    assert_match /requires :session_id/, error.message
+  end
+
+  def test_requires_session_id_and_user_id
+    error = assert_raises(FlowChat::Http::ConfigurationError) do
+      FlowChat::Http::Gateway::Simple.new(@mock_app, {session_id: "123"})
+    end
+    assert_match /requires :user_id/, error.message
   end
 
   def test_includes_instrumentation
@@ -35,11 +54,7 @@ class HttpSimpleGatewayTest < Minitest::Test
   end
 
   def test_call_sets_request_context
-    @controller.request.params = {
-      "session_id" => "test_session_123",
-      "msisdn" => "+256700123456",
-      "input" => "Hello"
-    }
+    @controller.request.params = {"input" => "Hello"}
 
     # Add the missing request methods to the mock
     @controller.request.define_singleton_method(:method) { "POST" }
@@ -51,8 +66,7 @@ class HttpSimpleGatewayTest < Minitest::Test
     @gateway.call(@context)
 
     assert_equal "test_session_123", @context["request.id"]
-    assert_equal "+256700123456", @context["request.msisdn"]
-    assert_equal "+256700123456", @context["request.user_id"]
+    assert_equal "user_456", @context["request.user_id"]
     assert_equal :http_simple, @context["request.gateway"]
     assert_equal :http, @context["request.platform"]
     assert_equal "POST", @context["http.method"]
@@ -61,7 +75,30 @@ class HttpSimpleGatewayTest < Minitest::Test
     assert_equal "Hello", @context.input
   end
 
-  def test_call_generates_defaults_when_missing
+  def test_call_with_optional_msisdn_and_email
+    gateway = FlowChat::Http::Gateway::Simple.new(@mock_app, {
+      session_id: "sess_123",
+      user_id: "user_789",
+      msisdn: "+256700123456",
+      email: "test@example.com"
+    })
+
+    @controller.request.params = {"input" => "Hello"}
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/test" }
+    @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
+
+    gateway.call(@context)
+
+    assert_equal "sess_123", @context["request.id"]
+    assert_equal "user_789", @context["request.user_id"]
+    assert_equal "+256700123456", @context["request.msisdn"]
+    assert_equal "test@example.com", @context["request.email"]
+  end
+
+  def test_call_generates_message_id_and_timestamp
     @controller.request.params = {}
     @controller.request.define_singleton_method(:method) { "GET" }
     @controller.request.define_singleton_method(:get?) { true }
@@ -71,27 +108,9 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     @gateway.call(@context)
 
-    refute_nil @context["request.id"]
     refute_nil @context["request.message_id"]
     refute_nil @context["request.timestamp"]
-    assert_equal @context["request.id"], @context["request.user_id"]  # Falls back to request.id
-  end
-
-  def test_call_handles_user_id_param
-    @controller.request.params = {
-      "user_id" => "custom_user_123",
-      "input" => "Test message"
-    }
-    @controller.request.define_singleton_method(:method) { "POST" }
-    @controller.request.define_singleton_method(:get?) { false }
-    @controller.request.define_singleton_method(:post?) { true }
-    @controller.request.define_singleton_method(:path) { "/test" }
-    @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
-
-    @gateway.call(@context)
-
-    assert_equal "custom_user_123", @context["request.user_id"]
-    assert_equal "Test message", @context.input
+    assert_match /^[0-9a-f-]{36}$/, @context["request.message_id"]  # UUID format
   end
 
   def test_call_renders_json_response
@@ -126,7 +145,7 @@ class HttpSimpleGatewayTest < Minitest::Test
       media = {url: "https://example.com/image.jpg", type: :image}
       [:prompt, "Check this image", nil, media]
     end
-    gateway = FlowChat::Http::Gateway::Simple.new(mock_app_with_media)
+    gateway = FlowChat::Http::Gateway::Simple.new(mock_app_with_media, @user_params)
 
     @controller.request.params = {"input" => "Show image"}
     @controller.request.define_singleton_method(:method) { "POST" }
@@ -149,7 +168,7 @@ class HttpSimpleGatewayTest < Minitest::Test
 
   def test_call_with_terminal_response
     mock_terminal_app = lambda { |ctx| [:terminal, "Goodbye!", nil, nil] }
-    gateway = FlowChat::Http::Gateway::Simple.new(mock_terminal_app)
+    gateway = FlowChat::Http::Gateway::Simple.new(mock_terminal_app, @user_params)
 
     @controller.request.params = {"input" => "bye"}
     @controller.request.define_singleton_method(:method) { "POST" }
@@ -170,31 +189,23 @@ class HttpSimpleGatewayTest < Minitest::Test
   end
 
   def test_phone_number_normalization
-    @controller.request.params = {
-      "msisdn" => "0700123456",  # Local format
-      "input" => "Test"
-    }
+    gateway = FlowChat::Http::Gateway::Simple.new(@mock_app, {
+      session_id: "sess_123",
+      user_id: "user_456",
+      msisdn: "0700123456"  # Local format
+    })
+
+    @controller.request.params = {"input" => "Test"}
     @controller.request.define_singleton_method(:method) { "POST" }
     @controller.request.define_singleton_method(:get?) { false }
     @controller.request.define_singleton_method(:post?) { true }
     @controller.request.define_singleton_method(:path) { "/test" }
     @controller.request.define_singleton_method(:user_agent) { "Test/1.0" }
 
-    # Mock PhoneNumberUtil to test normalization
-    original_method = FlowChat::PhoneNumberUtil.method(:to_e164)
-    FlowChat::PhoneNumberUtil.define_singleton_method(:to_e164) do |phone|
-      (phone == "0700123456") ? "+256700123456" : original_method.call(phone)
-    end
+    gateway.call(@context)
 
-    begin
-      @gateway.call(@context)
-
-      assert_equal "+256700123456", @context["request.msisdn"]
-      assert_equal "+256700123456", @context["request.user_id"]
-    ensure
-      # Restore original method
-      FlowChat::PhoneNumberUtil.define_singleton_method(:to_e164, original_method)
-    end
+    # msisdn is now set directly from user_params (no normalization)
+    assert_equal "0700123456", @context["request.msisdn"]
   end
 
   def test_instrumentation_events

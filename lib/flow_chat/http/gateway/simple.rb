@@ -1,5 +1,7 @@
 module FlowChat
   module Http
+    class ConfigurationError < StandardError; end
+
     module Gateway
       class Simple
         include FlowChat::Instrumentation
@@ -7,8 +9,11 @@ module FlowChat
 
         attr_reader :context
 
-        def initialize(app)
+        def initialize(app, user_params)
           @app = app
+          @user_params = user_params
+
+          validate_user_params!
         end
 
         def call(context)
@@ -23,11 +28,12 @@ module FlowChat
             return
           end
 
-          # Extract basic request information
-          context["request.id"] = params["session_id"].presence || SecureRandom.uuid
-          context["request.msisdn"] = FlowChat::PhoneNumberUtil.to_e164(params["msisdn"])
-          context["request.user_id"] = params["user_id"].presence || context["request.msisdn"].presence || context["request.id"]
-          context["request.message_id"] = params["message_id"] || SecureRandom.uuid
+          # Set request information from user_params
+          context["request.id"] = @user_params[:session_id]
+          context["request.user_id"] = @user_params[:user_id]
+          context["request.msisdn"] = @user_params[:msisdn] if @user_params[:msisdn]
+          context["request.email"] = @user_params[:email] if @user_params[:email]
+          context["request.message_id"] = SecureRandom.uuid
           context["request.timestamp"] = Time.current.iso8601
           context["request.gateway"] = :http_simple
           context["request.platform"] = :http
@@ -89,6 +95,17 @@ module FlowChat
         end
 
         private
+
+        def validate_user_params!
+          required_keys = [:session_id, :user_id]
+
+          required_keys.each do |key|
+            unless @user_params.key?(key)
+              raise FlowChat::Http::ConfigurationError,
+                "HTTP Simple gateway requires :#{key} in user_params"
+            end
+          end
+        end
 
         def render_response(type, prompt, choices, media)
           rendered = FlowChat::Http::Renderer.new(prompt, choices: choices, media: media).render

@@ -10,7 +10,8 @@ class GatewayNilResponseTest < Minitest::Test
     # Mock app that returns nil
     app = ->(ctx) { nil }
 
-    gateway = FlowChat::Http::Gateway::Simple.new(app)
+    user_params = {session_id: "test_123", user_id: "user_456"}
+    gateway = FlowChat::Http::Gateway::Simple.new(app, user_params)
     gateway.call(context)
 
     # Should render json with :skip type and full response structure

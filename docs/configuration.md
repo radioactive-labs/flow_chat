@@ -203,10 +203,24 @@ config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
 #### HTTP - Simple Gateway
 
 ```ruby
-config.use_gateway FlowChat::Http::Gateway::Simple
-
-# No additional configuration required
+# HTTP gateway requires user_params hash
+config.use_gateway FlowChat::Http::Gateway::Simple, {
+  session_id: "unique_session_id",  # required
+  user_id: "user_identifier",       # required
+  msisdn: "+256700123456",          # optional
+  email: "user@example.com"         # optional
+}
 ```
+
+**Required Parameters:**
+- `session_id` - Unique identifier for the session
+- `user_id` - User identifier
+
+**Optional Parameters:**
+- `msisdn` - E.164 formatted phone number
+- `email` - User email address
+
+**Note:** User input comes from `params["input"]` in the request. The `message_id` is auto-generated as a UUID.
 
 ### Custom Gateway Configuration
 
