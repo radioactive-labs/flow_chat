@@ -207,6 +207,7 @@ config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
 config.use_gateway FlowChat::Http::Gateway::Simple, {
   session_id: "unique_session_id",  # required
   user_id: "user_identifier",       # required
+  name: "John Doe",                 # optional
   msisdn: "+256700123456",          # optional
   email: "user@example.com"         # optional
 }
@@ -217,8 +218,9 @@ config.use_gateway FlowChat::Http::Gateway::Simple, {
 - `user_id` - User identifier
 
 **Optional Parameters:**
-- `msisdn` - E.164 formatted phone number
-- `email` - User email address
+- `name` - User's display name (sets `request.user_name`)
+- `msisdn` - E.164 formatted phone number (sets `request.msisdn`)
+- `email` - User email address (sets `request.email`)
 
 **Note:** User input comes from `params["input"]` in the request. The `message_id` is auto-generated as a UUID.
 

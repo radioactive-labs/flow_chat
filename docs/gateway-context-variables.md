@@ -8,9 +8,10 @@ This document describes all context variables set by each gateway in FlowChat.
 |----------|-----------|-------------|-------------------|--------------|-------------|
 | **Common Variables** |
 | `request.id` | ✓ Session ID | ✓ From user_params | ✓ Phone number | ✓ Conversation ID | Unique identifier for the session/conversation |
-| `request.user_id` | ✓ = msisdn | ✓ From user_params | ✓ = msisdn | ✓ Contact ID | User/contact identifier |
-| `request.msisdn` | ✓ | ✓ (optional) | ✓ | ✗ | E.164 phone number |
-| `request.email` | ✗ | ✓ (optional) | ✗ | ✗ | User email |
+| `request.user_id` | ✓ = msisdn | ✓ From user_params | ✓ Phone number | ✓ Contact ID | User/contact identifier |
+| `request.user_name` | ✗ | ✓ (optional) | ✓ (optional) | ✓ (optional) | User's display name |
+| `request.msisdn` | ✓ | ✓ (optional) | ✓ | ✓ (optional) | E.164 phone number |
+| `request.email` | ✗ | ✓ (optional) | ✗ | ✓ (optional) | User email |
 | `request.message_id` | ✓ UUID | ✓ UUID | ✓ WhatsApp ID | ✓ (optional) | Message identifier |
 | `request.timestamp` | ✓ Current | ✓ Current | ✓ Current³ | ✓ Current | ISO8601 timestamp |
 | `request.gateway` | ✓ `:nalo` | ✓ `:http_simple` | ✓ `:whatsapp_cloud_api` | ✓ `:intercom_api` | Gateway name |
@@ -20,7 +21,6 @@ This document describes all context variables set by each gateway in FlowChat.
 | **WhatsApp-Specific** |
 | `request.location` | ✗ | ✗ | ✓ | ✗ | Location data (when input is `"$location$"`) |
 | `request.media` | ✗ | ✗ | ✓ | ✗ | Media metadata (when input is `"$media$"`) |
-| `whatsapp.contact.name` | ✗ | ✗ | ✓ | ✗ | Contact's profile name |
 | `whatsapp.business.phone_number` | ✗ | ✗ | ✓ | ✗ | Business phone number (E.164) |
 | `whatsapp.business.phone_number_id` | ✗ | ✗ | ✓ | ✗ | WhatsApp phone number ID |
 | `whatsapp.client` | ✗ | ✗ | ✓ | ✗ | WhatsApp client instance |
@@ -40,6 +40,9 @@ class MyFlow < FlowChat::Flow
   def start
     # Common variables (all gateways)
     user_id = app.context["request.user_id"]
+    user_name = app.context["request.user_name"]  # Available from WhatsApp, Intercom, HTTP (optional)
+    msisdn = app.context["request.msisdn"]        # Available from USSD, WhatsApp, HTTP (optional)
+    email = app.context["request.email"]          # Available from HTTP (optional)
     platform = app.context["request.platform"]
     input = app.context["request.input"]
 
@@ -51,7 +54,6 @@ class MyFlow < FlowChat::Flow
     # Platform-specific variables
     case app.platform
     when :whatsapp
-      name = app.context["whatsapp.contact.name"]
       client = app.context["whatsapp.client"]
 
       # Handle special input types

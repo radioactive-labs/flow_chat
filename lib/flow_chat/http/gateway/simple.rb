@@ -31,6 +31,7 @@ module FlowChat
           # Set request information from user_params
           context["request.id"] = @user_params[:session_id]
           context["request.user_id"] = @user_params[:user_id]
+          context["request.user_name"] = @user_params[:name] if @user_params[:name]
           context["request.msisdn"] = @user_params[:msisdn] if @user_params[:msisdn]
           context["request.email"] = @user_params[:email] if @user_params[:email]
           context["request.message_id"] = SecureRandom.uuid

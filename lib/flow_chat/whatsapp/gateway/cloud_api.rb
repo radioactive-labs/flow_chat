@@ -156,15 +156,15 @@ module FlowChat
             end
 
             context["request.id"] = phone_number
+            context["request.user_id"] = phone_number
+            context["request.user_name"] = contact_name if contact_name
             context["request.msisdn"] = phone_number
-            context["request.user_id"] = context["request.msisdn"]
             context["request.gateway"] = :whatsapp_cloud_api
             context["request.platform"] = :whatsapp
             context["request.message_id"] = message_id
             context["request.timestamp"] = Time.current.iso8601
             context["request.body"] = @body
 
-            context["whatsapp.contact.name"] = contact_name
             context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
             context["whatsapp.business.phone_number_id"] = business_phone_number_id
             context["whatsapp.client"] = @client
@@ -358,7 +358,7 @@ module FlowChat
               would_send: message_payload,
               message_info: {
                 to: context["request.msisdn"],
-                contact_name: context["whatsapp.contact.name"],
+                contact_name: context["request.user_name"],
                 timestamp: Time.now.iso8601
               }
             }

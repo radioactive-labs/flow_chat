@@ -115,11 +115,17 @@ module FlowChat
               return @controller.head :ok
             end
 
-            # Get user ID from contact (most reliable)
+            # Get user ID, name, email, and phone from contact (most reliable)
             user_id = contact["id"]
+            user_name = contact["name"]
+            user_email = contact["email"]
+            user_phone = contact["phone"]
 
             context["request.id"] = conversation_id
             context["request.user_id"] = user_id
+            context["request.user_name"] = user_name if user_name
+            context["request.email"] = user_email if user_email
+            context["request.msisdn"] = user_phone if user_phone
             context["request.gateway"] = :intercom_api
             context["request.platform"] = :intercom
             context["request.timestamp"] = Time.now.iso8601
