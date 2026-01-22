@@ -1,5 +1,6 @@
 require "intercom"
 require "json"
+require "reverse_markdown"
 
 module FlowChat
   module Intercom
@@ -20,6 +21,15 @@ module FlowChat
       include FlowChat::Instrumentation
 
       attr_reader :intercom
+
+      # Convert HTML from Intercom messages to Markdown
+      def self.parse_html(html)
+        ReverseMarkdown.convert(html.to_s).strip.presence || ""
+      end
+
+      def parse_message(html)
+        self.class.parse_html(html)
+      end
 
       def initialize(config)
         @config = config

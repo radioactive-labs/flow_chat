@@ -2,6 +2,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 require "flow_chat"
 require "minitest/autorun"
+require "minitest/mock"
 require "minitest/reporters"
 require "active_support/core_ext/object/blank"
 require "active_support/core_ext/hash/indifferent_access"

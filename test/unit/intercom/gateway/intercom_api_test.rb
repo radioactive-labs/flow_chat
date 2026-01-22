@@ -74,6 +74,10 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Mock the client's send_message method for webhook tests
     @mock_client = Minitest::Mock.new
+    # Define parse_message to delegate to class method (not mockable behavior)
+    def @mock_client.parse_message(html)
+      FlowChat::Intercom::Client.parse_html(html)
+    end
     @gateway.instance_variable_set(:@client, @mock_client)
 
     WebMock.enable!
@@ -579,6 +583,45 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal false, result
   end
 
+  def test_html_message_converted_to_markdown
+    webhook_body = build_conversation_created_webhook_with_html
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # Verify HTML was converted to markdown
+    assert_equal "Hello, I need help with **my account**.", @context.input
+  end
+
+  def test_html_message_with_link_converted_to_markdown
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = '<p>Check out <a href="https://example.com">this link</a> please</p>'
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Response"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_equal "Check out [this link](https://example.com) please", @context.input
+  end
+
+  def test_html_message_empty_after_conversion
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = "<p>   </p>"
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Response"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_equal "", @context.input
+  end
+
   private
 
   def create_mock_context
@@ -700,6 +743,12 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     # Don't expect head :ok immediately - it will be called after app processing
     @context.controller.expect(:head, nil, [:ok])
+  end
+
+  def build_conversation_created_webhook_with_html
+    webhook = build_conversation_created_webhook
+    webhook["data"]["item"]["source"]["body"] = "<p>Hello, I need help with <strong>my account</strong>.</p>"
+    webhook
   end
 
   def build_conversation_created_webhook

@@ -139,9 +139,9 @@ module FlowChat
 
             if latest_message
               context["request.message_id"] = latest_message[:id]
-              # Strip HTML tags from message body
+              # Convert HTML to markdown for message body
               raw_body = latest_message[:body] || ""
-              context.input = raw_body.gsub(/<[^>]*>/, "").strip.presence || ""
+              context.input = @client.parse_message(raw_body)
               FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
             elsif @allowed_webhook_topics.include?(event_type)
               # No message but event is explicitly allowed - process without message
