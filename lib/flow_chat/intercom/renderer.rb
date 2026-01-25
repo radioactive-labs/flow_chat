@@ -1,3 +1,5 @@
+require "kramdown"
+
 module FlowChat
   module Intercom
     class Renderer
@@ -20,7 +22,7 @@ module FlowChat
       private
 
       def build_text_message
-        [:text, message, {}]
+        [:text, to_html(message), {}]
       end
 
       def build_selection_message
@@ -49,7 +51,19 @@ module FlowChat
 
         formatted_message += "\nReply with the number of your choice."
 
-        [:text, formatted_message, {choices: choice_hash}]
+        [:text, to_html(formatted_message), {choices: choice_hash}]
+      end
+
+      def to_html(text)
+        return "" if text.nil?
+
+        html = Kramdown::Document.new(text.to_s).to_html.strip
+        # Sanitize to only allow tags supported by Intercom messenger
+        ActionController::Base.helpers.sanitize(
+          html,
+          tags: %w[p br b strong i em a ul ol li h1 h2 h3 h4 h5 h6],
+          attributes: %w[href target]
+        )
       end
     end
   end

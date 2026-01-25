@@ -38,4 +38,5 @@ Gem::Specification.new do |spec|
   spec.add_dependency "ibsciss-middleware", "~> 0.4.2"
   spec.add_dependency "intercom", "~> 4.2"
   spec.add_dependency "reverse_markdown", "~> 3.0"
+  spec.add_dependency "kramdown", "~> 2.4"
 end

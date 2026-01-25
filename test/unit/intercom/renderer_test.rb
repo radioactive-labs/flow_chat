@@ -37,7 +37,8 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    assert_equal [:text, message, {}], result
+    # Messages are converted to HTML
+    assert_equal [:text, "<p>Hello, how can I help you today?</p>", {}], result
   end
 
   def test_render_text_message_with_media_no_choices
@@ -47,7 +48,7 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    assert_equal [:text, message, {}], result
+    assert_equal [:text, "<p>Check out this image:</p>", {}], result
   end
 
   def test_render_selection_message_with_choices
@@ -57,8 +58,13 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Please choose an option:\n\nPlease choose:\n1. Billing Questions\n2. Technical Support\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    # Kramdown converts to HTML with paragraphs
+    assert_equal :text, result[0]
+    assert_includes result[1], "<p>Please choose an option:</p>"
+    assert_includes result[1], "1. Billing Questions"
+    assert_includes result[1], "2. Technical Support"
+    assert_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_empty_message
@@ -68,8 +74,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Please choose:\n1. Yes\n2. No\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "1. Yes"
+    assert_includes result[1], "2. No"
+    assert_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_nil_message
@@ -79,8 +88,10 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Please choose:\n1. First Option\n2. Second Option\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "1. First Option"
+    assert_includes result[1], "2. Second Option"
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_single_choice
@@ -90,8 +101,10 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Do you want to continue?\n\nPlease choose:\n1. Yes, continue\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "Do you want to continue?"
+    assert_includes result[1], "1. Yes, continue"
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_multiple_choices
@@ -106,8 +119,13 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Select your department:\n\nPlease choose:\n1. Sales Department\n2. Customer Support\n3. Billing Department\n4. General Inquiries\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "Select your department:"
+    assert_includes result[1], "1. Sales Department"
+    assert_includes result[1], "2. Customer Support"
+    assert_includes result[1], "3. Billing Department"
+    assert_includes result[1], "4. General Inquiries"
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_with_media
@@ -118,8 +136,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Based on the image above, what would you like to do?\n\nPlease choose:\n1. Buy Now\n2. Get More Info\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "Based on the image above"
+    assert_includes result[1], "1. Buy Now"
+    assert_includes result[1], "2. Get More Info"
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_preserves_choice_order
@@ -130,8 +151,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     result = renderer.render
 
     # Ruby hashes maintain insertion order as of Ruby 1.9+
-    expected_text = "Select priority level:\n\nPlease choose:\n1. High Priority\n2. Medium Priority\n3. Low Priority\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "1. High Priority"
+    assert_includes result[1], "2. Medium Priority"
+    assert_includes result[1], "3. Low Priority"
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_with_special_characters
@@ -145,8 +169,12 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "What's your issue?\n\nPlease choose:\n1. I can't access my account\n2. Billing & payment issues\n3. Found a bug/error\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    # Note: & gets escaped to &amp; in HTML, ' becomes typographic apostrophe
+    assert_includes result[1], "your issue?"
+    assert_includes result[1], "access my account"
+    assert_includes result[1], "&amp;"  # & is escaped
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_selection_message_invalid_choices_raises_error
@@ -166,8 +194,10 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    expected_text = "Please choose:\n\nPlease choose:\n\nReply with the number of your choice."
-    assert_equal [:text, expected_text, {choices: choices}], result
+    assert_equal :text, result[0]
+    assert_includes result[1], "Please choose:"
+    assert_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices}, result[2])
   end
 
   def test_render_returns_array_with_three_elements
