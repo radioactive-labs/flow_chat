@@ -389,7 +389,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     @context.request.body = StringIO.new(body_json)
     @context.request.headers = {"X-Hub-Signature" => "sha1=invalid_signature"}
     @context.request.expect(:post?, true)
-    @context.controller.expect(:head, nil, [:unauthorized])
+    @context.controller.expect(:head, nil, [:ok])
 
     @gateway.call(@context)
   end
@@ -436,7 +436,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     @context.request.body = StringIO.new(body_json)
     @context.request.headers = {} # No signature header
     @context.request.expect(:post?, true)
-    @context.controller.expect(:head, nil, [:unauthorized])
+    @context.controller.expect(:head, nil, [:ok])
 
     @gateway.call(@context)
   end

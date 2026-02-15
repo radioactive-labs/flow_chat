@@ -112,9 +112,10 @@ module FlowChat
           end
 
           # Validate webhook signature for security (skip for simulator mode and background)
+          # Return 200 OK even for invalid signatures to prevent WhatsApp from retrying
           unless in_background? || is_simulator_mode || valid_webhook_signature?(@controller.request)
-            FlowChat.logger.warn { "CloudApi: Invalid webhook signature received - rejecting request" }
-            return @controller.head :unauthorized
+            FlowChat.logger.warn { "CloudApi: Invalid webhook signature - dropping request" }
+            return @controller.head :ok
           end
 
           FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }

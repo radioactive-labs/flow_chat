@@ -75,9 +75,10 @@ module FlowChat
           end
 
           # Validate webhook signature for security (skip for simulator mode and background)
+          # Return 200 OK even for invalid signatures to prevent Intercom from retrying
           unless in_background? || is_simulator_mode || valid_webhook_signature?(@controller.request)
-            FlowChat.logger.warn { "IntercomApi: Invalid webhook signature received - rejecting request" }
-            return @controller.head :unauthorized
+            FlowChat.logger.warn { "IntercomApi: Invalid webhook signature - dropping request" }
+            return @controller.head :ok
           end
 
           FlowChat.logger.debug { "IntercomApi: Webhook signature validation passed" }

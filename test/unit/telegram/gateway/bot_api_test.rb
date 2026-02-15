@@ -270,7 +270,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal :unauthorized, context.controller.last_head_status
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -283,7 +283,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal :unauthorized, context.controller.last_head_status
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 

@@ -240,7 +240,7 @@ class IntercomIntegrationTest < Minitest::Test
 
     run_processor(controller, GreetingFlow)
 
-    assert_equal :unauthorized, controller.last_head_status
+    assert_equal :ok, controller.last_head_status
     # Should NOT send any message
     assert_not_requested :post, "https://api.intercom.io/conversations/conv_123/reply"
   end
@@ -268,7 +268,7 @@ class IntercomIntegrationTest < Minitest::Test
 
     run_processor(controller, GreetingFlow)
 
-    assert_equal :unauthorized, controller.last_head_status
+    assert_equal :ok, controller.last_head_status
     assert_not_requested :post, "https://api.intercom.io/conversations/conv_123/reply"
   end
 

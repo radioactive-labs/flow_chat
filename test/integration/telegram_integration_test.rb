@@ -147,7 +147,7 @@ class TelegramIntegrationTest < Minitest::Test
 
     run_processor(controller, GreetingFlow)
 
-    assert_equal :unauthorized, controller.last_head_status
+    assert_equal :ok, controller.last_head_status
     # Should NOT send any message
     assert_not_requested :post, "https://api.telegram.org/bot123456:ABC-DEF/sendMessage"
   end

@@ -331,8 +331,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -352,8 +352,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -374,8 +374,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -514,8 +514,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject because signature doesn't match the actual body
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request (signature doesn't match body) with 200 OK to prevent retries
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 

@@ -266,7 +266,7 @@ class WhatsappIntegrationTest < Minitest::Test
 
     run_processor(controller, GreetingFlow, config: config)
 
-    assert_equal :unauthorized, controller.last_head_status
+    assert_equal :ok, controller.last_head_status
     # Should NOT send any message
     assert_not_requested :post, "#{@api_base_url}/123456789/messages"
   end

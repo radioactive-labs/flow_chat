@@ -53,9 +53,10 @@ module FlowChat
           end
 
           # Validate webhook signature (skip in background)
+          # Return 200 OK even for invalid signatures to prevent Telegram from retrying
           unless in_background? || valid_webhook_signature?(@controller.request)
-            FlowChat.logger.warn { "BotApi: Invalid webhook signature - rejecting request" }
-            return @controller.head :unauthorized
+            FlowChat.logger.warn { "BotApi: Invalid webhook signature - dropping request" }
+            return @controller.head :ok
           end
 
           # Process update
