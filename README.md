@@ -6,13 +6,13 @@
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%202.3.0-red.svg)](https://www.ruby-lang.org/)
 [![Rails](https://img.shields.io/badge/rails-%3E%3D%206.0-red.svg)](https://rubyonrails.org/)
 
-FlowChat is a powerful Rails framework for building sophisticated conversational interfaces across **multiple platforms** with a **pluggable gateway architecture**. Create interactive flows with menus, prompts, validation, media support, and session management using a unified, intuitive API that works across USSD, WhatsApp, HTTP, and any custom platforms you build.
+FlowChat is a powerful Rails framework for building sophisticated conversational interfaces across **multiple platforms** with a **pluggable gateway architecture**. Create interactive flows with menus, prompts, validation, media support, and session management using a unified, intuitive API that works across USSD, WhatsApp, Telegram, HTTP, and any custom platforms you build.
 
 ## ✨ Key Features
 
 - **🔄 Unified API**: Single codebase that works across all platforms
 - **🔌 Pluggable Gateways**: Extensible architecture supporting multiple backends per platform
-- **📱 Multi-Platform**: Out of the box support for USSD, WhatsApp, HTTP (and more coming soon), with simulator for testing
+- **📱 Multi-Platform**: Out of the box support for USSD, WhatsApp, Telegram, HTTP, and more, with simulator for testing
 - **🎯 Screen-Based Navigation**: Intuitive screen() method for building conversational flows
 - **💾 Advanced Session Management**: Flexible session boundaries and storage options
 - **🔧 Middleware Architecture**: Extensible middleware system for custom processing
@@ -99,6 +99,24 @@ class WhatsappController < ApplicationController
   def webhook
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run WelcomeFlow, :main_page
+  end
+end
+```
+
+### Basic Telegram Application
+
+```ruby
+# app/controllers/telegram_controller.rb
+class TelegramController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Telegram::Gateway::BotApi
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
@@ -196,6 +214,7 @@ end
 ### Platform Guides
 - [**USSD Development**](docs/platforms/ussd.md) - USSD-specific features and examples
 - [**WhatsApp Development**](docs/platforms/whatsapp.md) - WhatsApp Business API integration
+- [**Telegram Development**](docs/platforms/telegram.md) - Telegram Bot API integration
 - [**HTTP Development**](docs/platforms/http.md) 🚧 - API endpoints and webhooks
 - [**Multi-Platform Apps**](docs/platforms/multi-platform.md) 🚧 - Building unified experiences
 
@@ -295,6 +314,7 @@ end
 |----------|-------------------|----------|
 | **USSD** | `Nalo` ✅, Custom | Pagination, choice mapping, session management |
 | **WhatsApp** | `CloudApi` ✅, Custom | Rich media, buttons, lists, templates, background jobs |
+| **Telegram** | `BotApi` ✅, Custom | Inline keyboards, rich media, callbacks, group chats |
 | **HTTP** | `Simple` ✅, Custom | Testing, webhooks, API endpoints, JSON responses |
 | **Simulator** | Built-in ✅ | Development testing, conversation replay, flow debugging |
 | **Custom** | *Your Gateway* | Implement any platform by creating a gateway class |
@@ -307,11 +327,12 @@ end
 # Built-in gateways (included with FlowChat)
 config.use_gateway FlowChat::Ussd::Gateway::Nalo
 config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
+config.use_gateway FlowChat::Telegram::Gateway::BotApi, telegram_config
 config.use_gateway FlowChat::Http::Gateway::Simple
 
 # Custom gateway examples (you would build these)
 config.use_gateway MyCompany::Sms::Gateway::Twilio, twilio_config
-config.use_gateway MyCompany::Telegram::Gateway::BotAPI, telegram_config
+config.use_gateway MyCompany::Slack::Gateway::BoltJS, slack_config
 ```
 
 ## 📦 Example Applications

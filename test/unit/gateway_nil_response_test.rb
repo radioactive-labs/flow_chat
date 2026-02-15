@@ -1,68 +1,115 @@
 require "test_helper"
+require "webmock/minitest"
 
 class GatewayNilResponseTest < Minitest::Test
-  # Test that HTTP Simple gateway handles nil response
+  def setup
+    WebMock.enable!
+    WebMock.reset!
+
+    # Stub external API endpoints with specific patterns
+    stub_request(:post, %r{graph\.facebook\.com/v\d+\.\d+/\d+/messages})
+      .to_return(status: 200, body: {"messages" => [{"id" => "msg_123"}]}.to_json)
+
+    stub_request(:post, %r{api\.intercom\.io/conversations/[^/]+/reply})
+      .to_return(status: 200, body: {"type" => "conversation", "id" => "123"}.to_json)
+  end
+
+  def teardown
+    WebMock.disable!
+    WebMock.reset!
+  end
+
+  # ==========================================================================
+  # HTTP Simple Gateway
+  # ==========================================================================
+
   def test_http_simple_gateway_handles_nil_response
-    controller = mock_controller_with_request
+    controller = build_mock_http_controller
     context = FlowChat::Context.new
     context["controller"] = controller
 
-    # Mock app that returns nil
     app = ->(ctx) { nil }
-
-    user_params = {session_id: "test_123", user_id: "user_456"}
-    gateway = FlowChat::Http::Gateway::Simple.new(app, user_params)
+    gateway = FlowChat::Http::Gateway::Simple.new(app, {session_id: "test_123", user_id: "user_456"})
     gateway.call(context)
 
-    # Should render json with :skip type and full response structure
     response = controller.rendered_response
     assert_equal :skip, response[:json][:type]
-    assert response[:json][:session_id]
-    assert response[:json][:user_id]
+    assert_equal "test_123", response[:json][:session_id]
+    assert_equal "user_456", response[:json][:user_id]
     assert response[:json][:timestamp]
   end
 
-  # Test that USSD Nalo gateway does NOT handle nil response
-  def test_ussd_nalo_gateway_does_not_handle_nil_response
-    skip "USSD is synchronous and MUST return a response - nil handling not supported"
+  # ==========================================================================
+  # USSD Nalo Gateway
+  # ==========================================================================
+
+  def test_ussd_nalo_gateway_renders_empty_message_for_nil_response
+    controller = build_mock_ussd_controller
+    context = FlowChat::Context.new
+    context["controller"] = controller
+
+    app = ->(ctx) { nil }
+    gateway = FlowChat::Ussd::Gateway::Nalo.new(app)
+    gateway.call(context)
+
+    response = controller.rendered_response
+    assert response[:json], "Expected JSON response"
+    assert_equal "session_123", response[:json][:USERID]
+    assert_equal "233200000000", response[:json][:MSISDN]
+    assert_equal "", response[:json][:MSG], "MSG should be empty string for nil prompt"
   end
 
-  # Test that WhatsApp CloudApi gateway handles nil response (already had this)
+  # ==========================================================================
+  # WhatsApp Cloud API Gateway
+  # ==========================================================================
+
   def test_whatsapp_cloud_api_gateway_handles_nil_response
-    skip "WhatsApp gateway has more complex setup - already tested in integration tests"
+    webhook_body = whatsapp_text_message_payload(text: "hello")
+    controller = build_mock_whatsapp_controller(webhook_body: webhook_body)
+    context = FlowChat::Context.new
+    context["controller"] = controller
+
+    app = ->(ctx) { nil }
+    config = build_whatsapp_config
+
+    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(app, config)
+    gateway.call(context)
+
+    assert_equal :ok, controller.last_head_status
+    assert_not_requested :post, %r{graph\.facebook\.com/v\d+\.\d+/\d+/messages}
   end
 
-  # Test that Intercom gateway handles nil response (already had this)
+  # ==========================================================================
+  # Intercom Gateway
+  # ==========================================================================
+
   def test_intercom_gateway_handles_nil_response
-    skip "Intercom gateway has more complex setup - already tested in integration tests"
+    webhook_body = intercom_user_replied_payload
+    controller = build_mock_intercom_controller(webhook_body: webhook_body)
+    context = FlowChat::Context.new
+    context["controller"] = controller
+
+    app = ->(ctx) { nil }
+    config = FlowChat::Intercom::Configuration.new("test")
+    config.access_token = "test_token"
+    config.skip_signature_validation = true
+
+    gateway = FlowChat::Intercom::Gateway::IntercomApi.new(app, config)
+    gateway.call(context)
+
+    assert_equal :ok, controller.last_head_status
+    assert_not_requested :post, %r{api\.intercom\.io/conversations/[^/]+/reply}
   end
 
   private
 
-  def mock_controller_with_request(params = {})
-    request = OpenStruct.new(
-      params: params.with_indifferent_access,
-      method: "POST",
-      headers: OpenStruct.new({"Content-Type" => "application/json"}),
-      host: "test.example.com",
-      path: "/test",
-      remote_ip: "127.0.0.1",
-      body: nil,
-      cookies: {}
-    )
-
-    request.define_singleton_method(:get?) { method.upcase == "GET" }
-    request.define_singleton_method(:post?) { method.upcase == "POST" }
-    request.define_singleton_method(:user_agent) { headers["User-Agent"] }
-
-    controller = Object.new
-    controller.define_singleton_method(:request) { request }
-    controller.define_singleton_method(:rendered_response) { @rendered_response }
-    controller.define_singleton_method(:render) do |options|
-      @rendered_response = options
-      nil
-    end
-
-    controller
+  def build_whatsapp_config
+    config = FlowChat::Whatsapp::Configuration.new("test")
+    config.access_token = "test_token"
+    config.phone_number_id = "123456"
+    config.verify_token = "verify_token"
+    config.app_secret = "app_secret"
+    config.skip_signature_validation = true
+    config
   end
 end

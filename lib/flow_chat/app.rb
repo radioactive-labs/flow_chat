@@ -83,8 +83,8 @@ module FlowChat
 
     def prepare_user_input
       user_input = input
-      if platform != :ussd && session.get("$start$").nil?
-        session.set("$start$", user_input)
+      if platform != :ussd && session.get(FlowChat::Input::START).nil?
+        session.set(FlowChat::Input::START, user_input)
         user_input = nil
       end
       user_input

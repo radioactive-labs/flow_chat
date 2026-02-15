@@ -20,7 +20,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture Overview
 
-FlowChat is a Rails framework for building conversational interfaces across multiple platforms (USSD, WhatsApp, HTTP) using a **composition-based architecture** with **pluggable gateways**.
+FlowChat is a Rails framework for building conversational interfaces across multiple platforms (USSD, WhatsApp, Telegram, HTTP) using a **composition-based architecture** with **pluggable gateways**.
 
 ### Core Components
 
@@ -31,7 +31,7 @@ FlowChat is a Rails framework for building conversational interfaces across mult
 
 #### Gateway
 - Platform-specific request/response handling
-- Built-in gateways: `FlowChat::Ussd::Gateway::Nalo`, `FlowChat::Whatsapp::Gateway::CloudApi`, `FlowChat::Http::Gateway::Simple`
+- Built-in gateways: `FlowChat::Ussd::Gateway::Nalo`, `FlowChat::Whatsapp::Gateway::CloudApi`, `FlowChat::Telegram::Gateway::BotApi`, `FlowChat::Http::Gateway::Simple`
 - Custom gateways implement: `initialize(app, *args)` and `call(context)`
 
 #### App (`lib/flow_chat/app.rb`)
@@ -97,7 +97,7 @@ end
 ```
 
 #### Multi-Platform Support
-Same flow code works across USSD, WhatsApp, and HTTP by using platform-agnostic `app.screen()` calls.
+Same flow code works across USSD, WhatsApp, Telegram, and HTTP by using platform-agnostic `app.screen()` calls.
 
 #### Factory Pattern with Async
 The recommended approach for async processing using centralized configuration:
@@ -164,6 +164,7 @@ config.use_async(MyFlowJob, deployment_id: 123)
 ### Platform Gateways
 - `ussd/gateway/nalo.rb` - USSD platform integration (async not supported)
 - `whatsapp/gateway/cloud_api.rb` - WhatsApp Business API integration (async supported)
+- `telegram/gateway/bot_api.rb` - Telegram Bot API integration (async supported)
 - `http/gateway/simple.rb` - HTTP/JSON API integration (async supported)
 - `intercom/gateway/intercom_api.rb` - Intercom customer support integration (async supported)
 - All gateways include `GatewayAsyncSupport` concern for unified async handling
@@ -173,7 +174,7 @@ config.use_async(MyFlowJob, deployment_id: 123)
 - `rails_session_store.rb` - Rails session integration
 - `cache_session_store.rb` - Rails cache integration
 
-### Platform-Specific (`ussd/`, `whatsapp/`, `http/`, `intercom/`)
+### Platform-Specific (`ussd/`, `whatsapp/`, `telegram/`, `http/`, `intercom/`)
 - `renderer.rb` - Platform-specific response formatting
 - `middleware/` - Platform-specific processing logic
 - `intercom/client.rb` - Intercom REST API integration

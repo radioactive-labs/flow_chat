@@ -1,5 +1,22 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
+require "ostruct"
+
+# Mock Rails environment for testing - must be defined BEFORE requiring flow_chat
+# because flow_chat/config.rb checks Rails.env.development?
+module Rails
+  def self.logger
+    @logger ||= begin
+      require "logger"
+      Logger.new($stdout, level: Logger::WARN)
+    end
+  end
+
+  def self.env
+    @env ||= OpenStruct.new(development?: false, test?: true)
+  end
+end
+
 require "flow_chat"
 require "minitest/autorun"
 require "minitest/mock"
@@ -10,7 +27,6 @@ require "active_support/core_ext/string/inflections"
 require "active_support/core_ext/string/filters"
 require "active_support/core_ext/enumerable"
 require "active_support/core_ext/numeric/time"
-require "ostruct"
 
 # Require ActiveJob for async tests
 begin
@@ -21,6 +37,7 @@ end
 
 # Load test support files
 require_relative "support/mocks"
+require_relative "support/mock_controllers"
 require_relative "support/base_test_job"
 require_relative "support/test_flows/choice_test_flow"
 require_relative "support/test_flows/simple_flows"
@@ -44,20 +61,6 @@ unless FlowChat::Config.cache
     cache.define_singleton_method(:clear) { data.clear }
 
     cache
-  end
-end
-
-# Mock Rails environment for testing
-module Rails
-  def self.logger
-    @logger ||= begin
-      require "logger"
-      Logger.new($stdout, level: Logger::WARN)
-    end
-  end
-
-  def self.env
-    @env ||= OpenStruct.new(development?: false, test?: true)
   end
 end
 
@@ -188,4 +191,5 @@ end
 
 class Minitest::Test
   include TestHelpers
+  include FlowChat::TestSupport::MockControllers
 end

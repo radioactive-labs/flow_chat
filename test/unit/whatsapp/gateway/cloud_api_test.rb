@@ -118,7 +118,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal expected_location, context["request.location"]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.location123", context["request.message_id"]
-    assert_equal "$location$", context.input
+    assert_equal FlowChat::Input::LOCATION, context.input
   end
 
   def test_post_request_media_message_processing
@@ -129,16 +129,106 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
     @gateway.call(context)
 
-    expected_media = {
-      "type" => "image",
-      "id" => "media123",
-      "mime_type" => "image/jpeg",
-      "caption" => nil
-    }
-    assert_equal expected_media, context["request.media"]
+    assert_equal :image, context["request.media"][:type]
+    assert_equal "media123", context["request.media"][:id]
+    assert_equal "image/jpeg", context["request.media"][:mime_type]
+    assert_nil context["request.media"][:caption]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.media123", context["request.message_id"]
-    assert_equal "$media$", context.input
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_video_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_media_message_payload_for_type("video", "vid123", "video/mp4", "wamid.video123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :video, context["request.media"][:type]
+    assert_equal "vid123", context["request.media"][:id]
+    assert_equal "video/mp4", context["request.media"][:mime_type]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_audio_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_media_message_payload_for_type("audio", "aud123", "audio/ogg", "wamid.audio123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :audio, context["request.media"][:type]
+    assert_equal "aud123", context["request.media"][:id]
+    assert_equal "audio/ogg", context["request.media"][:mime_type]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_document_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_document_message_payload("doc123", "application/pdf", "report.pdf", "wamid.doc123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :document, context["request.media"][:type]
+    assert_equal "doc123", context["request.media"][:id]
+    assert_equal "application/pdf", context["request.media"][:mime_type]
+    assert_equal "report.pdf", context["request.media"][:filename]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_sticker_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_sticker_message_payload("sticker123", "image/webp", false, "wamid.sticker123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :sticker, context["request.media"][:type]
+    assert_equal "sticker123", context["request.media"][:id]
+    assert_equal "image/webp", context["request.media"][:mime_type]
+    assert_equal false, context["request.media"][:animated]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_contact_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_contact_message_payload("John Doe", "+1234567890", "wamid.contact123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal "John Doe", context["request.contact"][:name]
+    assert_equal "+1234567890", context["request.contact"][:phone_number]
+    assert_includes context["request.contact"][:phones], "+1234567890"
+    assert_equal "+256700000000", context["request.msisdn"]
+    assert_equal "wamid.contact123", context["request.message_id"]
+    assert_equal FlowChat::Input::CONTACT, context.input
+  end
+
+  def test_media_type_is_symbol_not_string
+    # Verify media types are symbols for all media types
+    %w[image video audio document sticker].each do |media_type|
+      context = create_context_with_request(
+        method: :post,
+        body: create_media_message_payload_for_type(media_type, "test_id", "application/octet-stream", "wamid.#{media_type}")
+      )
+
+      # Create fresh gateway for each test to avoid state bleed
+      gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |ctx| [:text, "Response", nil, nil] }, @mock_config)
+      gateway.call(context)
+
+      assert_kind_of Symbol, context["request.media"][:type],
+        "Expected media type to be Symbol for #{media_type}, got #{context["request.media"][:type].class}"
+      assert_equal media_type.to_sym, context["request.media"][:type],
+        "Expected :#{media_type} but got #{context["request.media"][:type].inspect}"
+    end
   end
 
   def test_empty_webhook_payload_handling
@@ -630,6 +720,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   end
 
   def create_media_message_payload(media_id, mime_type, message_id)
+    create_media_message_payload_for_type("image", media_id, mime_type, message_id)
+  end
+
+  def create_media_message_payload_for_type(type, media_id, mime_type, message_id)
     {
       "entry" => [{
         "changes" => [{
@@ -643,11 +737,107 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
               "id" => message_id,
               "from" => "256700000000",
               "timestamp" => "1702891800",
-              "image" => {
+              type => {
                 "id" => media_id,
                 "mime_type" => mime_type
               },
-              "type" => "image"
+              "type" => type
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_document_message_payload(media_id, mime_type, filename, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "document" => {
+                "id" => media_id,
+                "mime_type" => mime_type,
+                "filename" => filename
+              },
+              "type" => "document"
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_sticker_message_payload(media_id, mime_type, animated, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "sticker" => {
+                "id" => media_id,
+                "mime_type" => mime_type,
+                "animated" => animated
+              },
+              "type" => "sticker"
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_contact_message_payload(name, phone_number, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "contacts" => [{
+                "name" => {
+                  "formatted_name" => name,
+                  "first_name" => name.split.first,
+                  "last_name" => name.split.last
+                },
+                "phones" => [{"phone" => phone_number, "type" => "MOBILE"}]
+              }],
+              "type" => "contacts"
             }],
             "contacts" => [{
               "profile" => {"name" => "John Doe"},

@@ -6,7 +6,7 @@ FlowChat is built around a **composition-based architecture** with **pluggable g
 
 ### 1. Platform Abstraction
 
-FlowChat abstracts platform differences through a unified API, allowing the same flow code to work across USSD, WhatsApp, HTTP, and custom platforms.
+FlowChat abstracts platform differences through a unified API, allowing the same flow code to work across USSD, WhatsApp, Telegram, HTTP, and custom platforms.
 
 ```ruby
 # This exact code works on ALL platforms

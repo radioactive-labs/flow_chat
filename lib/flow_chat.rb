@@ -10,6 +10,16 @@ loader.enable_reloading if defined?(Rails.env) && Rails.env.development?
 loader.setup
 
 module FlowChat
+  # Special input markers for non-text message types
+  module Input
+    LOCATION = "$location$"
+    MEDIA = "$media$"
+    CONTACT = "$contact$"
+
+    # Session markers
+    START = "$start$"
+  end
+
   def self.root
     Pathname.new __dir__
   end

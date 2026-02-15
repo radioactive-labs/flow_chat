@@ -23,7 +23,7 @@ bundle install
 
 ## Quick Start: Your First Multi-Platform App
 
-Let's build a simple survey application that works across USSD, WhatsApp, and HTTP APIs.
+Let's build a simple survey application that works across USSD, WhatsApp, Telegram, and HTTP APIs.
 
 ### 1. Create the Flow
 
@@ -131,18 +131,39 @@ class WhatsappController < ApplicationController
 end
 ```
 
+#### Telegram Controller
+
+```ruby
+# app/controllers/telegram_controller.rb
+class TelegramController < ApplicationController
+  skip_forgery_protection
+
+  def webhook
+    processor = FlowChat::Processor.new(self) do |config|
+      config.use_gateway FlowChat::Telegram::Gateway::BotApi
+      config.use_session_store FlowChat::Session::CacheSessionStore
+    end
+
+    processor.run SurveyFlow, :start
+  rescue => e
+    Rails.logger.error { "Telegram error: #{e.message}" }
+    head :internal_server_error
+  end
+end
+```
+
 #### HTTP API Controller
 
 ```ruby
 # app/controllers/api/chat_controller.rb
 class Api::ChatController < ApplicationController
   before_action :authenticate_api_user # Your auth logic
-  
+
   def message
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Http::Gateway::Simple
       config.use_session_store FlowChat::Session::CacheSessionStore
-      
+
       # Session isolation per API user
       config.use_session_config(identifier: :user_id)
     end
@@ -160,11 +181,14 @@ end
 Rails.application.routes.draw do
   # USSD routes
   post '/ussd/nalo', to: 'ussd#nalo_webhook'
-  
-  # WhatsApp routes  
+
+  # WhatsApp routes
   post '/whatsapp/webhook', to: 'whatsapp#webhook'
   get '/whatsapp/webhook', to: 'whatsapp#verify' # For webhook verification
-  
+
+  # Telegram routes
+  post '/telegram/webhook', to: 'telegram#webhook'
+
   # API routes
   namespace :api do
     post '/chat/message', to: 'chat#message'
@@ -184,6 +208,10 @@ WHATSAPP_ACCESS_TOKEN=your_access_token
 WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
 WHATSAPP_VERIFY_TOKEN=your_verify_token
 WHATSAPP_APP_SECRET=your_app_secret
+
+# Telegram Configuration
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_SECRET_TOKEN=your_webhook_secret  # Optional: for webhook validation
 ```
 
 #### FlowChat Configuration
@@ -311,6 +339,7 @@ Now that you have a basic multi-platform application running:
 1. **Explore Platform Features**: Learn platform-specific capabilities
    - [USSD Development](platforms/ussd.md) - Pagination, choice mapping
    - [WhatsApp Development](platforms/whatsapp.md) - Rich media, templates
+   - [Telegram Development](platforms/telegram.md) - Inline keyboards, media, callbacks
    - [HTTP Development](platforms/http.md) - API integration patterns
 
 2. **Advanced Topics**:

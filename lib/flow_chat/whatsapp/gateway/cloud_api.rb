@@ -307,16 +307,36 @@ module FlowChat
               address: message.dig("location", "address")
             }
             context["request.location"] = location
-            context.input = "$location$"
+            context.input = FlowChat::Input::LOCATION
             FlowChat.logger.debug { "CloudApi: Location received - Lat: #{location[:latitude]}, Lng: #{location[:longitude]}" }
-          when "image", "document", "audio", "video"
+          when "image", "document", "audio", "video", "sticker"
+            media_data = message[message["type"]]
             context["request.media"] = {
-              type: message["type"],
-              id: message.dig(message["type"], "id"),
-              mime_type: message.dig(message["type"], "mime_type"),
-              caption: message.dig(message["type"], "caption")
+              type: message["type"].to_sym,
+              id: media_data["id"],
+              mime_type: media_data["mime_type"],
+              caption: media_data["caption"],
+              filename: media_data["filename"],
+              sha256: media_data["sha256"],
+              animated: media_data["animated"]
             }
-            context.input = "$media$"
+            context.input = FlowChat::Input::MEDIA
+            FlowChat.logger.debug { "CloudApi: Media received - Type: #{message["type"]}, ID: #{media_data["id"]}" }
+          when "contacts"
+            # WhatsApp sends contacts as an array, take the first one
+            contact_data = message.dig("contacts", 0)
+            if contact_data
+              phones = contact_data.dig("phones") || []
+              context["request.contact"] = {
+                name: contact_data.dig("name", "formatted_name"),
+                first_name: contact_data.dig("name", "first_name"),
+                last_name: contact_data.dig("name", "last_name"),
+                phones: phones.map { |p| p["phone"] },
+                phone_number: phones.first&.dig("phone")
+              }
+              context.input = FlowChat::Input::CONTACT
+              FlowChat.logger.debug { "CloudApi: Contact received - Name: #{context["request.contact"][:name]}" }
+            end
           end
         end
 

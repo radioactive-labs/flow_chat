@@ -1,4 +1,5 @@
 require "kramdown"
+require "rails-html-sanitizer"
 
 module FlowChat
   module Intercom
@@ -59,11 +60,19 @@ module FlowChat
 
         html = Kramdown::Document.new(text.to_s).to_html.strip
         # Sanitize to only allow tags supported by Intercom messenger
-        ActionController::Base.helpers.sanitize(
+        sanitize_html(html)
+      end
+
+      def sanitize_html(html)
+        self.class.sanitizer.sanitize(
           html,
           tags: %w[p br b strong i em a ul ol li h1 h2 h3 h4 h5 h6],
           attributes: %w[href target]
         )
+      end
+
+      def self.sanitizer
+        @sanitizer ||= Rails::Html::SafeListSanitizer.new
       end
     end
   end
