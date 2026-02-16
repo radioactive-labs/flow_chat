@@ -502,6 +502,13 @@ module FlowChat
           result
         else
           FlowChat.logger.error { "WhatsApp::Client: API request failed - #{response.code}: #{response.body}" }
+          report_api_error(
+            "WhatsApp API request failed",
+            response_code: response.code,
+            response_body: response.body,
+            recipient: to,
+            message_type: message_type
+          )
           nil
         end
       rescue Net::OpenTimeout, Net::ReadTimeout => network_error
@@ -510,7 +517,44 @@ module FlowChat
         raise network_error
       rescue => error
         FlowChat.logger.error { "WhatsApp::Client: API request exception: #{error.class.name}: #{error.message}" }
+        report_api_error(
+          "WhatsApp API request exception: #{error.class.name}",
+          error: error,
+          recipient: to,
+          message_type: message_type
+        )
         nil
+      end
+
+      def report_api_error(message, response_code: nil, response_body: nil, error: nil, recipient: nil, message_type: nil)
+        error_details = parse_error_response(response_body)
+
+        FlowChat::Instrumentation.report_api_error(
+          message,
+          error: error,
+          platform: :whatsapp,
+          phone_number_id: @config.phone_number_id,
+          recipient: recipient,
+          message_type: message_type,
+          response_code: response_code,
+          **error_details
+        )
+      end
+
+      def parse_error_response(response_body)
+        return {} unless response_body
+
+        parsed = JSON.parse(response_body)
+        return {} unless parsed.is_a?(Hash) && parsed["error"]
+
+        {
+          error_type: parsed.dig("error", "type"),
+          error_code: parsed.dig("error", "code"),
+          error_subcode: parsed.dig("error", "error_subcode"),
+          error_message: parsed.dig("error", "message")
+        }.compact
+      rescue JSON::ParserError
+        {}
       end
 
       def send_media_message(to, media_type, url_or_id, caption: nil, filename: nil, mime_type: nil)

@@ -21,6 +21,7 @@ module FlowChat
       include FlowChat::Instrumentation
 
       attr_reader :intercom
+      attr_accessor :app_id
 
       # Convert HTML from Intercom messages to Markdown
       def self.parse_html(html)
@@ -86,19 +87,23 @@ module FlowChat
         result
       rescue ::Intercom::ResourceNotFound => e
         FlowChat.logger.error { "Intercom::Client: Conversation not found: #{e.message}" }
+        report_api_error("Intercom conversation not found", error: e, conversation_id: conversation_id)
         nil
       rescue ::Intercom::AuthenticationError => e
         FlowChat.logger.error { "Intercom::Client: Authentication failed - check access token" }
+        report_api_error("Intercom authentication failed", error: e, conversation_id: conversation_id)
         raise ConfigurationError, "Invalid Intercom access token"
-      rescue ::Intercom::RateLimitExceeded => e
+      rescue ::Intercom::RateLimitExceeded
         retry_after = 60
         FlowChat.logger.warn { "Intercom::Client: Rate limit exceeded - retry after #{retry_after}s" }
         raise RateLimitError.new("Intercom API rate limit exceeded", retry_after)
       rescue ::Intercom::ServerError => e
         FlowChat.logger.error { "Intercom::Client: Server error: #{e.message}" }
+        report_api_error("Intercom server error", error: e, conversation_id: conversation_id)
         nil
       rescue => e
         FlowChat.logger.error { "Intercom::Client: API request exception: #{e.class.name}: #{e.message}" }
+        report_api_error("Intercom API request exception: #{e.class.name}", error: e, conversation_id: conversation_id)
         nil
       end
 
@@ -133,6 +138,18 @@ module FlowChat
         end
       end
 
+      private
+
+      def report_api_error(message, error: nil, conversation_id: nil)
+        FlowChat::Instrumentation.report_api_error(
+          message,
+          error: error,
+          platform: :intercom,
+          app_id: @app_id,
+          conversation_id: conversation_id,
+          admin_id: @config.admin_id
+        )
+      end
     end
   end
 end

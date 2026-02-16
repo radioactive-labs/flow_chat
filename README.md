@@ -224,6 +224,7 @@ end
 - [**Middleware Development**](docs/middleware.md) 🚧 - Creating custom middleware
 - [**Testing & Simulation**](docs/testing.md) - Testing strategies and simulator usage
 - [**Background Jobs**](docs/background-jobs.md) 🚧 - Async processing for WhatsApp
+- [**Instrumentation**](docs/instrumentation.md) - Monitoring, logging, and error tracking
 
 ### API Reference
 - [**Core API**](docs/api-reference/core.md) 🚧 - Processor, App, Flow classes

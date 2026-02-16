@@ -78,6 +78,10 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     def @mock_client.parse_message(html)
       FlowChat::Intercom::Client.parse_html(html)
     end
+    # Define app_id= setter (called by gateway after parsing request body)
+    def @mock_client.app_id=(value)
+      @app_id = value
+    end
     @gateway.instance_variable_set(:@client, @mock_client)
 
     WebMock.enable!

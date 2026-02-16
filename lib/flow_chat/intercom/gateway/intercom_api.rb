@@ -60,6 +60,7 @@ module FlowChat
           # Parse body
           begin
             parse_request_body(@controller.request)
+            @client.app_id = @body["app_id"]
             FlowChat.logger.debug { "IntercomApi: Successfully parsed webhook request body" }
           rescue JSON::ParserError => e
             FlowChat.logger.error { "IntercomApi: Failed to parse webhook body: #{e.message}" }

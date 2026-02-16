@@ -448,6 +448,79 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
     end
   end
 
+  def test_api_error_instruments_api_error_event
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendMessage")
+      .to_return(
+        status: 401,
+        body: {
+          "ok" => false,
+          "error_code" => 401,
+          "description" => "Unauthorized"
+        }.to_json
+      )
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    result = @client.send_text(12345, "Hello")
+
+    refute result["ok"]
+    assert_equal 1, events.size
+
+    event = events.first
+    assert_equal :telegram, event.payload[:platform]
+    assert_equal "123456", event.payload[:bot_id]
+    assert_equal "sendMessage", event.payload[:api_method]
+    assert_equal 401, event.payload[:error_code]
+    assert_equal "Unauthorized", event.payload[:error_description]
+    assert_equal 12345, event.payload[:chat_id]
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
+  def test_api_exception_instruments_api_error_event
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendMessage")
+      .to_raise(Errno::ECONNREFUSED)
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    result = @client.send_text(12345, "Hello")
+
+    refute result["ok"]
+    assert_equal 1, events.size
+
+    event = events.first
+    assert_equal :telegram, event.payload[:platform]
+    assert_equal "123456", event.payload[:bot_id]
+    assert_includes event.payload[:message], "Errno::ECONNREFUSED"
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
+  def test_network_timeout_reraises_without_instrumentation
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendMessage")
+      .to_raise(Net::OpenTimeout.new("execution expired"))
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    assert_raises(Net::OpenTimeout) do
+      @client.send_text(12345, "Hello")
+    end
+
+    # Network timeouts are re-raised for retry logic - no api.error instrumentation
+    assert_equal 0, events.size
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
   # ============================================================================
   # GET BOT INFO TEST
   # ============================================================================

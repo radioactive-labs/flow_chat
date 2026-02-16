@@ -35,6 +35,23 @@ module FlowChat
       ActiveSupport::Notifications.instrument(full_event_name, enriched_payload, &block)
     end
 
+    # Shared helper for reporting API errors with instrumentation and Rails.error
+    # @param message [String] Error message
+    # @param error [Exception, nil] Original exception if available
+    # @param context [Hash] Platform-specific error context (must include :platform)
+    def self.report_api_error(message, error: nil, **context)
+      error_context = context.compact
+
+      # Instrument for custom subscribers
+      instrument(Events::API_ERROR, error_context.merge(message: message))
+
+      # Report to Rails.error if available
+      if defined?(Rails) && Rails.respond_to?(:error) && Rails.error.respond_to?(:report)
+        exception = error || StandardError.new(message)
+        Rails.error.report(exception, handled: true, context: error_context)
+      end
+    end
+
     # Predefined event names for consistency
     module Events
       # Core framework events
@@ -61,6 +78,7 @@ module FlowChat
       WEBHOOK_FAILED = "webhook.failed"
       API_REQUEST = "api.request"
       MEDIA_UPLOAD = "media.upload"
+      API_ERROR = "api.error"
 
       PAGINATION_TRIGGERED = "pagination.triggered"
 

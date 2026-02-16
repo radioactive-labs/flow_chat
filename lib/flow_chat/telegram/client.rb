@@ -172,9 +172,41 @@ module FlowChat
           FlowChat.logger.debug { "Telegram::Client: API request successful" }
         else
           FlowChat.logger.error { "Telegram::Client: API error - #{result["description"]}" }
+          report_api_error(
+            "Telegram API error: #{result["description"]}",
+            api_method: method,
+            error_code: result["error_code"],
+            error_description: result["description"],
+            chat_id: params[:chat_id]
+          )
         end
 
         result
+      rescue Net::OpenTimeout, Net::ReadTimeout => network_error
+        FlowChat.logger.error { "Telegram::Client: Network timeout: #{network_error.class.name}: #{network_error.message}" }
+        raise network_error
+      rescue => error
+        FlowChat.logger.error { "Telegram::Client: API request exception: #{error.class.name}: #{error.message}" }
+        report_api_error(
+          "Telegram API request exception: #{error.class.name}",
+          api_method: method,
+          error: error,
+          chat_id: params[:chat_id]
+        )
+        {"ok" => false, "description" => error.message}
+      end
+
+      def report_api_error(message, api_method: nil, error_code: nil, error_description: nil, error: nil, chat_id: nil)
+        FlowChat::Instrumentation.report_api_error(
+          message,
+          error: error,
+          platform: :telegram,
+          bot_id: @config.bot_id,
+          api_method: api_method,
+          error_code: error_code,
+          error_description: error_description,
+          chat_id: chat_id
+        )
       end
     end
   end

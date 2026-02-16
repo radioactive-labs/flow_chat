@@ -10,6 +10,7 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
     @config.admin_id = "test_admin_id"
 
     @client = FlowChat::Intercom::Client.new(@config)
+    @client.app_id = "test_app_id"  # Normally set by gateway from request body
 
     WebMock.enable!
     WebMock.reset!
@@ -125,5 +126,115 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
   def test_parse_message_delegates_to_class_method
     html = "<p>Test <em>message</em></p>"
     assert_equal FlowChat::Intercom::Client.parse_html(html), @client.parse_message(html)
+  end
+
+  # ============================================================================
+  # ERROR REPORTING TESTS
+  # ============================================================================
+
+  def test_authentication_error_instruments_api_error_event
+    # Stub the intercom gem to raise authentication error
+    @client.intercom.stub(:conversations, ->(*) { raise ::Intercom::AuthenticationError.new("Invalid token") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+        events << event
+      end
+
+      assert_raises(FlowChat::Intercom::ConfigurationError) do
+        @client.send_message("conv_123", "Hello")
+      end
+
+      assert_equal 1, events.size
+
+      event = events.first
+      assert_equal :intercom, event.payload[:platform]
+      assert_equal "test_app_id", event.payload[:app_id]
+      assert_equal "conv_123", event.payload[:conversation_id]
+      assert_equal "test_admin_id", event.payload[:admin_id]
+      assert_includes event.payload[:message], "authentication failed"
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_server_error_instruments_api_error_event
+    @client.intercom.stub(:conversations, ->(*) { raise ::Intercom::ServerError.new("Internal error") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+        events << event
+      end
+
+      result = @client.send_message("conv_456", "Hello")
+
+      assert_nil result
+      assert_equal 1, events.size
+
+      event = events.first
+      assert_equal :intercom, event.payload[:platform]
+      assert_equal "conv_456", event.payload[:conversation_id]
+      assert_includes event.payload[:message], "server error"
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_generic_exception_instruments_api_error_event
+    @client.intercom.stub(:conversations, ->(*) { raise StandardError.new("Something went wrong") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+        events << event
+      end
+
+      result = @client.send_message("conv_789", "Hello")
+
+      assert_nil result
+      assert_equal 1, events.size
+
+      event = events.first
+      assert_equal :intercom, event.payload[:platform]
+      assert_equal "conv_789", event.payload[:conversation_id]
+      assert_includes event.payload[:message], "StandardError"
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_resource_not_found_instruments_api_error_event
+    @client.intercom.stub(:conversations, ->(*) { raise ::Intercom::ResourceNotFound.new("Conversation not found") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+        events << event
+      end
+
+      result = @client.send_message("conv_not_found", "Hello")
+
+      assert_nil result
+      assert_equal 1, events.size
+
+      event = events.first
+      assert_equal :intercom, event.payload[:platform]
+      assert_equal "conv_not_found", event.payload[:conversation_id]
+      assert_includes event.payload[:message], "not found"
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_rate_limit_does_not_instrument_api_error_event
+    @client.intercom.stub(:conversations, ->(*) { raise ::Intercom::RateLimitExceeded.new("Too many requests") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+        events << event
+      end
+
+      assert_raises(FlowChat::Intercom::RateLimitError) do
+        @client.send_message("conv_rate_limited", "Hello")
+      end
+
+      # Rate limits are expected and handled differently - no api.error instrumentation
+      assert_equal 0, events.size
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
   end
 end

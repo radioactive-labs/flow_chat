@@ -548,6 +548,142 @@ class WhatsappClientTest < Minitest::Test
     assert_raises(ArgumentError) { @client.upload_media }
   end
 
+  # ============================================================================
+  # ERROR REPORTING TESTS
+  # ============================================================================
+
+  def test_api_error_instruments_api_error_event
+    stub_request(:post, whatsapp_messages_url)
+      .to_return(status: 401, body: {
+        "error" => {
+          "message" => "Error validating access token",
+          "type" => "OAuthException",
+          "code" => 190,
+          "error_subcode" => 463
+        }
+      }.to_json)
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    result = @client.send_text("+1234567890", "Hello")
+
+    assert_nil result
+    assert_equal 1, events.size
+
+    event = events.first
+    assert_equal :whatsapp, event.payload[:platform]
+    assert_equal "123456789", event.payload[:phone_number_id]
+    assert_equal "+1234567890", event.payload[:recipient]
+    assert_equal "text", event.payload[:message_type]
+    assert_equal "401", event.payload[:response_code]
+    assert_equal "OAuthException", event.payload[:error_type]
+    assert_equal 190, event.payload[:error_code]
+    assert_equal 463, event.payload[:error_subcode]
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
+  def test_api_exception_instruments_api_error_event
+    stub_request(:post, whatsapp_messages_url)
+      .to_raise(Errno::ECONNREFUSED)
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    result = @client.send_text("+1234567890", "Hello")
+
+    assert_nil result
+    assert_equal 1, events.size
+
+    event = events.first
+    assert_equal :whatsapp, event.payload[:platform]
+    assert_includes event.payload[:message], "Errno::ECONNREFUSED"
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
+  def test_network_timeout_reraises_without_instrumentation
+    stub_request(:post, whatsapp_messages_url)
+      .to_raise(Net::ReadTimeout.new("Net::ReadTimeout"))
+
+    events = []
+    ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |event|
+      events << event
+    end
+
+    assert_raises(Net::ReadTimeout) do
+      @client.send_text("+1234567890", "Hello")
+    end
+
+    # Network timeouts are re-raised for retry logic - no api.error instrumentation
+    assert_equal 0, events.size
+  ensure
+    ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+  end
+
+  def test_parse_error_response_with_valid_error
+    error_body = {
+      "error" => {
+        "message" => "Invalid token",
+        "type" => "OAuthException",
+        "code" => 190,
+        "error_subcode" => 463
+      }
+    }.to_json
+
+    result = @client.send(:parse_error_response, error_body)
+
+    assert_equal "OAuthException", result[:error_type]
+    assert_equal 190, result[:error_code]
+    assert_equal 463, result[:error_subcode]
+    assert_equal "Invalid token", result[:error_message]
+  end
+
+  def test_parse_error_response_with_partial_error
+    error_body = {
+      "error" => {
+        "message" => "Something went wrong",
+        "code" => 500
+      }
+    }.to_json
+
+    result = @client.send(:parse_error_response, error_body)
+
+    assert_equal 500, result[:error_code]
+    assert_equal "Something went wrong", result[:error_message]
+    refute result.key?(:error_type)
+    refute result.key?(:error_subcode)
+  end
+
+  def test_parse_error_response_with_nil_body
+    result = @client.send(:parse_error_response, nil)
+
+    assert_equal({}, result)
+  end
+
+  def test_parse_error_response_with_malformed_json
+    result = @client.send(:parse_error_response, "not valid json")
+
+    assert_equal({}, result)
+  end
+
+  def test_parse_error_response_without_error_key
+    result = @client.send(:parse_error_response, '{"success": false}')
+
+    assert_equal({}, result)
+  end
+
+  def test_parse_error_response_with_non_hash_body
+    result = @client.send(:parse_error_response, '"just a string"')
+
+    assert_equal({}, result)
+  end
+
   private
 
   # ============================================================================
