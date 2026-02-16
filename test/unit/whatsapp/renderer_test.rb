@@ -262,4 +262,335 @@ class WhatsappRendererTest < Minitest::Test
 
     assert_equal "Unsupported media type: unsupported", error.message
   end
+
+  # Markdown formatting tests
+
+  def test_render_markdown_bold
+    renderer = FlowChat::Whatsapp::Renderer.new("Hello **bold** world")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Hello *bold* world", result[1]
+  end
+
+  def test_render_markdown_italic
+    renderer = FlowChat::Whatsapp::Renderer.new("Hello *italic* world")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Hello _italic_ world", result[1]
+  end
+
+  def test_render_markdown_strikethrough
+    renderer = FlowChat::Whatsapp::Renderer.new("Hello ~~strikethrough~~ world")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Hello ~strikethrough~ world", result[1]
+  end
+
+  def test_render_markdown_inline_code
+    renderer = FlowChat::Whatsapp::Renderer.new("Use `code` here")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Use `code` here", result[1]
+  end
+
+  def test_render_markdown_code_block
+    renderer = FlowChat::Whatsapp::Renderer.new("```\ndef hello\n  puts 'hi'\nend\n```")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "```"
+    assert_includes result[1], "def hello"
+  end
+
+  def test_render_markdown_link
+    renderer = FlowChat::Whatsapp::Renderer.new("Visit [Google](https://google.com)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Links become "text (url)" format
+    assert_includes result[1], "Google"
+    assert_includes result[1], "https://google.com"
+  end
+
+  def test_render_markdown_link_same_text_as_url
+    renderer = FlowChat::Whatsapp::Renderer.new("Visit [https://google.com](https://google.com)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # When text equals URL, just show URL once
+    assert_equal "Visit https://google.com", result[1]
+  end
+
+  def test_render_markdown_unordered_list
+    renderer = FlowChat::Whatsapp::Renderer.new("Items:\n\n* First\n* Second\n* Third")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "• First"
+    assert_includes result[1], "• Second"
+    assert_includes result[1], "• Third"
+  end
+
+  def test_render_markdown_ordered_list
+    renderer = FlowChat::Whatsapp::Renderer.new("Steps:\n\n1. First\n2. Second\n3. Third")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "1. First"
+    assert_includes result[1], "2. Second"
+    assert_includes result[1], "3. Third"
+  end
+
+  def test_render_markdown_blockquote
+    renderer = FlowChat::Whatsapp::Renderer.new("> This is a quote")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "> This is a quote"
+  end
+
+  def test_render_markdown_heading_degrades_to_bold
+    renderer = FlowChat::Whatsapp::Renderer.new("# Main Heading")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Headings aren't supported, but the text should still be present
+    assert_includes result[1], "Main Heading"
+  end
+
+  def test_render_markdown_nested_formatting
+    renderer = FlowChat::Whatsapp::Renderer.new("This is **bold and *italic* inside**")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "*"
+    assert_includes result[1], "_"
+  end
+
+  def test_render_markdown_multiple_paragraphs
+    renderer = FlowChat::Whatsapp::Renderer.new("First paragraph.\n\nSecond paragraph.")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "First paragraph."
+    assert_includes result[1], "Second paragraph."
+    # Should have newlines between paragraphs
+    assert_includes result[1], "\n"
+  end
+
+  def test_render_nil_message
+    renderer = FlowChat::Whatsapp::Renderer.new(nil)
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "", result[1]
+  end
+
+  def test_render_plain_text_unchanged
+    renderer = FlowChat::Whatsapp::Renderer.new("Hello World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Hello World", result[1]
+  end
+
+  def test_render_html_entities_decoded
+    renderer = FlowChat::Whatsapp::Renderer.new("Tom & Jerry")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Tom & Jerry", result[1]
+  end
+
+  def test_render_straight_quotes_preserved
+    renderer = FlowChat::Whatsapp::Renderer.new("He said 'hello' and \"goodbye\"")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "'"
+    assert_includes result[1], '"'
+    # Should NOT have curly quotes
+    refute_includes result[1], "\u2018"
+    refute_includes result[1], "\u201C"
+  end
+
+  # Markdown in media captions
+
+  def test_render_media_caption_with_markdown
+    media = {type: :image, url: "https://example.com/image.jpg"}
+    renderer = FlowChat::Whatsapp::Renderer.new("Check out this **amazing** photo!", media: media)
+    result = renderer.render
+
+    assert_equal :media_image, result[0]
+    assert_equal "Check out this *amazing* photo!", result[2][:caption]
+  end
+
+  # Markdown in interactive messages
+
+  def test_render_interactive_buttons_with_markdown
+    choices = {"opt1" => "Option 1", "opt2" => "Option 2"}
+    renderer = FlowChat::Whatsapp::Renderer.new("Choose **wisely**:", choices: choices)
+    result = renderer.render
+
+    assert_equal :interactive_buttons, result[0]
+    assert_equal "Choose *wisely*:", result[1]
+  end
+
+  def test_render_interactive_list_with_markdown
+    choices = (1..5).map { |i| [i, "Option #{i}"] }.to_h
+    renderer = FlowChat::Whatsapp::Renderer.new("Select an *option*:", choices: choices)
+    result = renderer.render
+
+    assert_equal :interactive_list, result[0]
+    assert_equal "Select an _option_:", result[1]
+  end
+
+  # Edge case tests
+
+  def test_render_empty_string
+    renderer = FlowChat::Whatsapp::Renderer.new("")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "", result[1]
+  end
+
+  def test_render_code_block_with_language
+    renderer = FlowChat::Whatsapp::Renderer.new("```ruby\ndef hello\n  puts 'hi'\nend\n```")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "```"
+    assert_includes result[1], "def hello"
+    assert_includes result[1], "puts 'hi'"
+  end
+
+  def test_render_multiple_code_blocks
+    input = "First:\n```\ncode1\n```\n\nSecond:\n```\ncode2\n```"
+    renderer = FlowChat::Whatsapp::Renderer.new(input)
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "code1"
+    assert_includes result[1], "code2"
+  end
+
+  def test_render_horizontal_rule
+    renderer = FlowChat::Whatsapp::Renderer.new("Above\n\n---\n\nBelow")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Above"
+    assert_includes result[1], "Below"
+  end
+
+  def test_render_nested_list
+    input = "List:\n\n* Item 1\n  * Nested 1\n  * Nested 2\n* Item 2"
+    renderer = FlowChat::Whatsapp::Renderer.new(input)
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Item 1"
+    assert_includes result[1], "Nested 1"
+    assert_includes result[1], "Item 2"
+  end
+
+  def test_render_link_with_special_characters
+    renderer = FlowChat::Whatsapp::Renderer.new("Check [this link](https://example.com/path?foo=bar&baz=qux)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "this link"
+    assert_includes result[1], "https://example.com/path?foo=bar&baz=qux"
+  end
+
+  def test_render_media_without_caption
+    media = {type: :image, url: "https://example.com/image.jpg"}
+    renderer = FlowChat::Whatsapp::Renderer.new(nil, media: media)
+    result = renderer.render
+
+    assert_equal :media_image, result[0]
+    assert_equal "", result[1]
+    assert_nil result[2][:caption]
+  end
+
+  def test_render_media_with_blank_caption
+    media = {type: :image, url: "https://example.com/image.jpg"}
+    renderer = FlowChat::Whatsapp::Renderer.new("", media: media)
+    result = renderer.render
+
+    assert_equal :media_image, result[0]
+    assert_nil result[2][:caption]
+  end
+
+  def test_render_unclosed_bold
+    renderer = FlowChat::Whatsapp::Renderer.new("Hello **unclosed bold")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Should not crash, text should be present
+    assert_includes result[1], "Hello"
+    assert_includes result[1], "unclosed bold"
+  end
+
+  def test_render_unclosed_code_block
+    renderer = FlowChat::Whatsapp::Renderer.new("```\ncode without closing")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Should not crash, content should be present
+    assert_includes result[1], "code without closing"
+  end
+
+  def test_render_mixed_formatting
+    input = "**Bold** and *italic* and `code` and ~~strike~~"
+    renderer = FlowChat::Whatsapp::Renderer.new(input)
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "*Bold*"
+    assert_includes result[1], "_italic_"
+    assert_includes result[1], "`code`"
+    assert_includes result[1], "~strike~"
+  end
+
+  def test_render_special_characters_not_markdown
+    renderer = FlowChat::Whatsapp::Renderer.new("Price: $100 (50% off)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Price: $100 (50% off)", result[1]
+  end
+
+  def test_render_multiline_blockquote
+    renderer = FlowChat::Whatsapp::Renderer.new("> Line 1\n> Line 2\n> Line 3")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "> Line 1"
+    assert_includes result[1], "> Line 2"
+    assert_includes result[1], "> Line 3"
+  end
+
+  def test_render_whitespace_only
+    renderer = FlowChat::Whatsapp::Renderer.new("   \n\n   ")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "", result[1]
+  end
+
+  def test_render_combined_bold_and_italic
+    renderer = FlowChat::Whatsapp::Renderer.new("This is ***bold and italic***")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # kramdown treats *** as bold+italic
+    assert_includes result[1], "*"
+    assert_includes result[1], "_"
+  end
 end

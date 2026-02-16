@@ -1,9 +1,10 @@
-require "kramdown"
-require "rails-html-sanitizer"
+require "flow_chat/renderers/markdown_support"
 
 module FlowChat
   module Intercom
     class Renderer
+      include FlowChat::Renderers::MarkdownSupport
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -55,24 +56,15 @@ module FlowChat
         [:text, to_html(formatted_message), {choices: choice_hash}]
       end
 
-      def to_html(text)
-        return "" if text.nil?
+      # MarkdownSupport overrides for Intercom-specific behavior
 
-        html = Kramdown::Document.new(text.to_s).to_html.strip
-        # Sanitize to only allow tags supported by Intercom messenger
-        sanitize_html(html)
+      def allowed_tags
+        # Tags supported by Intercom messenger
+        %w[p br b strong i em a ul ol li h1 h2 h3 h4 h5 h6]
       end
 
-      def sanitize_html(html)
-        self.class.sanitizer.sanitize(
-          html,
-          tags: %w[p br b strong i em a ul ol li h1 h2 h3 h4 h5 h6],
-          attributes: %w[href target]
-        )
-      end
-
-      def self.sanitizer
-        @sanitizer ||= Rails::Html::SafeListSanitizer.new
+      def allowed_attributes
+        %w[href target]
       end
     end
   end

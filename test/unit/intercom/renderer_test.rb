@@ -170,7 +170,7 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     result = renderer.render
 
     assert_equal :text, result[0]
-    # Note: & gets escaped to &amp; in HTML, ' becomes typographic apostrophe
+    # Note: & gets escaped to &amp; in HTML, apostrophes remain straight quotes
     assert_includes result[1], "your issue?"
     assert_includes result[1], "access my account"
     assert_includes result[1], "&amp;"  # & is escaped
@@ -228,5 +228,139 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     result = renderer.render
 
     assert_equal({}, result[2])
+  end
+
+  # Markdown conversion tests
+
+  def test_render_markdown_bold_converted_to_html
+    renderer = FlowChat::Intercom::Renderer.new("Hello **bold** text")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<strong>bold</strong>"
+  end
+
+  def test_render_markdown_italic_converted_to_html
+    renderer = FlowChat::Intercom::Renderer.new("Hello *italic* text")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<em>italic</em>"
+  end
+
+  def test_render_markdown_links
+    renderer = FlowChat::Intercom::Renderer.new("Visit [our site](https://example.com)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], '<a href="https://example.com">our site</a>'
+  end
+
+  def test_render_markdown_unordered_list
+    renderer = FlowChat::Intercom::Renderer.new("Items:\n\n* First\n* Second")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<ul>"
+    assert_includes result[1], "<li>First</li>"
+    assert_includes result[1], "<li>Second</li>"
+  end
+
+  def test_render_markdown_ordered_list
+    renderer = FlowChat::Intercom::Renderer.new("Steps:\n\n1. First\n2. Second")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<ol>"
+    assert_includes result[1], "<li>First</li>"
+    assert_includes result[1], "<li>Second</li>"
+  end
+
+  def test_render_markdown_headings
+    renderer = FlowChat::Intercom::Renderer.new("# Main Title\n\n## Subtitle")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<h1"
+    assert_includes result[1], "Main Title"
+    assert_includes result[1], "<h2"
+    assert_includes result[1], "Subtitle"
+  end
+
+  def test_render_nested_formatting
+    renderer = FlowChat::Intercom::Renderer.new("**bold and *italic* inside**")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<strong>"
+    assert_includes result[1], "<em>"
+  end
+
+  # HTML sanitization tests
+
+  def test_disallowed_tags_stripped
+    renderer = FlowChat::Intercom::Renderer.new("Hello <script>alert('xss')</script> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    refute_includes result[1], "<script>"
+    refute_includes result[1], "</script>"
+  end
+
+  def test_div_tags_stripped
+    renderer = FlowChat::Intercom::Renderer.new("Hello <div>content</div> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    refute_includes result[1], "<div>"
+  end
+
+  def test_span_tags_stripped
+    renderer = FlowChat::Intercom::Renderer.new("Hello <span style='color:red'>red</span> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    refute_includes result[1], "<span>"
+    refute_includes result[1], "style"
+  end
+
+  def test_disallowed_attributes_stripped
+    renderer = FlowChat::Intercom::Renderer.new('<a href="https://example.com" onclick="alert()">link</a>')
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], 'href="https://example.com"'
+    refute_includes result[1], "onclick"
+  end
+
+  def test_valid_html_tags_preserved
+    renderer = FlowChat::Intercom::Renderer.new("Hello <b>bold</b> and <i>italic</i>")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<b>bold</b>"
+    assert_includes result[1], "<i>italic</i>"
+  end
+
+  def test_target_attribute_allowed_on_links
+    renderer = FlowChat::Intercom::Renderer.new('<a href="https://example.com" target="_blank">link</a>')
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], 'target="_blank"'
+  end
+
+  # Smart quotes tests
+
+  def test_straight_quotes_preserved
+    renderer = FlowChat::Intercom::Renderer.new("He said 'hello' and \"goodbye\"")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Should have straight quotes, not curly quotes
+    assert_includes result[1], "'"
+    assert_includes result[1], '"'
+    refute_includes result[1], "\u2018"  # left single curly quote
+    refute_includes result[1], "\u201C"  # left double curly quote
   end
 end

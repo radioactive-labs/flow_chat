@@ -1,6 +1,10 @@
+require "flow_chat/renderers/markdown_support"
+
 module FlowChat
   module Telegram
     class Renderer
+      include FlowChat::Renderers::MarkdownSupport
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -24,13 +28,13 @@ module FlowChat
       private
 
       def build_text_message
-        [:text, escape_html(message), {}]
+        [:text, to_html(message), {}]
       end
 
       def build_keyboard_message
         validate_choices!
         keyboard = build_inline_keyboard(choices)
-        [:inline_keyboard, escape_html(message), {keyboard: keyboard}]
+        [:inline_keyboard, to_html(message), {keyboard: keyboard}]
       end
 
       def build_media_message
@@ -39,18 +43,18 @@ module FlowChat
 
         case media_type.to_sym
         when :photo
-          [:photo, message, {url: url}]
+          [:photo, to_html(message), {url: url}]
         when :document
-          [:document, message, {url: url, filename: media[:filename]}]
+          [:document, to_html(message), {url: url, filename: media[:filename]}]
         when :video
-          [:video, message, {url: url}]
+          [:video, to_html(message), {url: url}]
         when :audio
-          [:audio, message, {url: url}]
+          [:audio, to_html(message), {url: url}]
         when :voice
-          [:voice, message, {url: url}]
+          [:voice, to_html(message), {url: url}]
         else
           # Fallback to text for unsupported types
-          [:text, escape_html(message), {}]
+          [:text, to_html(message), {}]
         end
       end
 
@@ -60,7 +64,7 @@ module FlowChat
         media_type = media[:type] || :photo
         url = media[:url] || media[:file_id]
 
-        [:photo_with_keyboard, message, {
+        [:photo_with_keyboard, to_html(message), {
           url: url,
           keyboard: keyboard,
           media_type: media_type.to_sym
@@ -94,12 +98,27 @@ module FlowChat
         text[0, length - 3] + "..."
       end
 
-      def escape_html(text)
-        return "" if text.nil?
-        text.to_s
-          .gsub("&", "&amp;")
-          .gsub("<", "&lt;")
-          .gsub(">", "&gt;")
+      # MarkdownSupport overrides for Telegram-specific behavior
+
+      def allowed_tags
+        # Tags supported by Telegram Bot API HTML mode
+        # Note: p and br are allowed through sanitization but converted to newlines in post_process_html
+        %w[b strong i em u s strike del a code pre blockquote p br]
+      end
+
+      def allowed_attributes
+        %w[href]
+      end
+
+      def post_process_html(html)
+        # Convert <p> tags to text with double newlines (Telegram doesn't support <p>)
+        result = html.gsub(%r{<p>(.*?)</p>}m, '\1' + "\n\n")
+
+        # Convert <br> and <br/> to newlines (Telegram doesn't support <br>)
+        result = result.gsub(/<br\s*\/?>/, "\n")
+
+        # Clean up excessive newlines
+        result.gsub(/\n{3,}/, "\n\n").strip
       end
     end
   end

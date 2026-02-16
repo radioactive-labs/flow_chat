@@ -10,13 +10,22 @@ class FlowChat::Telegram::RendererTest < Minitest::Test
     assert_equal({}, result[2])
   end
 
-  def test_render_text_with_html_escaping
+  def test_render_text_preserves_valid_html
     renderer = FlowChat::Telegram::Renderer.new("Hello <b>World</b> & friends")
     result = renderer.render
 
     assert_equal :text, result[0]
-    # HTML special characters should be escaped
-    assert_equal "Hello &lt;b&gt;World&lt;/b&gt; &amp; friends", result[1]
+    # Valid HTML tags are preserved, ampersand is escaped
+    assert_equal "Hello <b>World</b> &amp; friends", result[1]
+  end
+
+  def test_render_markdown_converted_to_html
+    renderer = FlowChat::Telegram::Renderer.new("Hello **bold** and *italic*")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Markdown is converted to HTML
+    assert_equal "Hello <strong>bold</strong> and <em>italic</em>", result[1]
   end
 
   def test_render_nil_message
@@ -26,6 +35,175 @@ class FlowChat::Telegram::RendererTest < Minitest::Test
     assert_equal :text, result[0]
     assert_equal "", result[1]
   end
+
+  # Markdown conversion tests
+
+  def test_render_multiple_paragraphs
+    renderer = FlowChat::Telegram::Renderer.new("First paragraph.\n\nSecond paragraph.")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Paragraphs are converted to double newlines
+    assert_equal "First paragraph.\n\nSecond paragraph.", result[1]
+  end
+
+  def test_render_inline_code
+    renderer = FlowChat::Telegram::Renderer.new("Use `code` here")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "Use <code>code</code> here", result[1]
+  end
+
+  def test_render_code_block
+    # Kramdown uses indented code blocks (4 spaces) for <pre><code>
+    renderer = FlowChat::Telegram::Renderer.new("    def hello\n      puts 'hi'\n    end")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<pre>"
+    assert_includes result[1], "<code>"
+    assert_includes result[1], "def hello"
+  end
+
+  def test_render_blockquote
+    renderer = FlowChat::Telegram::Renderer.new("> This is a quote")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<blockquote>"
+    assert_includes result[1], "This is a quote"
+  end
+
+  def test_render_markdown_links
+    renderer = FlowChat::Telegram::Renderer.new("Visit [Google](https://google.com)")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], '<a href="https://google.com">Google</a>'
+  end
+
+  def test_render_nested_formatting
+    renderer = FlowChat::Telegram::Renderer.new("**bold and *italic* inside**")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<strong>"
+    assert_includes result[1], "<em>"
+  end
+
+  def test_render_underline_preserved
+    renderer = FlowChat::Telegram::Renderer.new("Text with <u>underline</u>")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<u>underline</u>"
+  end
+
+  def test_render_strikethrough_preserved
+    renderer = FlowChat::Telegram::Renderer.new("Text with <s>strikethrough</s>")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<s>strikethrough</s>"
+  end
+
+  def test_render_del_tag_preserved
+    renderer = FlowChat::Telegram::Renderer.new("Text with <del>deleted</del>")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<del>deleted</del>"
+  end
+
+  def test_render_strike_tag_preserved
+    renderer = FlowChat::Telegram::Renderer.new("Text with <strike>struck</strike>")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "<strike>struck</strike>"
+  end
+
+  # HTML sanitization tests
+
+  def test_disallowed_tags_stripped
+    renderer = FlowChat::Telegram::Renderer.new("Hello <script>alert('xss')</script> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Sanitizer strips the tag but preserves text content (standard behavior)
+    refute_includes result[1], "<script>"
+    refute_includes result[1], "</script>"
+  end
+
+  def test_div_tags_stripped
+    renderer = FlowChat::Telegram::Renderer.new("Hello <div>content</div> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    refute_includes result[1], "<div>"
+  end
+
+  def test_span_tags_stripped
+    renderer = FlowChat::Telegram::Renderer.new("Hello <span style='color:red'>red</span> World")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    refute_includes result[1], "<span>"
+    refute_includes result[1], "style"
+  end
+
+  def test_disallowed_attributes_stripped
+    renderer = FlowChat::Telegram::Renderer.new('<a href="https://example.com" onclick="alert()">link</a>')
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], 'href="https://example.com"'
+    refute_includes result[1], "onclick"
+  end
+
+  # Newline handling tests
+
+  def test_br_converted_to_newline
+    renderer = FlowChat::Telegram::Renderer.new("Line 1<br>Line 2")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Line 1\nLine 2"
+  end
+
+  def test_br_self_closing_converted_to_newline
+    renderer = FlowChat::Telegram::Renderer.new("Line 1<br/>Line 2")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Line 1\nLine 2"
+  end
+
+  def test_excessive_newlines_cleaned_up
+    renderer = FlowChat::Telegram::Renderer.new("Para 1\n\n\n\n\nPara 2")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Excessive newlines should be reduced to double newlines
+    refute_includes result[1], "\n\n\n"
+  end
+
+  # Smart quotes disabled test
+
+  def test_straight_quotes_preserved
+    renderer = FlowChat::Telegram::Renderer.new("He said 'hello' and \"goodbye\"")
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    # Should have straight quotes, not curly quotes
+    assert_includes result[1], "'"
+    assert_includes result[1], '"'
+    refute_includes result[1], "\u2018"  # left single curly quote
+    refute_includes result[1], "\u201C"  # left double curly quote
+  end
+
+  # Keyboard tests
 
   def test_render_with_choices_as_inline_keyboard
     choices = {
@@ -99,6 +277,8 @@ class FlowChat::Telegram::RendererTest < Minitest::Test
     assert button[:callback_data].length <= 64
   end
 
+  # Media tests
+
   def test_render_media_photo
     media = {type: :photo, url: "https://example.com/image.jpg"}
     renderer = FlowChat::Telegram::Renderer.new("Check this out", media: media)
@@ -155,7 +335,8 @@ class FlowChat::Telegram::RendererTest < Minitest::Test
     result = renderer.render
 
     assert_equal :voice, result[0]
-    assert_nil result[1]
+    # Voice messages don't have captions, nil converts to empty string
+    assert_equal "", result[1]
     assert_equal "https://example.com/voice.ogg", result[2][:url]
   end
 
@@ -192,6 +373,17 @@ class FlowChat::Telegram::RendererTest < Minitest::Test
     assert_equal :photo_with_keyboard, result[0]  # Generic type for media with keyboard
     assert_equal :video, result[2][:media_type]
   end
+
+  def test_render_media_with_markdown_caption
+    media = {type: :photo, url: "https://example.com/image.jpg"}
+    renderer = FlowChat::Telegram::Renderer.new("Check out this **amazing** photo!", media: media)
+    result = renderer.render
+
+    assert_equal :photo, result[0]
+    assert_includes result[1], "<strong>amazing</strong>"
+  end
+
+  # Validation tests
 
   def test_choices_must_be_hash
     renderer = FlowChat::Telegram::Renderer.new("Choose:", choices: "invalid")
