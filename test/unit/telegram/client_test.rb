@@ -568,4 +568,53 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     assert result["ok"]
   end
+
+  # ============================================================================
+  # SEND CHAT ACTION TESTS
+  # ============================================================================
+
+  def test_send_chat_action_defaults_to_typing
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendChatAction")
+      .with(
+        body: hash_including(
+          "chat_id" => 12345,
+          "action" => "typing"
+        )
+      )
+      .to_return(status: 200, body: {"ok" => true, "result" => true}.to_json)
+
+    result = @client.send_chat_action(12345)
+
+    assert result["ok"]
+  end
+
+  def test_send_chat_action_passes_through_custom_action
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendChatAction")
+      .with(
+        body: hash_including(
+          "chat_id" => 12345,
+          "action" => "upload_photo"
+        )
+      )
+      .to_return(status: 200, body: {"ok" => true, "result" => true}.to_json)
+
+    result = @client.send_chat_action(12345, action: "upload_photo")
+
+    assert result["ok"]
+  end
+
+  def test_indicate_typing_sends_typing_action
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendChatAction")
+      .with(
+        body: hash_including(
+          "chat_id" => 12345,
+          "action" => "typing"
+        )
+      )
+      .to_return(status: 200, body: {"ok" => true, "result" => true}.to_json)
+
+    result = @client.indicate_typing(12345)
+
+    assert result["ok"]
+  end
 end

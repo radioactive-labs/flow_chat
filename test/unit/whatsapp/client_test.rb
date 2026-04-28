@@ -684,6 +684,71 @@ class WhatsappClientTest < Minitest::Test
     assert_equal({}, result)
   end
 
+  # ============================================================================
+  # MARK AS READ / TYPING INDICATOR TESTS
+  # ============================================================================
+
+  def test_mark_as_read_without_typing
+    stub_request(:post, "#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+      .with(
+        body: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: "wamid.ABC123"
+        }.to_json,
+        headers: {"Authorization" => "Bearer test_token", "Content-Type" => "application/json"}
+      )
+      .to_return(status: 200, body: {"success" => true}.to_json)
+
+    result = @client.mark_as_read("wamid.ABC123")
+
+    assert_equal({"success" => true}, result)
+  end
+
+  def test_mark_as_read_with_typing_indicator
+    stub_request(:post, "#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+      .with(
+        body: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: "wamid.ABC123",
+          typing_indicator: {type: "text"}
+        }.to_json
+      )
+      .to_return(status: 200, body: {"success" => true}.to_json)
+
+    result = @client.mark_as_read("wamid.ABC123", typing: true)
+
+    assert_equal({"success" => true}, result)
+  end
+
+  def test_mark_as_read_reports_api_error_on_failure
+    stub_request(:post, "#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+      .to_return(status: 400, body: {"error" => {"message" => "Invalid message id", "code" => 100}}.to_json)
+
+    # send_message_payload returns nil on non-2xx; we expect the same here.
+    result = @client.mark_as_read("wamid.BAD")
+
+    assert_nil result
+  end
+
+  def test_indicate_typing_marks_read_with_typing_indicator
+    stub_request(:post, "#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+      .with(
+        body: {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: "wamid.ABC123",
+          typing_indicator: {type: "text"}
+        }.to_json
+      )
+      .to_return(status: 200, body: {"success" => true}.to_json)
+
+    result = @client.indicate_typing("wamid.ABC123")
+
+    assert_equal({"success" => true}, result)
+  end
+
   private
 
   # ============================================================================

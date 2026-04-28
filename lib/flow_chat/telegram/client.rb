@@ -131,6 +131,33 @@ module FlowChat
         })
       end
 
+      # Send a chat action (e.g. typing indicator) to a Telegram chat.
+      #
+      # The action lasts ~5 seconds or until the next outbound message.
+      # Valid actions per Telegram Bot API: "typing", "upload_photo",
+      # "record_video", "upload_video", "record_voice", "upload_voice",
+      # "upload_document", "choose_sticker", "find_location",
+      # "record_video_note", "upload_video_note".
+      #
+      # @param chat_id [Integer, String] the target chat id
+      # @param action [String] the chat action to broadcast (default: "typing")
+      # @return [Hash] parsed Telegram API response
+      def send_chat_action(chat_id, action: "typing")
+        api_request("sendChatAction", chat_id: chat_id, action: action)
+      end
+
+      # Show a typing indicator in a Telegram chat.
+      #
+      # Convenience wrapper around `send_chat_action(chat_id, action: "typing")`.
+      # The indicator lasts ~5 seconds or until the next outbound message;
+      # there is no stop-typing call.
+      #
+      # @param chat_id [Integer, String] the target chat id
+      # @return [Hash] parsed Telegram API response
+      def indicate_typing(chat_id)
+        send_chat_action(chat_id, action: "typing")
+      end
+
       # Webhook management
       def set_webhook(url, secret_token: nil, allowed_updates: nil)
         api_request("setWebhook", {

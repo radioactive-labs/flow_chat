@@ -467,6 +467,27 @@ client.send_template(
 )
 ```
 
+### Read Receipts & Typing Indicator
+
+Mark an inbound message as read and optionally show a typing indicator while your application processes a slow request (LLM call, lookup, etc.). WhatsApp Cloud API ties the typing indicator to the mark-as-read call — there is no separate typing endpoint.
+
+```ruby
+client = FlowChat::Whatsapp::Client.new(config)
+
+# Just mark as read
+client.mark_as_read("wamid.ABC123")
+
+# Mark as read AND show "typing…" in the user's chat
+client.mark_as_read("wamid.ABC123", typing: true)
+
+# Convenience equivalent of the line above
+client.indicate_typing("wamid.ABC123")
+```
+
+The typing indicator auto-dismisses on the next outbound message or after ~25 seconds. There is **no stop-typing call** — send the real reply and the indicator clears.
+
+`message_id` must be the id of an inbound user message; you cannot show a typing indicator without an associated inbound message.
+
 ### Complete Service Example
 
 ```ruby

@@ -158,6 +158,41 @@ module FlowChat
         send_media_message(to, :sticker, sticker_url_or_id, mime_type: mime_type)
       end
 
+      # Mark an inbound message as read, optionally showing a typing indicator.
+      #
+      # WhatsApp Cloud API ties the typing indicator to the mark-as-read call:
+      # passing `typing: true` adds a `typing_indicator` field to the same
+      # request. The indicator auto-dismisses on the next outbound message or
+      # after ~25 seconds; there is no separate "stop typing" call.
+      #
+      # @param message_id [String] the inbound message id (wamid.*) to mark as read
+      # @param typing [Boolean] when true, also show a typing indicator
+      # @return [Hash, nil] parsed API response, or nil on failure
+      def mark_as_read(message_id, typing: false)
+        payload = {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: message_id
+        }
+        payload[:typing_indicator] = {type: "text"} if typing
+
+        send_read_receipt_payload(payload, message_id)
+      end
+
+      # Show a typing indicator in response to an inbound message.
+      #
+      # Convenience wrapper around `mark_as_read(message_id, typing: true)`.
+      # Note that WhatsApp ties the typing indicator to read-receipt delivery,
+      # so calling this also marks the message as read. There is no stop-typing
+      # call — the indicator auto-dismisses on the next outbound message or
+      # after ~25 seconds.
+      #
+      # @param message_id [String] the inbound message id (wamid.*)
+      # @return [Hash, nil] parsed API response, or nil on failure
+      def indicate_typing(message_id)
+        mark_as_read(message_id, typing: true)
+      end
+
       # Upload media file and return media ID
       # @param file_path_or_io [String, IO] File path or IO object
       # @param mime_type [String] MIME type of the file (required)
@@ -522,6 +557,45 @@ module FlowChat
           error: error,
           recipient: to,
           message_type: message_type
+        )
+        nil
+      end
+
+      def send_read_receipt_payload(payload, message_id)
+        FlowChat.logger.debug { "WhatsApp::Client: Marking message #{message_id} as read (typing=#{payload.key?(:typing_indicator)})" }
+
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+
+        request = Net::HTTP::Post.new(uri)
+        request["Authorization"] = "Bearer #{@config.access_token}"
+        request["Content-Type"] = "application/json"
+        request.body = payload.to_json
+
+        response = http.request(request)
+
+        if response.is_a?(Net::HTTPSuccess)
+          JSON.parse(response.body)
+        else
+          FlowChat.logger.error { "WhatsApp::Client: mark_as_read failed - #{response.code}: #{response.body}" }
+          report_api_error(
+            "WhatsApp mark_as_read failed",
+            response_code: response.code,
+            response_body: response.body,
+            message_type: "read_receipt"
+          )
+          nil
+        end
+      rescue Net::OpenTimeout, Net::ReadTimeout => network_error
+        FlowChat.logger.error { "WhatsApp::Client: Network timeout marking read: #{network_error.class.name}: #{network_error.message}" }
+        raise network_error
+      rescue => error
+        FlowChat.logger.error { "WhatsApp::Client: mark_as_read exception: #{error.class.name}: #{error.message}" }
+        report_api_error(
+          "WhatsApp mark_as_read exception: #{error.class.name}",
+          error: error,
+          message_type: "read_receipt"
         )
         nil
       end

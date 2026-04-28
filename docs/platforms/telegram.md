@@ -498,6 +498,25 @@ client.delete_message(chat_id, message_id)
 client.answer_callback_query(callback_query_id, text: "Processing...", show_alert: false)
 ```
 
+### Chat Actions / Typing Indicator
+
+Broadcast a chat action (e.g. "typing…") to a Telegram chat. The action lasts ~5 seconds or until the next outbound message; there is **no stop-typing call**.
+
+```ruby
+client = FlowChat::Telegram::Client.new(config)
+
+# Show "typing…"
+client.send_chat_action(chat_id)
+
+# Convenience equivalent of the line above
+client.indicate_typing(chat_id)
+
+# Other actions (e.g. while uploading a generated image)
+client.send_chat_action(chat_id, action: "upload_photo")
+```
+
+Valid actions per the Telegram Bot API: `typing`, `upload_photo`, `record_video`, `upload_video`, `record_voice`, `upload_voice`, `upload_document`, `choose_sticker`, `find_location`, `record_video_note`, `upload_video_note`. FlowChat does not validate the action client-side; if Telegram rejects it the response will contain `"ok" => false` with the error description.
+
 ### Bot Information
 
 ```ruby
