@@ -122,6 +122,8 @@ end
 
 WhatsApp, Telegram, Intercom, and HTTP all set `request.media` with a `:type` symbol when inbound media is received (USSD is text-only and never sets media). WhatsApp and Telegram carry a single media item, while Intercom may set an **array** of media (one entry per attachment). HTTP callers submit inbound media via the `media_url` request param (with optional `media_type` and `mime_type`).
 
+The raw `:type` in the table below is the platform-native value. When you access media through `app.media`, `media.type` returns a **normalized** value (`:photo` → `:image`, `:voice` → `:audio`) and `media.raw_type` returns the native value.
+
 | Media Type | WhatsApp | Telegram | Additional Fields |
 |------------|----------|----------|-------------------|
 | `:image` / `:photo` | ✓ `:image` | ✓ `:photo` | id/file_id, mime_type, width, height |
@@ -140,9 +142,10 @@ The recommended way to work with inbound media is through the high-level `app` a
 photo = app.screen(:upload) { |prompt| prompt.ask "Please send a photo" }
 
 if app.media
-  app.media.type       # => :image, :document, :audio, :video, :photo, ...
+  app.media.type       # canonical: :image, :video, :audio, :document, :sticker
+  app.media.raw_type   # platform-native: e.g. :photo/:voice on Telegram
   app.media.mime_type
-  app.media.caption
+  app.media.caption    # user's caption/message text, when present
   app.media.filename
   url   = app.media.url        # a fetchable URL for the media
   bytes = app.media.download   # the raw file bytes
@@ -167,6 +170,8 @@ app.contact_name   # the sender's display name
 
 - `app.media` → the first inbound `FlowChat::Media` item, or `nil`.
 - `app.media_items` → `Array<FlowChat::Media>` (WhatsApp/Telegram carry one item; Intercom may carry several).
+- `media.type` → a canonical type (`:image`, `:video`, `:audio`, `:document`, `:sticker`) normalized across platforms; `media.raw_type` returns the platform-native value (Telegram's `:photo`/`:voice`).
+- `media.caption` → the caption/text the user sent alongside the media (Telegram message caption, Intercom body, WhatsApp caption). For a multi-attachment Intercom message the body is attached to the first item.
 - `app.location` → the `request.location` hash, or `nil`.
 - `app.contact` → the shared contact card hash, or `nil`.
 - `app.contact_name` → the sender's display name (`request.user_name`).
