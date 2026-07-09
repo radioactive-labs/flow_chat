@@ -303,6 +303,58 @@ class MediaSupportTest < Minitest::Test
     assert_equal "https://example.com/image.jpg", error1.media[:url]
   end
 
+  # ==========================================================================
+  # INBOUND MEDIA / LOCATION / CONTACT EXPOSURE
+  # ==========================================================================
+
+  def test_whatsapp_inbound_media_exposed_via_app
+    @whatsapp_context.input = FlowChat::Input::MEDIA
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["request.media"] = {type: :image, id: "MID", mime_type: "image/jpeg", caption: "hi"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_instance_of FlowChat::Media, app.media
+    assert_equal :image, app.media.type
+    assert_equal "MID", app.media.id
+    assert_equal 1, app.media_items.size
+  end
+
+  def test_intercom_inbound_multiple_media_exposed_via_app
+    ctx = FlowChat::Context.new
+    ctx.session = create_test_session_store
+    ctx["request.platform"] = :intercom
+    ctx["request.media"] = [
+      {type: :image, url: "https://i/1.png", mime_type: "image/png"},
+      {type: :document, url: "https://i/2.pdf", mime_type: "application/pdf"}
+    ]
+    app = FlowChat::App.new(ctx)
+
+    assert_equal 2, app.media_items.size
+    assert_equal "https://i/1.png", app.media.url
+    assert_equal :document, app.media_items.last.type
+  end
+
+  def test_inbound_media_absent_returns_nil_and_empty
+    @whatsapp_context.input = "just text"
+    @whatsapp_context["request.platform"] = :whatsapp
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_nil app.media
+    assert_equal [], app.media_items
+  end
+
+  def test_location_and_contact_exposed_via_app
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["request.location"] = {latitude: 1.0, longitude: 2.0}
+    @whatsapp_context["request.user_name"] = "John Doe"
+    @whatsapp_context["request.contact"] = {name: "Jane", first_name: "Jane"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal 1.0, app.location[:latitude]
+    assert_equal "John Doe", app.contact_name
+    assert_equal "Jane", app.contact[:name]
+  end
+
   private
 
   def create_test_session_store

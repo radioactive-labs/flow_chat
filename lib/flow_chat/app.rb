@@ -64,15 +64,27 @@ module FlowChat
     end
 
     def contact_name
-      nil
+      context["request.user_name"]
+    end
+
+    def contact
+      context["request.contact"]
     end
 
     def location
-      nil
+      context["request.location"]
     end
 
     def media
-      nil
+      media_items.first
+    end
+
+    def media_items
+      raw = context["request.media"]
+      return [] unless raw
+
+      items = raw.is_a?(Array) ? raw : [raw]
+      items.map { |data| FlowChat::Media.new(data, platform: platform, client: media_client) }
     end
 
     def session
@@ -88,6 +100,14 @@ module FlowChat
         user_input = nil
       end
       user_input
+    end
+
+    def media_client
+      case platform
+      when :whatsapp then context["whatsapp.client"]
+      when :telegram then context["telegram.client"]
+      when :intercom then context["intercom.client"]
+      end
     end
   end
 end
