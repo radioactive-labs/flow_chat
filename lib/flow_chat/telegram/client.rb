@@ -179,6 +179,37 @@ module FlowChat
         api_request("getMe")
       end
 
+      # Get file metadata (including file_path) for an inbound file_id
+      def get_file(file_id)
+        api_request("getFile", {file_id: file_id})
+      end
+
+      # Build the download URL for an inbound file_id
+      def file_url(file_id)
+        file_path = get_file(file_id).dig("result", "file_path")
+        return nil unless file_path
+
+        "https://api.telegram.org/file/bot#{@config.bot_token}/#{file_path}"
+      end
+
+      # Download the raw bytes for an inbound file_id
+      def download_file(file_id)
+        url = file_url(file_id)
+        return nil unless url
+
+        uri = URI(url)
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+        response = http.get(uri.request_uri)
+
+        if response.is_a?(Net::HTTPSuccess)
+          response.body
+        else
+          FlowChat.logger.error { "Telegram::Client: File download error: #{response.code}" }
+          nil
+        end
+      end
+
       private
 
       def api_request(method, params = {})
