@@ -4,40 +4,40 @@
     {
       "id": 1,
       "subject": "Task 1: FlowChat::Media value object",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Value object wrapping one inbound media item with metadata + per-platform url/download.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/media.rb\", \"test/unit/media_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/media_test.rb -v\", \"acceptanceCriteria\": [\"metadata readers\", \"url/download dispatch per platform\", \"autoloads via Zeitwerk\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 2,
       "subject": "Task 2: Telegram client media download",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Add get_file, file_url, download_file to Telegram client for inbound media.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/telegram/client.rb\", \"test/unit/telegram/client_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/telegram/client_test.rb -v\", \"acceptanceCriteria\": [\"get_file\", \"file_url\", \"download_file\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 3,
       "subject": "Task 3: Wire App to expose inbound media/location/contact",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [1, 2],
       "description": "**Goal:** Replace nil stubs; normalize single/array media into media_items, media as first-item convenience.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/app.rb\", \"test/integration/media_support_test.rb\"], \"verifyCommand\": \"ruby -Itest test/integration/media_support_test.rb -v\", \"acceptanceCriteria\": [\"media_items normalizes single/array/none\", \"media is first item\", \"location/contact/contact_name exposed\", \"correct platform client\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Intercom gateway inbound media parsing",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [3],
       "description": "**Goal:** Parse Intercom attachments (array) into request.media, supporting multiple per message.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/intercom/gateway/intercom_api.rb\", \"test/unit/intercom/gateway/intercom_api_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/intercom/gateway/intercom_api_test.rb -v\", \"acceptanceCriteria\": [\"attachments array parsed\", \"content_type mapping\", \"media sentinel input set\", \"text unaffected\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: HTTP gateway inbound media parsing",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [3],
       "description": "**Goal:** Accept inbound media via HTTP params (media_url/media_type/mime_type).\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/http/gateway/simple.rb\", \"test/unit/http/gateway/simple_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/http/gateway/simple_test.rb -v\", \"acceptanceCriteria\": [\"media_url sets request.media\", \"media sentinel when no text\", \"text precedence preserved\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 6,
       "subject": "Task 6: Full suite regression + docs",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [4, 5],
       "description": "**Goal:** Confirm full suite green; document inbound media API.\n\n```json:metadata\n{\"files\": [\"README.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"full suite green\", \"docs updated\"], \"requiresUserVerification\": false}\n```"
     }
