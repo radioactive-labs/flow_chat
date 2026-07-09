@@ -43,7 +43,7 @@ module FlowChat
     end
 
     def to_h
-      @data
+      @data.dup
     end
 
     # Resolve a fetchable URL for the media.
@@ -74,6 +74,9 @@ module FlowChat
       http.use_ssl = (uri.scheme == "https")
       response = http.get(uri.request_uri)
       response.body if response.is_a?(Net::HTTPSuccess)
+    rescue => e
+      FlowChat.logger.warn { "Media: download failed for #{resource_url}: #{e.message}" }
+      nil
     end
   end
 end

@@ -43,4 +43,58 @@ class MediaTest < Minitest::Test
     m = FlowChat::Media.new({type: :image, url: "https://intercom/a.png"}, platform: :intercom)
     assert_equal "https://intercom/a.png", m.url
   end
+
+  def test_to_h_returns_a_copy_that_cannot_mutate_internal_state
+    data = {type: :image, id: "MID"}
+    m = FlowChat::Media.new(data, platform: :whatsapp)
+    m.to_h[:type] = :video
+    assert_equal :image, m.type
+  end
+
+  def test_direct_download_returns_body_on_success
+    response = fake_response(success: true, body: "IMAGE_BYTES")
+    http = Minitest::Mock.new
+    http.expect(:use_ssl=, nil, [true])
+    http.expect(:get, response, ["/a.png"])
+
+    m = FlowChat::Media.new({type: :image, url: "https://intercom/a.png"}, platform: :intercom)
+    Net::HTTP.stub(:new, http) do
+      assert_equal "IMAGE_BYTES", m.download
+    end
+    http.verify
+  end
+
+  def test_direct_download_returns_nil_on_non_success
+    response = fake_response(success: false, body: "not found")
+    http = Minitest::Mock.new
+    http.expect(:use_ssl=, nil, [true])
+    http.expect(:get, response, ["/a.png"])
+
+    m = FlowChat::Media.new({type: :image, url: "https://intercom/a.png"}, platform: :intercom)
+    Net::HTTP.stub(:new, http) do
+      assert_nil m.download
+    end
+    http.verify
+  end
+
+  def test_direct_download_returns_nil_when_url_is_nil
+    m = FlowChat::Media.new({type: :image}, platform: :intercom)
+    assert_nil m.download
+  end
+
+  def test_direct_download_returns_nil_on_transport_error
+    m = FlowChat::Media.new({type: :image, url: "https://dead.host/a.png"}, platform: :intercom)
+    Net::HTTP.stub(:new, ->(*) { raise SocketError, "getaddrinfo: nodename nor servname provided" }) do
+      assert_nil m.download
+    end
+  end
+
+  private
+
+  def fake_response(success:, body:)
+    response = Object.new
+    response.define_singleton_method(:is_a?) { |klass| success && klass == Net::HTTPSuccess }
+    response.define_singleton_method(:body) { body }
+    response
+  end
 end
