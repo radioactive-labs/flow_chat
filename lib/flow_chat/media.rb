@@ -6,6 +6,10 @@ module FlowChat
   # Normalizes cross-platform differences (WhatsApp media-id, Telegram file_id,
   # Intercom/HTTP direct URL) behind #url and #download.
   class Media
+    # Maps platform-native media types to a canonical, cross-platform set.
+    # Telegram uses :photo/:voice where WhatsApp uses :image/:audio.
+    NORMALIZED_TYPES = {photo: :image, voice: :audio}.freeze
+
     attr_reader :platform, :client
 
     def initialize(data, platform:, client: nil)
@@ -14,7 +18,13 @@ module FlowChat
       @client = client
     end
 
+    # Canonical, cross-platform media type (:image, :video, :audio, :document, :sticker).
     def type
+      NORMALIZED_TYPES.fetch(raw_type, raw_type)
+    end
+
+    # The platform-native type as parsed by the gateway (e.g. :photo, :voice on Telegram).
+    def raw_type
       @data[:type]
     end
 

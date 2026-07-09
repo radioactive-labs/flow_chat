@@ -14,6 +14,27 @@ class MediaTest < Minitest::Test
     assert_equal "image/jpeg", m[:mime_type]
   end
 
+  def test_type_normalizes_telegram_photo_to_image
+    m = FlowChat::Media.new({type: :photo, file_id: "F"}, platform: :telegram)
+    assert_equal :image, m.type
+    assert_equal :photo, m.raw_type
+    assert_equal :photo, m[:type]  # raw hash access unchanged
+  end
+
+  def test_type_normalizes_telegram_voice_to_audio
+    m = FlowChat::Media.new({type: :voice, file_id: "F"}, platform: :telegram)
+    assert_equal :audio, m.type
+    assert_equal :voice, m.raw_type
+  end
+
+  def test_type_passes_through_canonical_types
+    %i[image video audio document sticker].each do |t|
+      m = FlowChat::Media.new({type: t}, platform: :whatsapp)
+      assert_equal t, m.type
+      assert_equal t, m.raw_type
+    end
+  end
+
   def test_filename_falls_back_to_file_name_key
     m = FlowChat::Media.new({type: :document, file_name: "doc.pdf"}, platform: :telegram)
     assert_equal "doc.pdf", m.filename
