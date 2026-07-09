@@ -252,6 +252,63 @@ class HttpSimpleGatewayTest < Minitest::Test
     end
   end
 
+  def test_inbound_media_url_sets_request_media
+    @controller.request.params = {"media_url" => "https://x/a.jpg", "media_type" => "image", "mime_type" => "image/jpeg"}
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/http/webhook" }
+    @controller.request.define_singleton_method(:user_agent) { "TestAgent/1.0" }
+
+    @gateway.call(@context)
+
+    assert_equal :image, @context["request.media"][:type]
+    assert_equal "https://x/a.jpg", @context["request.media"][:url]
+    assert_equal "image/jpeg", @context["request.media"][:mime_type]
+    assert_equal FlowChat::Input::MEDIA, @context.input
+  end
+
+  def test_inbound_media_defaults_type_to_document
+    @controller.request.params = {"media_url" => "https://x/a.pdf"}
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/http/webhook" }
+    @controller.request.define_singleton_method(:user_agent) { "TestAgent/1.0" }
+
+    @gateway.call(@context)
+
+    assert_equal :document, @context["request.media"][:type]
+    assert_equal FlowChat::Input::MEDIA, @context.input
+  end
+
+  def test_text_input_takes_precedence_over_media
+    @controller.request.params = {"input" => "hello", "media_url" => "https://x/a.jpg"}
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/http/webhook" }
+    @controller.request.define_singleton_method(:user_agent) { "TestAgent/1.0" }
+
+    @gateway.call(@context)
+
+    assert_equal "hello", @context.input
+    assert_equal "https://x/a.jpg", @context["request.media"][:url]
+  end
+
+  def test_no_media_leaves_request_media_unset
+    @controller.request.params = {"input" => "hi"}
+    @controller.request.define_singleton_method(:method) { "POST" }
+    @controller.request.define_singleton_method(:get?) { false }
+    @controller.request.define_singleton_method(:post?) { true }
+    @controller.request.define_singleton_method(:path) { "/http/webhook" }
+    @controller.request.define_singleton_method(:user_agent) { "TestAgent/1.0" }
+
+    @gateway.call(@context)
+
+    assert_nil @context["request.media"]
+  end
+
   def test_sets_request_body_with_stringified_keys
     @controller.request.params = {
       "session_id" => "test_session_123",
