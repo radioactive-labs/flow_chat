@@ -40,6 +40,18 @@
       "status": "completed",
       "blockedBy": [4, 5],
       "description": "**Goal:** Confirm full suite green; document inbound media API.\n\n```json:metadata\n{\"files\": [\"README.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"full suite green\", \"docs updated\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Normalize FlowChat::Media#type across platforms",
+      "status": "completed",
+      "description": "**Goal:** Follow-up from final review. media.type returns canonical type; raw_type returns native. Committed 51ae2f8."
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Capture inbound captions (Telegram + Intercom)",
+      "status": "completed",
+      "description": "**Goal:** Follow-up from final review. Telegram message caption + Intercom body captured as media caption. Committed d58a0f5."
     }
   ],
   "lastUpdated": "2026-07-09"
