@@ -120,7 +120,7 @@ end
 
 ## Media Type Reference
 
-Both WhatsApp and Telegram set `request.media` with a `:type` symbol when media is received:
+WhatsApp, Telegram, Intercom, and HTTP all set `request.media` with a `:type` symbol when inbound media is received (USSD is text-only and never sets media). WhatsApp and Telegram carry a single media item, while Intercom may set an **array** of media (one entry per attachment). HTTP callers submit inbound media via the `media_url` request param (with optional `media_type` and `mime_type`).
 
 | Media Type | WhatsApp | Telegram | Additional Fields |
 |------------|----------|----------|-------------------|
@@ -133,7 +133,49 @@ Both WhatsApp and Telegram set `request.media` with a `:type` symbol when media 
 
 ### Accessing Media in Flows
 
-FlowChat provides constants for special input markers:
+The recommended way to work with inbound media is through the high-level `app` accessors. They wrap the raw request data in `FlowChat::Media` objects and normalize platform differences (e.g. WhatsApp's `id` vs Telegram's `file_id`, `:filename` vs `:file_name`):
+
+```ruby
+# Preferred: use the app accessors
+photo = app.screen(:upload) { |prompt| prompt.ask "Please send a photo" }
+
+if app.media
+  app.media.type       # => :image, :document, :audio, :video, :photo, ...
+  app.media.mime_type
+  app.media.caption
+  app.media.filename
+  url   = app.media.url        # a fetchable URL for the media
+  bytes = app.media.download   # the raw file bytes
+end
+
+# A single inbound message may carry several media items (e.g. Intercom attachments)
+app.media_items.each do |item|
+  process(item.download)
+end
+
+# Location and shared contacts
+if app.location
+  lat = app.location[:latitude]
+  lng = app.location[:longitude]
+end
+
+if app.contact
+  name = app.contact[:name]
+end
+app.contact_name   # the sender's display name
+```
+
+- `app.media` → the first inbound `FlowChat::Media` item, or `nil`.
+- `app.media_items` → `Array<FlowChat::Media>` (WhatsApp/Telegram carry one item; Intercom may carry several).
+- `app.location` → the `request.location` hash, or `nil`.
+- `app.contact` → the shared contact card hash, or `nil`.
+- `app.contact_name` → the sender's display name (`request.user_name`).
+
+`media.url` resolves a fetchable URL per platform (WhatsApp via `client.get_media_url`, Telegram via `getFile`, Intercom/HTTP use the direct URL), and `media.download` returns the raw file bytes.
+
+#### Lower-level access
+
+The raw request hashes are still available, and you can dispatch on `app.input` against the special input sentinels:
 
 ```ruby
 FlowChat::Input::LOCATION  # "$location$"
@@ -142,23 +184,11 @@ FlowChat::Input::CONTACT   # "$contact$"
 FlowChat::Input::START     # "$start$" (session marker)
 ```
 
-Example usage:
-
 ```ruby
 case app.input
 when FlowChat::Input::MEDIA
-  media = app.context["request.media"]
-
-  case media[:type]
-  when :photo, :image
-    file_id = media[:file_id] || media[:id]
-  when :video
-    duration = media[:duration]
-  when :document
-    filename = media[:file_name] || media[:filename]
-  when :sticker
-    emoji = media[:emoji]
-  end
+  media = app.context["request.media"]   # raw Hash (or Array for Intercom)
+  file_id = media[:file_id] || media[:id]
 
 when FlowChat::Input::LOCATION
   location = app.context["request.location"]
@@ -169,3 +199,5 @@ when FlowChat::Input::CONTACT
   phone = contact[:phone_number]
 end
 ```
+
+Prefer `app.media` / `app.media_items` over the raw hashes — they handle multiple attachments and cross-platform field naming for you.
