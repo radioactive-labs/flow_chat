@@ -128,8 +128,8 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
       .with { |request|
         body = JSON.parse(request.body)
         body["chat_id"] == 12345 &&
-        body["text"] == "Choose:" &&
-        body["reply_markup"]["inline_keyboard"].is_a?(Array)
+          body["text"] == "Choose:" &&
+          body["reply_markup"]["inline_keyboard"].is_a?(Array)
       }
       .to_return(status: 200, body: {"ok" => true, "result" => {}}.to_json)
 
@@ -310,9 +310,9 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
       .with { |request|
         body = JSON.parse(request.body)
         body["chat_id"] == 12345 &&
-        body["message_id"] == 99 &&
-        body["text"] == "Updated" &&
-        body["reply_markup"]["inline_keyboard"].is_a?(Array)
+          body["message_id"] == 99 &&
+          body["text"] == "Updated" &&
+          body["reply_markup"]["inline_keyboard"].is_a?(Array)
       }
       .to_return(status: 200, body: {"ok" => true, "result" => {}}.to_json)
 
@@ -330,7 +330,7 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
       .with { |request|
         body = JSON.parse(request.body)
         body["url"] == "https://example.com/webhook" &&
-        body["allowed_updates"] == ["message", "callback_query"]
+          body["allowed_updates"] == ["message", "callback_query"]
       }
       .to_return(status: 200, body: {"ok" => true, "result" => true}.to_json)
 
@@ -344,7 +344,7 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
       .with { |request|
         body = JSON.parse(request.body)
         body["url"] == "https://example.com/webhook" &&
-        body["secret_token"] == "my_secret"
+          body["secret_token"] == "my_secret"
       }
       .to_return(status: 200, body: {"ok" => true, "result" => true}.to_json)
 

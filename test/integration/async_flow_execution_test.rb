@@ -44,7 +44,7 @@ class AsyncFlowExecutionTest < Minitest::Test
       # Check if we should enqueue async
       if should_enqueue_async?
         enqueue_async_job
-        return @controller.render json: {status: "processing"}
+        @controller.render json: {status: "processing"}
       else
         # Process inline
         @app.call(context)
@@ -109,7 +109,10 @@ class AsyncFlowExecutionTest < Minitest::Test
 
     # Mock the job class to verify it gets called
     job_enqueued = false
-    TestAsyncJob.stub(:perform_later, ->(args) { job_enqueued = true; args }) do
+    TestAsyncJob.stub(:perform_later, ->(args) {
+      job_enqueued = true
+      args
+    }) do
       processor.run(TestFlow, :start)
     end
 

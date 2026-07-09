@@ -319,7 +319,7 @@ class UssdPaginationTest < Minitest::Test
         content = prompt.gsub(/\n\n# More$/, "")
 
         # Should end with a word boundary (space, newline, or punctuation)
-        assert content.match(/[\s\n\.!?:]$/) || content.length < 10,
+        assert content.match(/[\s\n.!?:]$/) || content.length < 10,
           "Pagination should break at word boundaries, got: '#{content[-10..]}'"
       end
     ensure
@@ -411,7 +411,7 @@ class UssdPaginationTest < Minitest::Test
           "Should not break Unicode text mid-word, got: '#{content[-15..]}'"
 
         # Should end with a reasonable boundary (space, punctuation, or newline)
-        assert content.match(/[\s\n\.!?:]$/) || content.length < 20,
+        assert content.match(/[\s\n.!?:]$/) || content.length < 20,
           "Should break at reasonable boundaries with Unicode text"
       end
     ensure

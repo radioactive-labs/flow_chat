@@ -1,5 +1,6 @@
 require "bundler/gem_tasks"
 require "rake/testtask"
+require "standard/rake"
 
 # Load custom rake tasks
 Dir.glob("lib/tasks/**/*.rake").each { |r| load r }
@@ -10,4 +11,4 @@ Rake::TestTask.new(:test) do |t|
   t.test_files = FileList["test/**/*_test.rb"]
 end
 
-task default: :test
+task default: %i[test standard]

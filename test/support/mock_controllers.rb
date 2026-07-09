@@ -34,7 +34,7 @@ module FlowChat
 
       def build_mock_whatsapp_controller(webhook_body:)
         body_json = webhook_body.is_a?(String) ? webhook_body : webhook_body.to_json
-        body_io = StringIO.new(body_json)
+        StringIO.new(body_json)
 
         request = OpenStruct.new
         request.define_singleton_method(:post?) { true }
@@ -50,7 +50,7 @@ module FlowChat
 
       def build_mock_intercom_controller(webhook_body:)
         body_json = webhook_body.is_a?(String) ? webhook_body : webhook_body.to_json
-        body_io = StringIO.new(body_json)
+        StringIO.new(body_json)
 
         request = OpenStruct.new
         request.define_singleton_method(:post?) { true }

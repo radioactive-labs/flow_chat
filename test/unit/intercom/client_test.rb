@@ -96,7 +96,7 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
   end
 
   def test_parse_html_complex_intercom_message
-    html = '<p>Hi there! I need help with <strong>my account</strong>.</p><p>Can you assist?</p>'
+    html = "<p>Hi there! I need help with <strong>my account</strong>.</p><p>Can you assist?</p>"
     result = FlowChat::Intercom::Client.parse_html(html)
     assert_includes result, "Hi there!"
     assert_includes result, "**my account**"

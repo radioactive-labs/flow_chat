@@ -59,7 +59,7 @@ module FlowChat
           if should_enqueue_async?
             # HTTP request with async enabled → enqueue job and return immediately
             enqueue_async_job
-            return @controller.render json: {status: "processing"}
+            @controller.render json: {status: "processing"}
           else
             # Background OR inline → process message
             # Process the request

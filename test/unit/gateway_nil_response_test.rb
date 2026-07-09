@@ -28,7 +28,7 @@ class GatewayNilResponseTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = controller
 
-    app = ->(ctx) { nil }
+    app = ->(ctx) {}
     gateway = FlowChat::Http::Gateway::Simple.new(app, {session_id: "test_123", user_id: "user_456"})
     gateway.call(context)
 
@@ -48,7 +48,7 @@ class GatewayNilResponseTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = controller
 
-    app = ->(ctx) { nil }
+    app = ->(ctx) {}
     gateway = FlowChat::Ussd::Gateway::Nalo.new(app)
     gateway.call(context)
 
@@ -69,7 +69,7 @@ class GatewayNilResponseTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = controller
 
-    app = ->(ctx) { nil }
+    app = ->(ctx) {}
     config = build_whatsapp_config
 
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(app, config)
@@ -89,7 +89,7 @@ class GatewayNilResponseTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = controller
 
-    app = ->(ctx) { nil }
+    app = ->(ctx) {}
     config = FlowChat::Intercom::Configuration.new("test")
     config.access_token = "test_token"
     config.skip_signature_validation = true

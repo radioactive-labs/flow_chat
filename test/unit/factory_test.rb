@@ -32,8 +32,8 @@ class FactoryTest < Minitest::Test
     error = assert_raises(FlowChat::Factory::FactoryNotFoundError) do
       FlowChat::Factory.execute(:unknown, controller: mock_controller)
     end
-    assert_match /not registered/, error.message
-    assert_match /unknown/, error.message
+    assert_match(/not registered/, error.message)
+    assert_match(/unknown/, error.message)
   end
 
   def test_clear_removes_all_factories

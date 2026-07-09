@@ -122,7 +122,7 @@ class ProcessorTest < Minitest::Test
   end
 
   def test_use_session_config_with_block
-    custom_proc = lambda { |context| "custom_session_#{context['request.id']}" }
+    custom_proc = lambda { |context| "custom_session_#{context["request.id"]}" }
 
     result = @processor.use_session_config(&custom_proc)
 
@@ -134,7 +134,7 @@ class ProcessorTest < Minitest::Test
   def test_use_session_config_with_block_overrides_previous_config
     # First set regular config
     @processor.use_session_config(boundaries: [:flow], identifier: :msisdn)
-    
+
     # Then override with proc
     custom_proc = lambda { |context| "always_custom" }
     @processor.use_session_config(&custom_proc)

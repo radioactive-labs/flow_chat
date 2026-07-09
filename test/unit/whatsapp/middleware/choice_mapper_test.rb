@@ -27,7 +27,7 @@ module FlowChat
           @context.input = nil
           @app.expect :call, [:text, "response", nil, nil], [@context]
 
-          result = @middleware.call(@context)
+          @middleware.call(@context)
 
           assert_nil @context.input
           @app.verify
@@ -77,7 +77,7 @@ module FlowChat
           choices = {"create" => "Create Account", "login" => "Login"}
           @app.expect :call, [:text, "response", choices, nil], [@context]
 
-          type, prompt, transformed_choices, media = @middleware.call(@context)
+          _, _, transformed_choices, _ = @middleware.call(@context)
 
           # Middleware should transform choices to use generated IDs as keys
           assert_equal "Create Account", transformed_choices["Create Account"]

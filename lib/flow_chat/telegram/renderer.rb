@@ -83,7 +83,7 @@ module FlowChat
         if buttons.length <= 4
           buttons.each_slice(2).to_a
         else
-          buttons.map { |b| [b] }
+          buttons.zip
         end
       end
 

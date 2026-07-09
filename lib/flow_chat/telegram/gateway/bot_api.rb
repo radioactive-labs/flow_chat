@@ -24,7 +24,13 @@ module FlowChat
           @controller = context.controller
           request = @controller.request
 
-          FlowChat.logger.debug { "BotApi: Processing #{request.request_method rescue 'POST'} request" }
+          FlowChat.logger.debug {
+            "BotApi: Processing #{begin
+              request.request_method
+            rescue
+              "POST"
+            end} request"
+          }
 
           # Handle POST webhooks only
           if request.post?

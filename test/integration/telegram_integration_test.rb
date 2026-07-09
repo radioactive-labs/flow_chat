@@ -358,8 +358,14 @@ class TelegramIntegrationTest < Minitest::Test
 
       if context_callback
         c.use_middleware Class.new {
-          define_method(:initialize) { |app| @app = app; @callback = context_callback }
-          define_method(:call) { |context| @callback.call(context); @app.call(context) }
+          define_method(:initialize) { |app|
+            @app = app
+            @callback = context_callback
+          }
+          define_method(:call) { |context|
+            @callback.call(context)
+            @app.call(context)
+          }
         }
       end
     end

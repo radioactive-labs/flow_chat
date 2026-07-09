@@ -69,7 +69,7 @@ module FlowChat
         assert_equal "Accept", id1
         refute_equal id1, id2
         # Hash suffix uses space separator and 3-char hash
-        assert_match /^Accept\s[a-f0-9]{3}$/, id2
+        assert_match(/^Accept\s[a-f0-9]{3}$/, id2)
       end
 
       def test_multiple_duplicates_all_unique
@@ -80,7 +80,7 @@ module FlowChat
 
         ids[1..4].each do |id|
           # Hash suffix uses space separator and 3-char hash
-          assert_match /^Same Label\s[a-f0-9]{3}$/, id
+          assert_match(/^Same Label\s[a-f0-9]{3}$/, id)
         end
       end
 
@@ -213,7 +213,7 @@ module FlowChat
 
         assert id_with_hash.length <= IdGenerator::MAX_ID_LENGTH
         # Hash suffix uses space separator and 3-char hash
-        assert_match /\s[a-f0-9]{3}$/, id_with_hash
+        assert_match(/\s[a-f0-9]{3}$/, id_with_hash)
       end
 
       def test_different_labels_produce_different_ids

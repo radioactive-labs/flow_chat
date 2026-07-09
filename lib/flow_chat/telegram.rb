@@ -5,4 +5,3 @@ module FlowChat
   module Telegram
   end
 end
-

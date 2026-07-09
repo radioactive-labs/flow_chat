@@ -95,7 +95,7 @@ class ProcessorAsyncTest < Minitest::Test
       processor.use_async
     end
 
-    assert_match /factory.*required/, error.message
+    assert_match(/factory.*required/, error.message)
   end
 
   def test_use_async_without_job_class_uses_generic_async_job

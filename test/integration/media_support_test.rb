@@ -55,6 +55,7 @@ require "test_helper"
 
 class MediaSupportTest < Minitest::Test
   include FlowChat::TestSupport::TestFlows
+
   def setup
     @ussd_context = FlowChat::Context.new
     @ussd_context.session = create_test_session_store

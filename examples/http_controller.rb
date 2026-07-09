@@ -128,7 +128,7 @@ class WelcomeFlow < FlowChat::Flow
       prompt.ask "Enter your email address:",
         validate: ->(input) {
           return "Email is required" if input.blank?
-          return "Invalid email format" unless input.match?(/\A[\w+\-.]+@[a-z\d\-]+(\.[a-z\d\-]+)*\.[a-z]+\z/i)
+          return "Invalid email format" unless input.match?(/\A[\w+\-.]+@[a-z\d-]+(\.[a-z\d-]+)*\.[a-z]+\z/i)
           nil
         },
         transform: ->(input) { input.downcase.strip }

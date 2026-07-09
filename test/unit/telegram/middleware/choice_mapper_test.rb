@@ -49,7 +49,7 @@ class FlowChat::Telegram::Middleware::ChoiceMapperTest < Minitest::Test
 
     @app.expect(:call, [:text, "Response", nil, nil], [@context])
 
-    result = @middleware.call(@context)
+    @middleware.call(@context)
 
     # Input should pass through since it's a valid choice key
     assert_equal "opt1", @context.input

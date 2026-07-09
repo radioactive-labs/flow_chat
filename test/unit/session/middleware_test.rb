@@ -553,7 +553,7 @@ class SessionMiddlewareTest < Minitest::Test
 
   def test_custom_session_id_proc_overrides_default_behavior
     @session_options.session_id_proc = lambda do |context|
-      "custom_#{context['request.msisdn']}_#{context['flow.name']}"
+      "custom_#{context["request.msisdn"]}_#{context["flow.name"]}"
     end
 
     middleware = FlowChat::Session::Middleware.new(@mock_app, @session_options)

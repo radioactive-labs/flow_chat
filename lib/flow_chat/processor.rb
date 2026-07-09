@@ -45,7 +45,7 @@ module FlowChat
         @session_options.session_id_proc = block
       else
         FlowChat.logger.debug { "Processor: Configuring session config: boundaries=#{boundaries.inspect}, hash_identifiers=#{hash_identifiers}, identifier=#{identifier}" }
-        
+
         # Update the session options directly
         @session_options = @session_options.dup
         @session_options.boundaries = Array(boundaries) unless boundaries.nil?
@@ -98,12 +98,11 @@ module FlowChat
 
         FlowChat.logger.debug { "Processor: Configuring async processing with GenericAsyncJob for factory '#{job_params[:factory]}'" }
         @async_job_class = FlowChat::GenericAsyncJob
-        @async_job_params = job_params
       else
         FlowChat.logger.debug { "Processor: Configuring async processing with job class #{job_class.name} and params: #{job_params.inspect}" }
         @async_job_class = job_class
-        @async_job_params = job_params
       end
+      @async_job_params = job_params
 
       self
     end

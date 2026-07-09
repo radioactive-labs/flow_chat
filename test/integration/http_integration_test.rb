@@ -481,7 +481,6 @@ class HttpIntegrationTest < Minitest::Test
     name: nil, msisdn: nil, email: nil,
     method: "POST", path: "/flow", user_agent: "TestClient/1.0",
     extra_params: {})
-
     params = {"input" => input}.merge(extra_params)
 
     controller = Object.new
@@ -537,8 +536,14 @@ class HttpIntegrationTest < Minitest::Test
 
       if context_callback
         c.use_middleware Class.new {
-          define_method(:initialize) { |app| @app = app; @callback = context_callback }
-          define_method(:call) { |context| @callback.call(context); @app.call(context) }
+          define_method(:initialize) { |app|
+            @app = app
+            @callback = context_callback
+          }
+          define_method(:call) { |context|
+            @callback.call(context)
+            @app.call(context)
+          }
         }
       end
     end

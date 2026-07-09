@@ -78,6 +78,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     def @mock_client.parse_message(html)
       FlowChat::Intercom::Client.parse_html(html)
     end
+
     # Define app_id= setter (called by gateway after parsing request body)
     def @mock_client.app_id=(value)
       @app_id = value
@@ -321,7 +322,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     # This catches issues with argument splatting in the middleware system
 
     # Create a mock flow
-    flow_class = Class.new(FlowChat::Flow) do
+    Class.new(FlowChat::Flow) do
       def start
         app.say "Test"
       end

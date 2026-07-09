@@ -106,10 +106,10 @@ module FlowChat
       # @return [Hash] API response
       def send_image(to, image_url_or_id, caption = nil, mime_type = nil)
         FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? "URL" : "Media ID"}" }
-        if url?(image_url_or_id)
-          media = {type: :image, url: image_url_or_id}
+        media = if url?(image_url_or_id)
+          {type: :image, url: image_url_or_id}
         else
-          media = {type: :image, id: image_url_or_id}
+          {type: :image, id: image_url_or_id}
         end
         send_message(to, caption, media: media)
       end

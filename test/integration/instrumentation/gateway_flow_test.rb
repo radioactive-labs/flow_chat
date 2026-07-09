@@ -5,6 +5,21 @@ require "test_helper"
 module FlowChat
   module Instrumentation
     class GatewayFlowTest < Minitest::Test
+      # In-memory session store used to exercise the gateway/flow instrumentation.
+      class HashSessionStore
+        def initialize(context)
+          @data = {}
+        end
+
+        def get(key)
+          @data[key]
+        end
+
+        def set(key, value)
+          @data[key] = value
+        end
+      end
+
       def setup
         @log_messages = []
         @test_logger = Object.new
@@ -125,19 +140,7 @@ module FlowChat
         # Create processor with WhatsApp gateway
         processor = FlowChat::Processor.new(controller) do |config|
           config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
-          config.use_session_store Class.new do
-            def initialize(context)
-              @data = {}
-            end
-
-            def get(key)
-              @data[key]
-            end
-
-            def set(key, value)
-              @data[key] = value
-            end
-          end
+          config.use_session_store HashSessionStore
         end
 
         # Run the flow - may fail due to missing WhatsApp config, but that's ok for instrumentation test

@@ -39,14 +39,14 @@ class HttpSimpleGatewayTest < Minitest::Test
     error = assert_raises(FlowChat::Http::ConfigurationError) do
       FlowChat::Http::Gateway::Simple.new(@mock_app, {})
     end
-    assert_match /requires :session_id/, error.message
+    assert_match(/requires :session_id/, error.message)
   end
 
   def test_requires_session_id_and_user_id
     error = assert_raises(FlowChat::Http::ConfigurationError) do
       FlowChat::Http::Gateway::Simple.new(@mock_app, {session_id: "123"})
     end
-    assert_match /requires :user_id/, error.message
+    assert_match(/requires :user_id/, error.message)
   end
 
   def test_includes_instrumentation
@@ -110,7 +110,7 @@ class HttpSimpleGatewayTest < Minitest::Test
 
     refute_nil @context["request.message_id"]
     refute_nil @context["request.timestamp"]
-    assert_match /^[0-9a-f-]{36}$/, @context["request.message_id"]  # UUID format
+    assert_match(/^[0-9a-f-]{36}$/, @context["request.message_id"])  # UUID format
   end
 
   def test_call_renders_json_response

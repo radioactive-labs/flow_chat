@@ -109,7 +109,7 @@ class BackgroundControllerTest < Minitest::Test
 
   def test_is_a_checks_for_background_controller
     assert @controller.is_a?(FlowChat::BackgroundController)
-    assert @controller.kind_of?(FlowChat::BackgroundController)
+    assert @controller.is_a?(FlowChat::BackgroundController)
   end
 
   def test_params_delegates_to_request_params

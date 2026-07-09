@@ -28,7 +28,7 @@ class FactoryIntegrationTest < Minitest::Test
 
       if should_enqueue_async?
         enqueue_async_job
-        return @controller.render json: {status: "processing"}
+        @controller.render json: {status: "processing"}
       else
         @app.call(context)
         @controller.render json: {status: "ok"}
@@ -184,8 +184,8 @@ class FactoryIntegrationTest < Minitest::Test
       FlowChat::Factory.execute(:unknown, controller: controller)
     end
 
-    assert_match /not registered/, error.message
-    assert_match /unknown/, error.message
+    assert_match(/not registered/, error.message)
+    assert_match(/unknown/, error.message)
   end
 
   def test_multiple_factories_can_be_registered

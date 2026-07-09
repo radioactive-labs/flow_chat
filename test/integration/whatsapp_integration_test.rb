@@ -479,9 +479,9 @@ class WhatsappIntegrationTest < Minitest::Test
     assert session_data.key?("whatsapp.choice_mapping")
     # The mapping is from generated IDs to original keys
     mapping = session_data["whatsapp.choice_mapping"]
-    assert mapping.values.include?("red")
-    assert mapping.values.include?("green")
-    assert mapping.values.include?("blue")
+    assert mapping.value?("red")
+    assert mapping.value?("green")
+    assert mapping.value?("blue")
   end
 
   def test_choice_mapper_maps_button_reply_to_original_key
@@ -840,8 +840,14 @@ class WhatsappIntegrationTest < Minitest::Test
 
       if context_callback
         c.use_middleware Class.new {
-          define_method(:initialize) { |app| @app = app; @callback = context_callback }
-          define_method(:call) { |context| @callback.call(context); @app.call(context) }
+          define_method(:initialize) { |app|
+            @app = app
+            @callback = context_callback
+          }
+          define_method(:call) { |context|
+            @callback.call(context)
+            @app.call(context)
+          }
         }
       end
     end

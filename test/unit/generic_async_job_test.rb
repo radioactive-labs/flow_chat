@@ -62,8 +62,8 @@ class GenericAsyncJobTest < Minitest::Test
       job.perform(request_context: request_data, factory: :unknown_factory)
     end
 
-    assert_match /not registered/, error.message
-    assert_match /unknown_factory/, error.message
+    assert_match(/not registered/, error.message)
+    assert_match(/unknown_factory/, error.message)
   end
 
   def test_execute_ignores_extra_job_params
