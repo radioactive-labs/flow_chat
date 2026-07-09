@@ -27,7 +27,7 @@ module FlowChat
       def build_media
         return unless media.present?
 
-        media_url = media[:url] || media[:path]
+        media_url = media[:url]
         media_type = media[:type] || :image
 
         # For USSD, we append the media URL to the message

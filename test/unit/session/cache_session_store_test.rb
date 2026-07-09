@@ -7,26 +7,31 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_ussd_session_key_generation
     context = create_ussd_context("test_session_123", "+256700123456")
+    # Set the session.id that would be set by the session middleware
+    context["session.id"] = "test_flow:ussd:nalo:test_session_123"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     session_key = store.send(:session_key)
-    expected_key = "flow_chat:session:ussd:test_session_123:+256700123456"
+    expected_key = "flow_chat:cached_session:test_flow:ussd:nalo:test_session_123"
 
     assert_equal expected_key, session_key
   end
 
   def test_whatsapp_session_key_generation
     context = create_whatsapp_context("+256700123456")
+    # Set the session.id that would be set by the session middleware
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     session_key = store.send(:session_key)
-    expected_key = "flow_chat:session:whatsapp:+256700123456"
+    expected_key = "flow_chat:cached_session:test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
 
     assert_equal expected_key, session_key
   end
 
   def test_ussd_session_ttl
     context = create_ussd_context("test_session_123", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_123"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     ttl = store.send(:session_ttl)
@@ -37,6 +42,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_whatsapp_session_ttl
     context = create_whatsapp_context("+256700123456")
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     ttl = store.send(:session_ttl)
@@ -47,6 +53,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_get_returns_cached_value
     context = create_ussd_context("test_session_get", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_get"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     session_key = store.send(:session_key)
 
@@ -59,6 +66,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_get_returns_nil_for_missing_key
     context = create_ussd_context("test_session_missing", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_missing"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     result = store.get("nonexistent")
@@ -67,6 +75,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_get_returns_nil_for_missing_session
     context = create_ussd_context("test_session_no_cache", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_no_cache"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     result = store.get("name")
@@ -75,6 +84,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_set_stores_value_in_cache
     context = create_ussd_context("test_session_set", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_set"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     store.set("name", "Alice")
@@ -87,6 +97,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_set_preserves_existing_values
     context = create_ussd_context("test_session_preserve", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_preserve"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     session_key = store.send(:session_key)
 
@@ -103,6 +114,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_set_updates_ttl_on_write
     context = create_ussd_context("test_session_ttl", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_ttl"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     store.set("key", "value")
@@ -115,6 +127,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_delete_removes_key_from_session
     context = create_ussd_context("test_session_delete", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_delete"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     session_key = store.send(:session_key)
 
@@ -131,6 +144,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_delete_handles_missing_session
     context = create_ussd_context("test_session_delete_missing", "+256700123456")
+    context["session.id"] = "test_flow:ussd:nalo:test_session_delete_missing"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     # Should not raise an error - just test that it doesn't crash
@@ -141,6 +155,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_clear_removes_entire_session
     context = create_whatsapp_context("+256700123456")
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:test_clear"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     session_key = store.send(:session_key)
 
@@ -157,6 +172,10 @@ class CacheSessionStoreTest < Minitest::Test
     ussd_context = create_ussd_context("shared_session", "+256700123456")
     whatsapp_context = create_whatsapp_context("+256700123456")
 
+    # Set different session IDs for different platforms
+    ussd_context["session.id"] = "test_flow:ussd:nalo:shared_session"
+    whatsapp_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
+
     ussd_store = FlowChat::Session::CacheSessionStore.new(ussd_context, @mock_cache)
     whatsapp_store = FlowChat::Session::CacheSessionStore.new(whatsapp_context, @mock_cache)
 
@@ -172,6 +191,10 @@ class CacheSessionStoreTest < Minitest::Test
   def test_different_users_session_isolation
     user1_context = create_whatsapp_context("+256700111111")
     user2_context = create_whatsapp_context("+256700222222")
+
+    # Set different session IDs for different users
+    user1_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:user1hash"
+    user2_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:user2hash"
 
     user1_store = FlowChat::Session::CacheSessionStore.new(user1_context, @mock_cache)
     user2_store = FlowChat::Session::CacheSessionStore.new(user2_context, @mock_cache)
@@ -190,6 +213,9 @@ class CacheSessionStoreTest < Minitest::Test
     whatsapp_context = create_whatsapp_context("+256700123456")
     ussd_context = create_ussd_context("test", "+256700123456")
 
+    whatsapp_context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:persist_test"
+    ussd_context["session.id"] = "test_flow:ussd:nalo:persist_test"
+
     whatsapp_store = FlowChat::Session::CacheSessionStore.new(whatsapp_context, @mock_cache)
     ussd_store = FlowChat::Session::CacheSessionStore.new(ussd_context, @mock_cache)
 
@@ -207,22 +233,9 @@ class CacheSessionStoreTest < Minitest::Test
     # The specific TTL values are tested in the individual ttl tests above
   end
 
-  def test_handles_nil_context_gracefully
-    store = FlowChat::Session::CacheSessionStore.new(nil, @mock_cache)
-
-    # Should not crash with nil context
-    assert_nil store.get("key")
-
-    # Should not crash with nil context - just test that they don't raise errors
-    store.set("key", "value")
-    store.delete("key")
-    store.clear
-    # If we get here, none of them raised an error, which is what we want
-    assert true
-  end
-
   def test_handles_json_serialization_of_complex_data
     context = create_whatsapp_context("+256700123456")
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:json_test"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
 
     complex_data = {
@@ -241,6 +254,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_destroy_alias_works
     context = create_whatsapp_context("+256700123456")
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:destroy_test"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     session_key = store.send(:session_key)
 
@@ -255,6 +269,7 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_exists_method
     context = create_whatsapp_context("+256700123456")
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:exists_test"
     store = FlowChat::Session::CacheSessionStore.new(context, @mock_cache)
     store.send(:session_key)
 
@@ -285,6 +300,8 @@ class CacheSessionStoreTest < Minitest::Test
 
   def test_uses_config_cache_as_default
     context = create_whatsapp_context("+256700123456")
+    # Set the session.id that would be set by the session middleware
+    context["session.id"] = "test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4"
 
     # Set a cache in config
     FlowChat::Config.cache = @mock_cache
@@ -293,7 +310,7 @@ class CacheSessionStoreTest < Minitest::Test
 
     # Should use the configured cache
     store.set("test", "value")
-    assert_equal "value", @mock_cache.read("flow_chat:session:whatsapp:+256700123456")["test"]
+    assert_equal "value", @mock_cache.read("flow_chat:cached_session:test_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4")["test"]
   ensure
     # Clean up
     FlowChat::Config.cache = nil

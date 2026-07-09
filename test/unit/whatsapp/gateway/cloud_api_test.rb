@@ -70,9 +70,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "Hello", context.input
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.test123", context["request.message_id"]
-    assert_equal "John Doe", context["request.contact_name"]
+    assert_equal "John Doe", context["request.user_name"]
     assert_equal :whatsapp_cloud_api, context["request.gateway"]
-    assert_equal "1702891800", context["request.timestamp"]
+    refute_equal "1702891800", context["request.timestamp"] # Now uses Time.current instead of webhook timestamp
   end
 
   def test_post_request_button_response_processing
@@ -118,7 +118,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal expected_location, context["request.location"]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.location123", context["request.message_id"]
-    assert_equal "$location$", context.input
+    assert_equal FlowChat::Input::LOCATION, context.input
   end
 
   def test_post_request_media_message_processing
@@ -129,16 +129,106 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
     @gateway.call(context)
 
-    expected_media = {
-      "type" => "image",
-      "id" => "media123",
-      "mime_type" => "image/jpeg",
-      "caption" => nil
-    }
-    assert_equal expected_media, context["request.media"]
+    assert_equal :image, context["request.media"][:type]
+    assert_equal "media123", context["request.media"][:id]
+    assert_equal "image/jpeg", context["request.media"][:mime_type]
+    assert_nil context["request.media"][:caption]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.media123", context["request.message_id"]
-    assert_equal "$media$", context.input
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_video_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_media_message_payload_for_type("video", "vid123", "video/mp4", "wamid.video123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :video, context["request.media"][:type]
+    assert_equal "vid123", context["request.media"][:id]
+    assert_equal "video/mp4", context["request.media"][:mime_type]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_audio_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_media_message_payload_for_type("audio", "aud123", "audio/ogg", "wamid.audio123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :audio, context["request.media"][:type]
+    assert_equal "aud123", context["request.media"][:id]
+    assert_equal "audio/ogg", context["request.media"][:mime_type]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_document_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_document_message_payload("doc123", "application/pdf", "report.pdf", "wamid.doc123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :document, context["request.media"][:type]
+    assert_equal "doc123", context["request.media"][:id]
+    assert_equal "application/pdf", context["request.media"][:mime_type]
+    assert_equal "report.pdf", context["request.media"][:filename]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_sticker_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_sticker_message_payload("sticker123", "image/webp", false, "wamid.sticker123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal :sticker, context["request.media"][:type]
+    assert_equal "sticker123", context["request.media"][:id]
+    assert_equal "image/webp", context["request.media"][:mime_type]
+    assert_equal false, context["request.media"][:animated]
+    assert_equal FlowChat::Input::MEDIA, context.input
+  end
+
+  def test_post_request_contact_message_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_contact_message_payload("John Doe", "+1234567890", "wamid.contact123")
+    )
+
+    @gateway.call(context)
+
+    assert_equal "John Doe", context["request.contact"][:name]
+    assert_equal "+1234567890", context["request.contact"][:phone_number]
+    assert_includes context["request.contact"][:phones], "+1234567890"
+    assert_equal "+256700000000", context["request.msisdn"]
+    assert_equal "wamid.contact123", context["request.message_id"]
+    assert_equal FlowChat::Input::CONTACT, context.input
+  end
+
+  def test_media_type_is_symbol_not_string
+    # Verify media types are symbols for all media types
+    %w[image video audio document sticker].each do |media_type|
+      context = create_context_with_request(
+        method: :post,
+        body: create_media_message_payload_for_type(media_type, "test_id", "application/octet-stream", "wamid.#{media_type}")
+      )
+
+      # Create fresh gateway for each test to avoid state bleed
+      gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |ctx| [:text, "Response", nil, nil] }, @mock_config)
+      gateway.call(context)
+
+      assert_kind_of Symbol, context["request.media"][:type],
+        "Expected media type to be Symbol for #{media_type}, got #{context["request.media"][:type].class}"
+      assert_equal media_type.to_sym, context["request.media"][:type],
+        "Expected :#{media_type} but got #{context["request.media"][:type].inspect}"
+    end
   end
 
   def test_empty_webhook_payload_handling
@@ -186,293 +276,6 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @gateway.call(context)
 
     assert_equal :bad_request, context.controller.last_head_status
-  end
-
-  # Tests for different message handling modes
-  def test_inline_mode_message_handling
-    # Mock inline mode
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
-      # Track app execution
-      app_called = false
-      test_app = proc do |context|
-        app_called = true
-        [:text, "Response", nil, nil]
-      end
-
-      # Mock the client send_message call
-      mock_client = Minitest::Mock.new
-      mock_client.expect(:send_message, {"messages" => [{"id" => "sent_123"}]}, ["+256700000000", [:text, "Response", {}]])
-
-      # Stub the WhatsApp Client class to return our mock
-      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        # Create gateway which will use our mocked client
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
-        context = create_context_with_request(
-          method: :post,
-          body: create_text_message_payload("Hello", "wamid.test123")
-        )
-
-        gateway.call(context)
-
-        # Verify app was called and processed correctly
-        assert app_called, "App should have been called"
-
-        # In inline mode, message should be sent immediately
-        mock_client.verify
-        assert_equal({"messages" => [{"id" => "sent_123"}]}, context["whatsapp.message_result"])
-      end
-    end
-  end
-
-  def test_background_mode_message_handling
-    # Mock background mode
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
-        # Mock job class
-        job_class = Minitest::Mock.new
-        job_class.expect(:perform_later, true, [Hash])
-
-        # Stub constantize to return our mock
-        stub_constantize("TestBackgroundJob", job_class) do
-          context = create_context_with_request(
-            method: :post,
-            body: create_text_message_payload("Hello", "wamid.test123")
-          )
-
-          @gateway.call(context)
-
-          job_class.verify
-        end
-      end
-    end
-  end
-
-  def test_background_mode_fallback_to_inline_when_job_missing
-    # Mock background mode with missing job class
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, "NonExistentJob") do
-        # Create a simple mock client that tracks if send_message was called
-        send_message_called = false
-        mock_client = Object.new
-        mock_client.define_singleton_method(:send_message) do |phone, response|
-          send_message_called = true
-          {"messages" => [{"id" => "fallback_123"}]}
-        end
-
-        # Capture logged warning
-        logged_warning = nil
-        logger_mock = Minitest::Mock.new
-        logger_mock.expect(:warn, nil) { |msg|
-          logged_warning = msg
-          true
-        }
-
-        # Use the helper to make constantize fail for NonExistentJob
-        stub_constantize_to_fail("NonExistentJob") do
-          # Mock the WhatsApp Client class to return our mock
-          FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-            Rails.stub(:logger, logger_mock) do
-              gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-              context = create_context_with_request(
-                method: :post,
-                body: create_text_message_payload("Hello", "wamid.test123")
-              )
-
-              gateway.call(context)
-
-              # Verify fallback behavior
-              assert send_message_called, "Should have called send_message for fallback inline sending"
-              assert_includes logged_warning, "Background mode requested but no NonExistentJob found. Falling back to inline sending."
-              assert_equal({"messages" => [{"id" => "fallback_123"}]}, context["whatsapp.message_result"])
-            end
-          end
-        end
-
-        logger_mock.verify
-      end
-    end
-  end
-
-  def test_simulator_mode_message_handling
-    # Mock simulator mode
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :simulator) do
-      # Mock client build_message_payload method - expects final rendered format
-      mock_client = Minitest::Mock.new
-      mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
-
-      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        # App returns new format: [type, message, choices, media]
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-        context = create_context_with_request(
-          method: :post,
-          body: create_text_message_payload("Hello", "wamid.test123")
-        )
-
-        gateway.call(context)
-
-        mock_client.verify
-        # Should render simulator response
-        assert_equal "simulator", context.controller.last_render[:json][:mode]
-        assert_equal true, context.controller.last_render[:json][:webhook_processed]
-        assert_includes context.controller.last_render[:json], :would_send
-        assert_includes context.controller.last_render[:json], :message_info
-      end
-    end
-  end
-
-  def test_simulator_mode_via_request_parameter
-    # Set up global simulator secret
-    FlowChat::Config.simulator_secret = "test_simulator_secret_123"
-
-    # Generate valid simulator cookie
-    timestamp = Time.now.to_i
-    message = "simulator:#{timestamp}"
-    signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), "test_simulator_secret_123", message)
-    valid_cookie = "#{timestamp}:#{signature}"
-
-    # Even if global mode is inline, simulator parameter should override
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
-      mock_client = Minitest::Mock.new
-      mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
-
-      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        # App returns new format: [type, message, choices, media]
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-        context = create_context_with_request(
-          method: :post,
-          body: create_text_message_payload("Hello", "wamid.test123").merge("simulator_mode" => true),
-          cookies: {
-            "flowchat_simulator" => valid_cookie
-          }
-        )
-
-        # Enable simulator mode for this test
-        context["enable_simulator"] = true
-
-        gateway.call(context)
-
-        mock_client.verify
-        # Should render simulator response despite global inline mode
-        assert_equal "simulator", context.controller.last_render[:json][:mode]
-      end
-    end
-  ensure
-    # Clean up
-    FlowChat::Config.simulator_secret = nil
-  end
-
-  def test_flow_processing_happens_synchronously_in_background_mode
-    # Verify that flow processing happens sync, even in background mode
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
-        # Track if flow was called
-        flow_called = false
-        test_app = proc do |context|
-          flow_called = true
-          # Verify we have full context during flow execution
-          assert_equal "Hello", context.input
-          assert_equal "+256700000000", context["request.msisdn"]
-          [:text, "Flow executed with context", nil, nil]
-        end
-
-        job_class = Minitest::Mock.new
-        job_class.expect(:perform_later, true, [Hash])
-
-        stub_constantize("TestBackgroundJob", job_class) do
-          gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
-          context = create_context_with_request(
-            method: :post,
-            body: create_text_message_payload("Hello", "wamid.test123")
-          )
-
-          gateway.call(context)
-
-          # Flow should have been executed synchronously
-          assert flow_called, "Flow should be executed synchronously even in background mode"
-          job_class.verify
-        end
-      end
-    end
-  end
-
-  def test_background_mode_preserves_controller_context
-    # Verify that controller context is preserved during flow execution
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :background) do
-      FlowChat::Config.whatsapp.stub(:background_job_class, "TestBackgroundJob") do
-        controller_preserved = false
-        test_app = proc do |context|
-          # Verify controller is available during flow execution
-          controller_preserved = !context.controller.nil?
-          [:text, "Controller context preserved", nil, nil]
-        end
-
-        job_class = Minitest::Mock.new
-        job_class.expect(:perform_later, true, [Hash])
-
-        stub_constantize("TestBackgroundJob", job_class) do
-          gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(test_app, @mock_config)
-          context = create_context_with_request(
-            method: :post,
-            body: create_text_message_payload("Hello", "wamid.test123")
-          )
-
-          gateway.call(context)
-
-          assert controller_preserved, "Controller context should be preserved during flow execution"
-          job_class.verify
-        end
-      end
-    end
-  end
-
-  def test_post_request_skips_validation_with_simulator_mode_parameter
-    # Set up app_secret for signature validation and global simulator secret
-    @mock_config.app_secret = "test_app_secret"
-    FlowChat::Config.simulator_secret = "test_simulator_secret_123"
-
-    # Generate valid simulator cookie
-    timestamp = Time.now.to_i
-    message = "simulator:#{timestamp}"
-    signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), "test_simulator_secret_123", message)
-    valid_cookie = "#{timestamp}:#{signature}"
-
-    # Even if global mode is inline, simulator parameter should override and skip validation
-    FlowChat::Config.whatsapp.stub(:message_handling_mode, :inline) do
-      mock_client = Minitest::Mock.new
-      mock_client.expect(:build_message_payload, {"to" => "+256700000000", "type" => "text", "text" => {"body" => "Response"}}, [[:text, "Response", {}], "+256700000000"])
-
-      FlowChat::Whatsapp::Client.stub(:new, mock_client) do
-        # App returns new format: [type, message, choices, media]
-        gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-
-        payload_hash = create_text_message_payload("Hello", "wamid.test123")
-        payload_json = payload_hash.to_json
-
-        # Add simulator_mode to body - no webhook signature provided, should be skipped
-        payload_with_simulator = JSON.parse(payload_json)
-        payload_with_simulator["simulator_mode"] = true
-
-        context = create_context_with_request(
-          method: :post,
-          body: payload_with_simulator.to_json,
-          cookies: {
-            "flowchat_simulator" => valid_cookie
-          }
-        )
-
-        # Enable simulator mode for this test
-        context["enable_simulator"] = true
-
-        gateway.call(context)
-
-        mock_client.verify
-        # Should render simulator response despite no webhook signature
-        assert_equal "simulator", context.controller.last_render[:json][:mode]
-      end
-    end
-  ensure
-    # Clean up
-    FlowChat::Config.simulator_secret = nil
   end
 
   # ============================================================================
@@ -528,8 +331,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -549,8 +352,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -571,8 +374,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject with unauthorized status
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request silently (200 OK to prevent retries)
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -711,8 +514,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
     gateway.call(context)
 
-    # Should reject because signature doesn't match the actual body
-    assert_equal :unauthorized, context.controller.last_head_status
+    # Should drop request (signature doesn't match body) with 200 OK to prevent retries
+    assert_equal :ok, context.controller.last_head_status
     assert_nil context.input
   end
 
@@ -778,6 +581,10 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Create mock controller
     controller = OpenStruct.new(request: request)
 
+    # Add mock response for streaming
+    mock_response = FlowChat::TestSupport::MockResponse.new
+    controller.define_singleton_method(:response) { mock_response }
+
     # Track render calls
     controller.define_singleton_method(:render) do |options|
       @last_render = options
@@ -800,6 +607,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -822,6 +634,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -847,6 +664,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -872,6 +694,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -893,19 +720,124 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   end
 
   def create_media_message_payload(media_id, mime_type, message_id)
+    create_media_message_payload_for_type("image", media_id, mime_type, message_id)
+  end
+
+  def create_media_message_payload_for_type(type, media_id, mime_type, message_id)
     {
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
               "timestamp" => "1702891800",
-              "image" => {
+              type => {
                 "id" => media_id,
                 "mime_type" => mime_type
               },
-              "type" => "image"
+              "type" => type
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_document_message_payload(media_id, mime_type, filename, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "document" => {
+                "id" => media_id,
+                "mime_type" => mime_type,
+                "filename" => filename
+              },
+              "type" => "document"
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_sticker_message_payload(media_id, mime_type, animated, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "sticker" => {
+                "id" => media_id,
+                "mime_type" => mime_type,
+                "animated" => animated
+              },
+              "type" => "sticker"
+            }],
+            "contacts" => [{
+              "profile" => {"name" => "John Doe"},
+              "wa_id" => "256700000000"
+            }]
+          }
+        }]
+      }]
+    }
+  end
+
+  def create_contact_message_payload(name, phone_number, message_id)
+    {
+      "entry" => [{
+        "changes" => [{
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
+            "messages" => [{
+              "id" => message_id,
+              "from" => "256700000000",
+              "timestamp" => "1702891800",
+              "contacts" => [{
+                "name" => {
+                  "formatted_name" => name,
+                  "first_name" => name.split.first,
+                  "last_name" => name.split.last
+                },
+                "phones" => [{"phone" => phone_number, "type" => "MOBILE"}]
+              }],
+              "type" => "contacts"
             }],
             "contacts" => [{
               "profile" => {"name" => "John Doe"},
@@ -922,6 +854,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
       "entry" => [{
         "changes" => [{
           "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            },
             "messages" => [{
               "id" => message_id,
               "from" => "256700000000",
@@ -936,5 +873,84 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         }]
       }]
     }
+  end
+
+  def test_sets_request_body_with_stringified_keys
+    webhook_payload = create_text_message_payload("Test message", "wamid.test999")
+
+    context = create_context_with_request(
+      method: :post,
+      body: webhook_payload
+    )
+
+    @gateway.call(context)
+
+    # Verify request.body is set
+    assert_kind_of Hash, context["request.body"]
+
+    # Verify it contains the expected webhook structure
+    assert context["request.body"]["entry"]
+    assert_kind_of Array, context["request.body"]["entry"]
+
+    # Verify nested structure has string keys
+    entry = context["request.body"]["entry"].first
+    assert_kind_of Hash, entry
+    assert entry["changes"]
+
+    # Verify all top-level keys are strings
+    context["request.body"].keys.each do |key|
+      assert_kind_of String, key, "Expected all keys to be strings, but found #{key.class}"
+    end
+
+    # Verify nested keys are also strings
+    entry.keys.each do |key|
+      assert_kind_of String, key, "Expected nested keys to be strings, but found #{key.class}"
+    end
+  end
+end
+
+class WhatsappCloudApiGatewayMiddlewareStackTest < Minitest::Test
+  def test_configure_middleware_stack_adds_choice_mapper
+    # Create a mock builder to track middleware registration
+    builder = MockMiddlewareBuilder.new
+    custom_middleware = Object.new
+
+    # Call the class method
+    FlowChat::Whatsapp::Gateway::CloudApi.configure_middleware_stack(builder, custom_middleware)
+
+    # Verify custom middleware was added first
+    assert_equal custom_middleware, builder.middlewares[0],
+      "Custom middleware should be added first"
+
+    # Verify ChoiceMapper was added second
+    assert_equal FlowChat::Whatsapp::Middleware::ChoiceMapper, builder.middlewares[1],
+      "ChoiceMapper should be added after custom middleware"
+  end
+
+  def test_configure_middleware_stack_order_matches_ussd_pattern
+    # WhatsApp should follow same pattern as USSD: custom middleware -> platform middleware
+    builder = MockMiddlewareBuilder.new
+    custom_middleware = Object.new
+
+    FlowChat::Whatsapp::Gateway::CloudApi.configure_middleware_stack(builder, custom_middleware)
+
+    # Verify order: custom first, then ChoiceMapper
+    assert_equal 2, builder.middlewares.length,
+      "Should have exactly 2 middlewares registered"
+    assert_equal custom_middleware, builder.middlewares[0]
+    assert_equal FlowChat::Whatsapp::Middleware::ChoiceMapper, builder.middlewares[1]
+  end
+
+  # Mock builder to track middleware registration
+  class MockMiddlewareBuilder
+    attr_reader :middlewares
+
+    def initialize
+      @middlewares = []
+    end
+
+    def use(middleware, *args)
+      @middlewares << middleware
+    end
   end
 end

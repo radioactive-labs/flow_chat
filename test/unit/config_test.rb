@@ -24,30 +24,28 @@ class ConfigTest < Minitest::Test
 
     # Session boundaries defaults
     assert_equal [:flow, :gateway, :platform], session_config.boundaries
-    assert_equal true, session_config.hash_phone_numbers
+    assert_equal true, session_config.hash_identifiers
     assert_nil session_config.identifier  # Platform chooses default
-
   end
 
   def test_session_config_setter_methods
     original_boundaries = FlowChat::Config.session.boundaries.dup
-    original_hash_phone = FlowChat::Config.session.hash_phone_numbers
+    original_hash_phone = FlowChat::Config.session.hash_identifiers
     original_identifier = FlowChat::Config.session.identifier
 
     begin
       # Test setters work
       FlowChat::Config.session.boundaries = [:flow, :gateway]
-      FlowChat::Config.session.hash_phone_numbers = false
+      FlowChat::Config.session.hash_identifiers = false
       FlowChat::Config.session.identifier = :request_id
 
       assert_equal [:flow, :gateway], FlowChat::Config.session.boundaries
-      assert_equal false, FlowChat::Config.session.hash_phone_numbers
+      assert_equal false, FlowChat::Config.session.hash_identifiers
       assert_equal :request_id, FlowChat::Config.session.identifier
-
     ensure
       # Restore original values
       FlowChat::Config.session.boundaries = original_boundaries
-      FlowChat::Config.session.hash_phone_numbers = original_hash_phone
+      FlowChat::Config.session.hash_identifiers = original_hash_phone
       FlowChat::Config.session.identifier = original_identifier
     end
   end
@@ -111,7 +109,6 @@ class ConfigTest < Minitest::Test
 
     # Session config should not have other config methods
     refute_respond_to FlowChat::Config.session, :pagination_page_size
-    refute_respond_to FlowChat::Config.session, :message_handling_mode
   end
 
   def test_whatsapp_config_object_accessible
@@ -124,73 +121,7 @@ class ConfigTest < Minitest::Test
   def test_whatsapp_config_defaults
     whatsapp_config = FlowChat::Config.whatsapp
 
-    assert_equal :inline, whatsapp_config.message_handling_mode
-    assert_equal "WhatsappMessageJob", whatsapp_config.background_job_class
-  end
-
-  def test_whatsapp_config_setter_methods
-    original_mode = FlowChat::Config.whatsapp.message_handling_mode
-    original_job_class = FlowChat::Config.whatsapp.background_job_class
-
-    begin
-      # Test setters work
-      FlowChat::Config.whatsapp.message_handling_mode = :background
-      FlowChat::Config.whatsapp.background_job_class = "CustomJob"
-
-      assert_equal :background, FlowChat::Config.whatsapp.message_handling_mode
-      assert_equal "CustomJob", FlowChat::Config.whatsapp.background_job_class
-    ensure
-      # Restore original values
-      FlowChat::Config.whatsapp.message_handling_mode = original_mode
-      FlowChat::Config.whatsapp.background_job_class = original_job_class
-    end
-  end
-
-  def test_whatsapp_mode_validation
-    config = FlowChat::Config::WhatsappConfig.new
-
-    # Valid modes should work
-    config.message_handling_mode = :inline
-    assert_equal :inline, config.message_handling_mode
-
-    config.message_handling_mode = :background
-    assert_equal :background, config.message_handling_mode
-
-    config.message_handling_mode = :simulator
-    assert_equal :simulator, config.message_handling_mode
-
-    # String modes should be converted to symbols
-    config.message_handling_mode = "inline"
-    assert_equal :inline, config.message_handling_mode
-
-    # Invalid modes should raise error
-    error = assert_raises(ArgumentError) do
-      config.message_handling_mode = :invalid_mode
-    end
-    assert_includes error.message, "Invalid message handling mode: invalid_mode"
-    assert_includes error.message, "Valid modes: inline, background, simulator"
-  end
-
-  def test_whatsapp_mode_helper_methods
-    config = FlowChat::Config::WhatsappConfig.new
-
-    # Test inline mode
-    config.message_handling_mode = :inline
-    assert config.inline_mode?
-    refute config.background_mode?
-    refute config.simulator_mode?
-
-    # Test background mode
-    config.message_handling_mode = :background
-    refute config.inline_mode?
-    assert config.background_mode?
-    refute config.simulator_mode?
-
-    # Test simulator mode
-    config.message_handling_mode = :simulator
-    refute config.inline_mode?
-    refute config.background_mode?
-    assert config.simulator_mode?
+    assert_equal "https://graph.facebook.com/v23.0", whatsapp_config.api_base_url
   end
 
   def test_whatsapp_config_singleton_instance
@@ -202,10 +133,6 @@ class ConfigTest < Minitest::Test
   end
 
   def test_whatsapp_config_separation
-    # General config should not have WhatsApp methods
-    refute_respond_to FlowChat::Config, :message_handling_mode
-    refute_respond_to FlowChat::Config, :background_job_class
-
     # WhatsApp config should not have general methods
     refute_respond_to FlowChat::Config.whatsapp, :logger
     refute_respond_to FlowChat::Config.whatsapp, :cache
@@ -231,5 +158,64 @@ class ConfigTest < Minitest::Test
     assert_equal true, FlowChat::Config.combine_validation_error_with_message
   ensure
     FlowChat::Config.combine_validation_error_with_message = original_setting
+  end
+
+  def test_http_config_object_accessible
+    assert_respond_to FlowChat::Config, :http
+
+    http_config = FlowChat::Config.http
+    assert_kind_of FlowChat::Config::HttpConfig, http_config
+  end
+
+  def test_http_config_defaults
+    http_config = FlowChat::Config.http
+
+    assert_equal :simple, http_config.default_gateway
+    assert_equal 30, http_config.request_timeout
+    assert_equal :json, http_config.response_format
+  end
+
+  def test_http_config_setter_methods
+    original_gateway = FlowChat::Config.http.default_gateway
+    original_timeout = FlowChat::Config.http.request_timeout
+    original_format = FlowChat::Config.http.response_format
+
+    begin
+      # Test setters work
+      FlowChat::Config.http.default_gateway = :custom
+      FlowChat::Config.http.request_timeout = 60
+      FlowChat::Config.http.response_format = :xml
+
+      assert_equal :custom, FlowChat::Config.http.default_gateway
+      assert_equal 60, FlowChat::Config.http.request_timeout
+      assert_equal :xml, FlowChat::Config.http.response_format
+    ensure
+      # Restore original values
+      FlowChat::Config.http.default_gateway = original_gateway
+      FlowChat::Config.http.request_timeout = original_timeout
+      FlowChat::Config.http.response_format = original_format
+    end
+  end
+
+  def test_http_config_singleton_instance
+    # Should return the same instance each time
+    config1 = FlowChat::Config.http
+    config2 = FlowChat::Config.http
+
+    assert_same config1, config2
+  end
+
+  def test_http_config_separation
+    # General config should not have HTTP methods
+    refute_respond_to FlowChat::Config, :default_gateway
+    refute_respond_to FlowChat::Config, :request_timeout
+
+    # HTTP config should not have general methods
+    refute_respond_to FlowChat::Config.http, :logger
+    refute_respond_to FlowChat::Config.http, :cache
+
+    # HTTP config should not have other config methods
+    refute_respond_to FlowChat::Config.http, :pagination_page_size
+    refute_respond_to FlowChat::Config.http, :boundaries
   end
 end

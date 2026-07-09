@@ -1,3 +1,5 @@
+require "digest"
+
 module FlowChat
   module Session
     class Middleware
@@ -52,6 +54,14 @@ module FlowChat
           return session_id
         end
 
+        # Check for custom session ID proc
+        if @session_options.session_id_proc
+          FlowChat.logger.debug { "Session::Middleware: Using custom session ID proc" }
+          session_id = @session_options.session_id_proc.call(context)
+          FlowChat.logger.debug { "Session::Middleware: Generated custom session ID: #{session_id}" }
+          return session_id
+        end
+
         FlowChat.logger.debug { "Session::Middleware: Building session ID for platform=#{platform}, gateway=#{gateway}, flow=#{flow_name}" }
 
         # Get identifier based on configuration
@@ -64,29 +74,30 @@ module FlowChat
       end
 
       def get_session_identifier(context)
-        identifier_type = @session_options.identifier
-        
-        # If no identifier specified, use platform defaults
-        if identifier_type.nil?
-          platform = context["request.platform"]
-          identifier_type = case platform
-          when :ussd
-            :request_id    # USSD defaults to ephemeral sessions
-          when :whatsapp
-            :msisdn       # WhatsApp defaults to durable sessions
-          else
-            :msisdn       # Default fallback to durable
-          end
-        end
-        
+        identifier_type = @session_options.identifier || platform_default_identifier(context)
+
         case identifier_type
         when :request_id
           context["request.id"]
+        when :user_id
+          user_id = context["request.user_id"]
+          @session_options.hash_identifiers ? hash_identifier(user_id) : user_id
         when :msisdn
-          phone = context["request.msisdn"]
-          @session_options.hash_phone_numbers ? hash_phone_number(phone) : phone
+          msisdn = context["request.msisdn"]
+          @session_options.hash_identifiers ? hash_identifier(msisdn) : msisdn
         else
           raise "Invalid session identifier type: #{identifier_type}"
+        end
+      end
+
+      def platform_default_identifier(context)
+        platform = context["request.platform"]
+
+        case platform
+        when :whatsapp
+          :msisdn
+        else
+          :request_id
         end
       end
 
@@ -120,19 +131,26 @@ module FlowChat
         return nil unless request
 
         # Extract host and path for URL boundary
-        host = request.host rescue nil
-        path = request.path rescue nil
+        host = begin
+          request.host
+        rescue
+          nil
+        end
+        path = begin
+          request.path
+        rescue
+          nil
+        end
 
-        # Create a normalized URL identifier: host + path 
+        # Create a normalized URL identifier: host + path
         # e.g., "example.com/api/v1/ussd" or "tenant1.example.com/ussd"
         url_parts = []
         url_parts << host if host.present?
-        url_parts << path.sub(/^\//, '') if path.present? && path != '/'
+        url_parts << path.sub(/^\//, "") if path.present? && path != "/"
 
         # For long URLs, use first part + hash suffix instead of full hash
-        url_identifier = url_parts.join('/').gsub(/[^a-zA-Z0-9._-]/, '_')
+        url_identifier = url_parts.join("/").gsub(/[^a-zA-Z0-9._-]/, "_")
         if url_identifier.length > 50
-          require 'digest'
           # Take first 41 chars + hash suffix to keep it manageable but recognizable
           first_part = url_identifier[0, 41]
           hash_suffix = Digest::SHA256.hexdigest(url_identifier)[0, 8]
@@ -142,10 +160,9 @@ module FlowChat
         url_identifier
       end
 
-      def hash_phone_number(phone)
+      def hash_identifier(identifier)
         # Use SHA256 but only take first 8 characters for reasonable session IDs
-        require 'digest'
-        Digest::SHA256.hexdigest(phone.to_s)[0, 8]
+        Digest::SHA256.hexdigest(identifier.to_s)[0, 8]
       end
     end
   end

@@ -8,9 +8,11 @@ module FlowChat
     def instrument(event_name, payload = {}, &block)
       enriched_payload = payload&.dup || {}
       if respond_to?(:context) && context
+        enriched_payload[:request_id] = context["request.id"] if context["request.id"]
         enriched_payload[:session_id] = context["session.id"] if context["session.id"]
         enriched_payload[:flow_name] = context["flow.name"] if context["flow.name"]
         enriched_payload[:gateway] = context["request.gateway"] if context["request.gateway"]
+        enriched_payload[:platform] = context["request.platform"] if context["request.platform"]
       end
 
       self.class.instrument(event_name, enriched_payload, &block)
@@ -31,6 +33,23 @@ module FlowChat
       }.merge(payload || {}).compact
 
       ActiveSupport::Notifications.instrument(full_event_name, enriched_payload, &block)
+    end
+
+    # Shared helper for reporting API errors with instrumentation and Rails.error
+    # @param message [String] Error message
+    # @param error [Exception, nil] Original exception if available
+    # @param context [Hash] Platform-specific error context (must include :platform)
+    def self.report_api_error(message, error: nil, **context)
+      error_context = context.compact
+
+      # Instrument for custom subscribers
+      instrument(Events::API_ERROR, error_context.merge(message: message))
+
+      # Report to Rails.error if available
+      if defined?(Rails) && Rails.respond_to?(:error) && Rails.error.respond_to?(:report)
+        exception = error || StandardError.new(message)
+        Rails.error.report(exception, handled: true, context: error_context)
+      end
     end
 
     # Predefined event names for consistency
@@ -59,12 +78,18 @@ module FlowChat
       WEBHOOK_FAILED = "webhook.failed"
       API_REQUEST = "api.request"
       MEDIA_UPLOAD = "media.upload"
+      API_ERROR = "api.error"
 
       PAGINATION_TRIGGERED = "pagination.triggered"
 
       # Middleware events
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
+
+      # Conversation management events (for Intercom and similar platforms)
+      CONVERSATION_ASSIGNED = "conversation.assigned"
+      CONVERSATION_TAGGED = "conversation.tagged"
+      CONVERSATION_STATE_CHANGED = "conversation.state_changed"
     end
   end
 end

@@ -1,41 +1,56 @@
+# frozen_string_literal: true
+
+# Module: SimpleFlowTest
+#
+# Purpose:
+# Integration tests demonstrating various flow patterns and control structures
+# in FlowChat, including terminal flows, multi-step interactions, error handling,
+# and advanced flow features like go_back navigation.
+#
+# Coverage:
+# - Terminal flows that end immediately
+# - Multi-step flows with user input collection
+# - Error handling and validation flows
+# - Navigation features (go_back functionality)
+# - Different flow control patterns
+# - Session state management across interactions
+#
+# Test Flow Types:
+# - HelloWorldFlow: Simple terminal flow with immediate message
+# - TestFlow: Two-step flow collecting name and displaying greeting
+# - ErrorFlow: Demonstrates error interrupt handling
+# - GoBackTestFlow: Multi-screen flow with back navigation
+#
+# Key Test Scenarios:
+# - Immediate termination with terminal message
+# - Sequential screen navigation with data collection
+# - Error propagation through interrupt system
+# - Back navigation preserving previous inputs
+# - Session data persistence between screens
+#
+# Flow Control Patterns:
+# - app.say(): Display message and terminate
+# - app.screen(): Create named checkpoint for navigation
+# - prompt.ask(): Collect user input with optional validation
+# - app.go_back(): Return to previous screen
+# - raise Interrupt::Prompt/Terminate/Error: Control flow
+#
+# Architecture Validation:
+# - Flows use interrupts for control flow
+# - Screens provide navigation checkpoints
+# - Session stores screen history for go_back
+# - Each interaction preserves session state
+#
+# Special Considerations:
+# - Tests run flows directly without full middleware stack
+# - Interrupt exceptions are expected and caught
+# - Session state is mocked for isolation
+# - Each test uses fresh context and session
+
 require "test_helper"
 
 class SimpleFlowTest < Minitest::Test
-  # Test flow classes
-  class HelloWorldFlow < FlowChat::Flow
-    def main_page
-      app.say "Hello World!"
-    end
-  end
-
-  class NameCollectionFlow < FlowChat::Flow
-    def main_page
-      name = app.screen(:name) { |prompt| prompt.ask "What is your name?" }
-      app.say "Hello, #{name}!"
-    end
-  end
-
-  class MultiStepFlow < FlowChat::Flow
-    def main_page
-      name = app.screen(:name) { |prompt|
-        prompt.ask "What is your name?", transform: ->(input) { input.strip.titleize }
-      }
-
-      age = app.screen(:age) do |prompt|
-        prompt.ask "How old are you?",
-          validate: ->(input) { "You must be at least 13 years old" unless input.to_i >= 13 },
-          transform: ->(input) { input.to_i }
-      end
-
-      gender = app.screen(:gender) { |prompt| prompt.select "What is your gender?", ["Male", "Female"] }
-
-      confirm = app.screen(:confirm) do |prompt|
-        prompt.yes?("Is this correct?\n\nName: #{name}\nAge: #{age}\nGender: #{gender}")
-      end
-
-      app.say confirm ? "Thank you for confirming" : "Please try again"
-    end
-  end
+  include FlowChat::TestSupport::TestFlows
 
   def setup
     @controller = mock_controller
@@ -49,7 +64,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = nil
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = HelloWorldFlow.new(app)
       flow.main_page
     end
@@ -64,7 +79,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = nil
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = NameCollectionFlow.new(app)
       flow.main_page
     end
@@ -76,10 +91,11 @@ class SimpleFlowTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = @controller
     context.session = @session_store
+    context["request.platform"] = :ussd
     context.input = "John"
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = NameCollectionFlow.new(app)
       flow.main_page
     end
@@ -92,10 +108,11 @@ class SimpleFlowTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = @controller
     context.session = @session_store
+    context["request.platform"] = :ussd
     context.input = nil
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -106,7 +123,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = "  john doe  "
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -118,7 +135,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = "12"
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -129,7 +146,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = "25"
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -141,7 +158,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = "Male"  # Choose Male from the options
 
     error = assert_raises(FlowChat::Interrupt::Prompt) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -156,7 +173,7 @@ class SimpleFlowTest < Minitest::Test
     context.input = "Yes"  # Confirm the details
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end
@@ -174,10 +191,11 @@ class SimpleFlowTest < Minitest::Test
     context = FlowChat::Context.new
     context["controller"] = @controller
     context.session = @session_store
+    context["request.platform"] = :ussd
     context.input = "No"  # Reject confirmation
 
     error = assert_raises(FlowChat::Interrupt::Terminate) do
-      app = FlowChat::Ussd::App.new(context)
+      app = FlowChat::App.new(context)
       flow = MultiStepFlow.new(app)
       flow.main_page
     end

@@ -44,7 +44,7 @@ class UssdNaloGatewayTest < Minitest::Test
 
     @gateway.call(@context)
 
-    assert_nil @context.input
+    assert_equal "", @context.input
     assert_equal "test_session_456", @context["request.id"]
   end
 
@@ -56,7 +56,7 @@ class UssdNaloGatewayTest < Minitest::Test
 
     @gateway.call(@context)
 
-    assert_nil @context.input
+    assert_equal "", @context.input
     assert_equal "test_session_789", @context["request.id"]
   end
 
@@ -200,6 +200,29 @@ class UssdNaloGatewayTest < Minitest::Test
     rendered_message = @context.controller.last_render[:json][:MSG]
     assert_includes rendered_message, "Choose an option:"
     # Note: Actual formatting depends on USSD renderer implementation
+  end
+
+  def test_sets_request_body_with_stringified_keys
+    @context.controller.request.params = {
+      "USERID" => "test_session_123",
+      "MSISDN" => "256700123456",
+      "USERDATA" => "test input"
+    }
+
+    @gateway.call(@context)
+
+    # Verify request.body is set
+    assert_kind_of Hash, @context["request.body"]
+
+    # Verify it contains the expected params
+    assert_equal "test_session_123", @context["request.body"]["USERID"]
+    assert_equal "256700123456", @context["request.body"]["MSISDN"]
+    assert_equal "test input", @context["request.body"]["USERDATA"]
+
+    # Verify all keys are strings
+    @context["request.body"].keys.each do |key|
+      assert_kind_of String, key, "Expected all keys to be strings, but found #{key.class}"
+    end
   end
 
   private

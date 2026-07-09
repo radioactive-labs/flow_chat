@@ -320,7 +320,7 @@ class UssdPaginationTest < Minitest::Test
 
         # Should end with a word boundary (space, newline, or punctuation)
         assert content.match(/[\s\n\.!?:]$/) || content.length < 10,
-          "Pagination should break at word boundaries, got: '#{content[-10..-1]}'"
+          "Pagination should break at word boundaries, got: '#{content[-10..]}'"
       end
     ensure
       FlowChat::Config.ussd.pagination_page_size = original_page_size
@@ -329,8 +329,8 @@ class UssdPaginationTest < Minitest::Test
 
   def test_word_boundary_in_subsequent_pages
     # Test word boundary preservation in calculate_offsets (subsequent pages)
-    long_text = "First page content that will be on page one. " +
-      "Choose a test category for the second page content: " +
+    long_text = "First page content that will be on page one. " \
+      "Choose a test category for the second page content: " \
       "basic option, advanced option, complete option here."
 
     # Set up pagination state as if we're on page 1
@@ -391,7 +391,7 @@ class UssdPaginationTest < Minitest::Test
 
   def test_word_boundary_with_unicode_and_emojis
     # Test word boundaries work correctly with Unicode characters and emojis
-    unicode_text = "🧪 Welcome to FlowChat! 测试 Unicode characters and émojis work correctly. " +
+    unicode_text = "🧪 Welcome to FlowChat! 测试 Unicode characters and émojis work correctly. " \
       "Choose a test option for advanced scenarios: básico, avançado, complète testing."
 
     long_app = lambda { |context| [:prompt, unicode_text, []] }
@@ -408,7 +408,7 @@ class UssdPaginationTest < Minitest::Test
         content = prompt.gsub(/\n\n# More$/, "")
         # Should not break in the middle of common words
         refute content.include?("Choose a tes"),
-          "Should not break Unicode text mid-word, got: '#{content[-15..-1]}'"
+          "Should not break Unicode text mid-word, got: '#{content[-15..]}'"
 
         # Should end with a reasonable boundary (space, punctuation, or newline)
         assert content.match(/[\s\n\.!?:]$/) || content.length < 20,

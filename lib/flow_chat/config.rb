@@ -7,6 +7,8 @@ module FlowChat
     # When true (default), validation errors are combined with the original message.
     # When false, only the validation error message is shown to the user.
     mattr_accessor :combine_validation_error_with_message, default: true
+    # When true, inject logger into middleware stack. Defaults to true in Rails development.
+    mattr_accessor :inject_middleware_logger, default: defined?(Rails) && Rails.env.development?
 
     # Session configuration object
     def self.session
@@ -23,8 +25,13 @@ module FlowChat
       @whatsapp ||= WhatsappConfig.new
     end
 
+    # HTTP-specific configuration object
+    def self.http
+      @http ||= HttpConfig.new
+    end
+
     class SessionConfig
-      attr_accessor :boundaries, :hash_phone_numbers, :identifier
+      attr_accessor :boundaries, :hash_identifiers, :identifier, :session_id_proc
 
       def initialize
         # Session boundaries control how session IDs are constructed
@@ -32,14 +39,17 @@ module FlowChat
         # :gateway = separate sessions per gateway
         # :platform = separate sessions per platform (ussd, whatsapp)
         @boundaries = [:flow, :gateway, :platform]
-        
+
         # Always hash phone numbers for privacy
-        @hash_phone_numbers = true
-        
+        @hash_identifiers = true
+
         # Session identifier type (nil = let platforms choose their default)
         # :msisdn = durable sessions (durable across timeouts)
         # :request_id = ephemeral sessions (new session each time)
         @identifier = nil
+
+        # Proc for custom session ID generation (overrides default behavior when set)
+        @session_id_proc = nil
       end
     end
 
@@ -57,35 +67,20 @@ module FlowChat
     end
 
     class WhatsappConfig
-      attr_accessor :background_job_class
-      attr_reader :message_handling_mode, :api_base_url
+      attr_reader :api_base_url
 
       def initialize
-        @message_handling_mode = :inline
-        @background_job_class = "WhatsappMessageJob"
-        @api_base_url = "https://graph.facebook.com/v22.0"
+        @api_base_url = "https://graph.facebook.com/v23.0"
       end
+    end
 
-      # Validate message handling mode
-      def message_handling_mode=(mode)
-        valid_modes = [:inline, :background, :simulator]
-        unless valid_modes.include?(mode.to_sym)
-          raise ArgumentError, "Invalid message handling mode: #{mode}. Valid modes: #{valid_modes.join(", ")}"
-        end
-        @message_handling_mode = mode.to_sym
-      end
+    class HttpConfig
+      attr_accessor :default_gateway, :request_timeout, :response_format
 
-      # Helper methods for mode checking
-      def inline_mode?
-        @message_handling_mode == :inline
-      end
-
-      def background_mode?
-        @message_handling_mode == :background
-      end
-
-      def simulator_mode?
-        @message_handling_mode == :simulator
+      def initialize
+        @default_gateway = :simple
+        @request_timeout = 30
+        @response_format = :json
       end
     end
   end

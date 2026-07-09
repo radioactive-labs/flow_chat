@@ -19,10 +19,13 @@ module FlowChat
       # @param to [String] Phone number in E.164 format
       # @param response [Array] FlowChat response array [type, content, options]
       # @return [Hash] API response or nil on error
-      def send_message(to, response)
-        type, content, _ = response
-        FlowChat.logger.info { "WhatsApp::Client: Sending #{type} message to #{to}" }
-        FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{content.to_s.truncate(100)}'" }
+      def send_message(to, prompt, choices: nil, media: nil)
+        FlowChat.logger.info { "WhatsApp::Client: Sending message to #{to}" }
+        FlowChat.logger.debug { "WhatsApp::Client: Message content: '#{prompt.to_s.truncate(100)}'" }
+
+        # Use renderer to convert to structured response
+        response = FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
+        type, content, _options = response
 
         result = instrument(Events::MESSAGE_SENT, {
           to: to,
@@ -50,7 +53,7 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_text(to, text)
         FlowChat.logger.debug { "WhatsApp::Client: Sending text message to #{to}" }
-        send_message(to, [:text, text, {}])
+        send_message(to, text)
       end
 
       # Send interactive buttons
@@ -60,7 +63,8 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_buttons(to, text, buttons)
         FlowChat.logger.debug { "WhatsApp::Client: Sending interactive buttons to #{to} with #{buttons.size} buttons" }
-        send_message(to, [:interactive_buttons, text, {buttons: buttons}])
+        choices = buttons.each_with_object({}) { |button, hash| hash[button[:id]] = button[:title] }
+        send_message(to, text, choices: choices)
       end
 
       # Send interactive list
@@ -72,7 +76,9 @@ module FlowChat
       def send_list(to, text, sections, button_text = "Choose")
         total_items = sections.sum { |section| section[:rows]&.size || 0 }
         FlowChat.logger.debug { "WhatsApp::Client: Sending interactive list to #{to} with #{sections.size} sections, #{total_items} total items" }
-        send_message(to, [:interactive_list, text, {sections: sections, button_text: button_text}])
+        choices = {}
+        sections.each { |section| section[:rows]&.each { |row| choices[row[:id]] = row[:title] } }
+        send_message(to, text, choices: choices)
       end
 
       # Send a template message
@@ -83,11 +89,13 @@ module FlowChat
       # @return [Hash] API response or nil on error
       def send_template(to, template_name, components = [], language = "en_US")
         FlowChat.logger.debug { "WhatsApp::Client: Sending template '#{template_name}' to #{to} in #{language}" }
-        send_message(to, [:template, "", {
+        media = {
+          type: :template,
           template_name: template_name,
           components: components,
           language: language
-        }])
+        }
+        send_message(to, "", media: media)
       end
 
       # Send image message
@@ -98,7 +106,12 @@ module FlowChat
       # @return [Hash] API response
       def send_image(to, image_url_or_id, caption = nil, mime_type = nil)
         FlowChat.logger.debug { "WhatsApp::Client: Sending image to #{to} - #{url?(image_url_or_id) ? "URL" : "Media ID"}" }
-        send_media_message(to, :image, image_url_or_id, caption: caption, mime_type: mime_type)
+        if url?(image_url_or_id)
+          media = {type: :image, url: image_url_or_id}
+        else
+          media = {type: :image, id: image_url_or_id}
+        end
+        send_message(to, caption, media: media)
       end
 
       # Send document message
@@ -143,6 +156,41 @@ module FlowChat
       def send_sticker(to, sticker_url_or_id, mime_type = nil)
         FlowChat.logger.debug { "WhatsApp::Client: Sending sticker to #{to}" }
         send_media_message(to, :sticker, sticker_url_or_id, mime_type: mime_type)
+      end
+
+      # Mark an inbound message as read, optionally showing a typing indicator.
+      #
+      # WhatsApp Cloud API ties the typing indicator to the mark-as-read call:
+      # passing `typing: true` adds a `typing_indicator` field to the same
+      # request. The indicator auto-dismisses on the next outbound message or
+      # after ~25 seconds; there is no separate "stop typing" call.
+      #
+      # @param message_id [String] the inbound message id (wamid.*) to mark as read
+      # @param typing [Boolean] when true, also show a typing indicator
+      # @return [Hash, nil] parsed API response, or nil on failure
+      def mark_as_read(message_id, typing: false)
+        payload = {
+          messaging_product: "whatsapp",
+          status: "read",
+          message_id: message_id
+        }
+        payload[:typing_indicator] = {type: "text"} if typing
+
+        send_read_receipt_payload(payload, message_id)
+      end
+
+      # Show a typing indicator in response to an inbound message.
+      #
+      # Convenience wrapper around `mark_as_read(message_id, typing: true)`.
+      # Note that WhatsApp ties the typing indicator to read-receipt delivery,
+      # so calling this also marks the message as read. There is no stop-typing
+      # call — the indicator auto-dismisses on the next outbound message or
+      # after ~25 seconds.
+      #
+      # @param message_id [String] the inbound message id (wamid.*)
+      # @return [Hash, nil] parsed API response, or nil on failure
+      def indicate_typing(message_id)
+        mark_as_read(message_id, typing: true)
       end
 
       # Upload media file and return media ID
@@ -379,7 +427,7 @@ module FlowChat
           data = JSON.parse(response.body)
           data["url"]
         else
-          Rails.logger.error "WhatsApp Media API error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: Media API error: #{response.body}" }
           nil
         end
       end
@@ -403,7 +451,7 @@ module FlowChat
         if response.is_a?(Net::HTTPSuccess)
           response.body
         else
-          Rails.logger.error "WhatsApp Media download error: #{response.body}"
+          FlowChat.logger.error { "WhatsApp::Client: Media download error: #{response.body}" }
           nil
         end
       end
@@ -420,7 +468,7 @@ module FlowChat
         response = http.head(uri.path)
         response["content-type"]
       rescue => e
-        Rails.logger.warn "Could not detect MIME type for #{url}: #{e.message}"
+        FlowChat.logger.warn { "WhatsApp::Client: Could not detect MIME type for #{url}: #{e.message}" }
         nil
       end
 
@@ -489,6 +537,13 @@ module FlowChat
           result
         else
           FlowChat.logger.error { "WhatsApp::Client: API request failed - #{response.code}: #{response.body}" }
+          report_api_error(
+            "WhatsApp API request failed",
+            response_code: response.code,
+            response_body: response.body,
+            recipient: to,
+            message_type: message_type
+          )
           nil
         end
       rescue Net::OpenTimeout, Net::ReadTimeout => network_error
@@ -497,7 +552,83 @@ module FlowChat
         raise network_error
       rescue => error
         FlowChat.logger.error { "WhatsApp::Client: API request exception: #{error.class.name}: #{error.message}" }
+        report_api_error(
+          "WhatsApp API request exception: #{error.class.name}",
+          error: error,
+          recipient: to,
+          message_type: message_type
+        )
         nil
+      end
+
+      def send_read_receipt_payload(payload, message_id)
+        FlowChat.logger.debug { "WhatsApp::Client: Marking message #{message_id} as read (typing=#{payload.key?(:typing_indicator)})" }
+
+        uri = URI("#{FlowChat::Config.whatsapp.api_base_url}/#{@config.phone_number_id}/messages")
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+
+        request = Net::HTTP::Post.new(uri)
+        request["Authorization"] = "Bearer #{@config.access_token}"
+        request["Content-Type"] = "application/json"
+        request.body = payload.to_json
+
+        response = http.request(request)
+
+        if response.is_a?(Net::HTTPSuccess)
+          JSON.parse(response.body)
+        else
+          FlowChat.logger.error { "WhatsApp::Client: mark_as_read failed - #{response.code}: #{response.body}" }
+          report_api_error(
+            "WhatsApp mark_as_read failed",
+            response_code: response.code,
+            response_body: response.body,
+            message_type: "read_receipt"
+          )
+          nil
+        end
+      rescue Net::OpenTimeout, Net::ReadTimeout => network_error
+        FlowChat.logger.error { "WhatsApp::Client: Network timeout marking read: #{network_error.class.name}: #{network_error.message}" }
+        raise network_error
+      rescue => error
+        FlowChat.logger.error { "WhatsApp::Client: mark_as_read exception: #{error.class.name}: #{error.message}" }
+        report_api_error(
+          "WhatsApp mark_as_read exception: #{error.class.name}",
+          error: error,
+          message_type: "read_receipt"
+        )
+        nil
+      end
+
+      def report_api_error(message, response_code: nil, response_body: nil, error: nil, recipient: nil, message_type: nil)
+        error_details = parse_error_response(response_body)
+
+        FlowChat::Instrumentation.report_api_error(
+          message,
+          error: error,
+          platform: :whatsapp,
+          phone_number_id: @config.phone_number_id,
+          recipient: recipient,
+          message_type: message_type,
+          response_code: response_code,
+          **error_details
+        )
+      end
+
+      def parse_error_response(response_body)
+        return {} unless response_body
+
+        parsed = JSON.parse(response_body)
+        return {} unless parsed.is_a?(Hash) && parsed["error"]
+
+        {
+          error_type: parsed.dig("error", "type"),
+          error_code: parsed.dig("error", "code"),
+          error_subcode: parsed.dig("error", "error_subcode"),
+          error_message: parsed.dig("error", "message")
+        }.compact
+      rescue JSON::ParserError
+        {}
       end
 
       def send_media_message(to, media_type, url_or_id, caption: nil, filename: nil, mime_type: nil)

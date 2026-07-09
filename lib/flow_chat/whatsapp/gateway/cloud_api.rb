@@ -1,6 +1,5 @@
 require "net/http"
 require "json"
-require "phonelib"
 require "openssl"
 
 module FlowChat
@@ -11,6 +10,7 @@ module FlowChat
     module Gateway
       class CloudApi
         include FlowChat::Instrumentation
+        include FlowChat::GatewayAsyncSupport
 
         attr_reader :context
 
@@ -25,25 +25,28 @@ module FlowChat
 
         def call(context)
           @context = context
-          controller = context.controller
-          request = controller.request
+          @controller = context.controller
+          request = @controller.request
 
           FlowChat.logger.debug { "CloudApi: Processing #{request.request_method} request to #{request.path}" }
 
-          # Handle webhook verification
-          if request.get? && request.params["hub.mode"] == "subscribe"
-            FlowChat.logger.info { "CloudApi: Handling webhook verification request" }
-            return handle_verification(context)
+          # Skip webhook-specific handling in background mode
+          unless in_background?
+            # Handle webhook verification
+            if request.get? && request.params["hub.mode"] == "subscribe"
+              FlowChat.logger.info { "CloudApi: Handling webhook verification request" }
+              return handle_verification(context)
+            end
           end
 
           # Handle webhook messages
           if request.post?
-            FlowChat.logger.info { "CloudApi: Handling webhook message" }
+            FlowChat.logger.info { "CloudApi: Handling webhook message (background: #{in_background?})" }
             return handle_webhook(context)
           end
 
           FlowChat.logger.warn { "CloudApi: Invalid request method or parameters - returning bad request" }
-          controller.head :bad_request
+          @controller.head :bad_request
         end
 
         # Expose client for out-of-band messaging
@@ -52,21 +55,18 @@ module FlowChat
         private
 
         def determine_message_handler(context)
-          # Check if simulator mode was already detected and set in context
+          # Use simulator mode if enabled, otherwise always use inline
           if context["simulator_mode"]
             FlowChat.logger.debug { "CloudApi: Using simulator message handler" }
-            return :simulator
+            :simulator
+          else
+            FlowChat.logger.debug { "CloudApi: Using inline message handler" }
+            :inline
           end
-
-          # Use global WhatsApp configuration
-          mode = FlowChat::Config.whatsapp.message_handling_mode
-          FlowChat.logger.debug { "CloudApi: Using #{mode} message handling mode" }
-          mode
         end
 
         def handle_verification(context)
-          controller = context.controller
-          params = controller.request.params
+          params = @controller.request.params
 
           verify_token = @config.verify_token
           provided_token = params["hub.verify_token"]
@@ -81,7 +81,7 @@ module FlowChat
               platform: :whatsapp
             })
 
-            controller.render plain: challenge
+            @controller.render plain: challenge
           else
             # Use instrumentation for webhook verification failure
             instrument(Events::WEBHOOK_FAILED, {
@@ -89,20 +89,18 @@ module FlowChat
               platform: :whatsapp
             })
 
-            controller.head :forbidden
+            @controller.head :forbidden
           end
         end
 
         def handle_webhook(context)
-          controller = context.controller
-
           # Parse body
           begin
-            parse_request_body(controller.request)
+            parse_request_body(@controller.request)
             FlowChat.logger.debug { "CloudApi: Successfully parsed webhook request body" }
           rescue JSON::ParserError => e
             FlowChat.logger.error { "CloudApi: Failed to parse webhook body: #{e.message}" }
-            return controller.head :bad_request
+            return @controller.head :bad_request
           end
 
           # Check for simulator mode parameter in request (before validation)
@@ -113,10 +111,11 @@ module FlowChat
             context["simulator_mode"] = true
           end
 
-          # Validate webhook signature for security (skip for simulator mode)
-          unless is_simulator_mode || valid_webhook_signature?(controller.request)
-            FlowChat.logger.warn { "CloudApi: Invalid webhook signature received - rejecting request" }
-            return controller.head :unauthorized
+          # Validate webhook signature for security (skip for simulator mode and background)
+          # Return 200 OK even for invalid signatures to prevent WhatsApp from retrying
+          unless in_background? || is_simulator_mode || valid_webhook_signature?(@controller.request)
+            FlowChat.logger.warn { "CloudApi: Invalid webhook signature - dropping request" }
+            return @controller.head :ok
           end
 
           FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }
@@ -125,19 +124,19 @@ module FlowChat
           entry = @body.dig("entry", 0)
           unless entry
             FlowChat.logger.debug { "CloudApi: No entry found in webhook body - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           changes = entry.dig("changes", 0)
           unless changes
             FlowChat.logger.debug { "CloudApi: No changes found in webhook entry - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           value = changes["value"]
           unless value
             FlowChat.logger.debug { "CloudApi: No value found in webhook changes - returning OK" }
-            return controller.head :ok
+            return @controller.head :ok
           end
 
           # Handle incoming messages
@@ -145,44 +144,65 @@ module FlowChat
             message = value["messages"].first
             contact = value["contacts"]&.first
 
-            phone_number = message["from"]
+            phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
             message_id = message["id"]
             contact_name = contact&.dig("profile", "name")
+            business_phone_number = value.dig("metadata", "display_phone_number")
+            business_phone_number_id = value.dig("metadata", "phone_number_id")
 
-            # Use instrumentation for message received
-            instrument(Events::MESSAGE_RECEIVED, {
-              from: phone_number,
-              message: context.input,
-              message_type: message["type"],
-              message_id: message_id,
-              platform: :whatsapp
-            })
+            # Validate that webhook is for our configured phone number
+            if business_phone_number_id != @config.phone_number_id
+              FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
+              return @controller.head :forbidden
+            end
 
             context["request.id"] = phone_number
+            context["request.user_id"] = phone_number
+            context["request.user_name"] = contact_name if contact_name
+            context["request.msisdn"] = phone_number
             context["request.gateway"] = :whatsapp_cloud_api
             context["request.platform"] = :whatsapp
             context["request.message_id"] = message_id
-            context["request.msisdn"] = Phonelib.parse(phone_number).e164
-            context["request.contact_name"] = contact_name
-            context["request.timestamp"] = message["timestamp"]
+            context["request.timestamp"] = Time.current.iso8601
+            context["request.body"] = @body
+
+            context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
+            context["whatsapp.business.phone_number_id"] = business_phone_number_id
+            context["whatsapp.client"] = @client
 
             # Extract message content based on type
-            extract_message_content(message, context)
+            extract_message_content!(message, context)
+
+            if context.input.present?
+              # Use instrumentation for message received
+              instrument(Events::MESSAGE_RECEIVED, {
+                from: phone_number,
+                message: context.input,
+                message_type: message["type"],
+                message_id: message_id
+              })
+            end
 
             FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
 
-            # Determine message handling mode
-            handler_mode = determine_message_handler(context)
+            # Determine routing: async enqueue, background execute, or inline
+            if should_enqueue_async?
+              # Webhook with async enabled → enqueue job and return immediately
+              enqueue_async_job
+              return @controller.head :ok
+            else
+              # Background OR inline → process message
+              # Determine message handling mode (simulator vs inline)
+              handler_mode = determine_message_handler(context)
 
-            # Process the message based on handling mode
-            case handler_mode
-            when :inline
-              handle_message_inline(context, controller)
-            when :background
-              handle_message_background(context, controller)
-            when :simulator
-              # Return early from simulator mode to preserve the JSON response
-              return handle_message_simulator(context, controller)
+              # Process the message based on handling mode
+              case handler_mode
+              when :inline
+                handle_message_inline(context, @controller)
+              when :simulator
+                # Return early from simulator mode to preserve the JSON response
+                return handle_message_simulator(context, @controller)
+              end
             end
           end
 
@@ -193,7 +213,7 @@ module FlowChat
             FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
           end
 
-          controller.head :ok
+          @controller.head :ok
         end
 
         # Validate webhook signature to ensure request comes from WhatsApp
@@ -260,14 +280,14 @@ module FlowChat
           res == 0
         end
 
-        def extract_message_content(message, context)
+        def extract_message_content!(message, context)
           message_type = message["type"]
           FlowChat.logger.debug { "CloudApi: Extracting content from #{message_type} message" }
 
           case message_type
           when "text"
             content = message.dig("text", "body")
-            context.input = content
+            context.input = content.presence || ""
             FlowChat.logger.debug { "CloudApi: Text message content: '#{content}'" }
           when "interactive"
             # Handle button/list replies
@@ -288,57 +308,57 @@ module FlowChat
               address: message.dig("location", "address")
             }
             context["request.location"] = location
-            context.input = "$location$"
+            context.input = FlowChat::Input::LOCATION
             FlowChat.logger.debug { "CloudApi: Location received - Lat: #{location[:latitude]}, Lng: #{location[:longitude]}" }
-          when "image", "document", "audio", "video"
+          when "image", "document", "audio", "video", "sticker"
+            media_data = message[message["type"]]
             context["request.media"] = {
-              type: message["type"],
-              id: message.dig(message["type"], "id"),
-              mime_type: message.dig(message["type"], "mime_type"),
-              caption: message.dig(message["type"], "caption")
+              type: message["type"].to_sym,
+              id: media_data["id"],
+              mime_type: media_data["mime_type"],
+              caption: media_data["caption"],
+              filename: media_data["filename"],
+              sha256: media_data["sha256"],
+              animated: media_data["animated"]
             }
-            context.input = "$media$"
+            context.input = FlowChat::Input::MEDIA
+            FlowChat.logger.debug { "CloudApi: Media received - Type: #{message["type"]}, ID: #{media_data["id"]}" }
+          when "contacts"
+            # WhatsApp sends contacts as an array, take the first one
+            contact_data = message.dig("contacts", 0)
+            if contact_data
+              phones = contact_data.dig("phones") || []
+              context["request.contact"] = {
+                name: contact_data.dig("name", "formatted_name"),
+                first_name: contact_data.dig("name", "first_name"),
+                last_name: contact_data.dig("name", "last_name"),
+                phones: phones.map { |p| p["phone"] },
+                phone_number: phones.first&.dig("phone")
+              }
+              context.input = FlowChat::Input::CONTACT
+              FlowChat.logger.debug { "CloudApi: Contact received - Name: #{context["request.contact"][:name]}" }
+            end
           end
         end
 
         def handle_message_inline(context, controller)
           response = @app.call(context)
           if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-            result = @client.send_message(context["request.msisdn"], rendered_message)
+            type, prompt, choices, media = response
+            result = @client.send_message(context["request.msisdn"], prompt, choices: choices, media: media)
             context["whatsapp.message_result"] = result
-          end
-        end
 
-        def handle_message_background(context, controller)
-          # Process the flow synchronously (maintaining controller context)
-          response = @app.call(context)
-
-          if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
-
-            # Queue only the response delivery asynchronously
-            send_data = {
-              msisdn: context["request.msisdn"],
-              response: rendered_message,
-              config_name: @config.name
-            }
-
-            # Get job class from configuration
-            job_class_name = FlowChat::Config.whatsapp.background_job_class
-
-            # Enqueue background job for sending only
-            begin
-              job_class = job_class_name.constantize
-              job_class.perform_later(send_data)
-            rescue NameError
-              # Fallback to inline sending if no job system
-              Rails.logger.warn "Background mode requested but no #{job_class_name} found. Falling back to inline sending."
-              result = @client.send_message(context["request.msisdn"], rendered_message)
-              context["whatsapp.message_result"] = result
-            end
+            # Instrument message sent
+            instrument(Events::MESSAGE_SENT, {
+              to: context["request.msisdn"],
+              session_id: context["request.id"],
+              message: prompt,
+              message_type: (type == :prompt) ? "prompt" : "terminal",
+              gateway: :whatsapp_cloud_api,
+              platform: :whatsapp,
+              content_length: prompt.to_s.length,
+              timestamp: context["request.timestamp"]
+            })
           end
         end
 
@@ -346,12 +366,12 @@ module FlowChat
           response = @app.call(context)
 
           if response
-            _type, prompt, choices, media = response
-            rendered_message = render_response(prompt, choices, media)
+            _, prompt, choices, media = response
+            response_data = render_response(prompt, choices, media)
 
             # For simulator mode, return the response data in the HTTP response
             # instead of actually sending via WhatsApp API
-            message_payload = @client.build_message_payload(rendered_message, context["request.msisdn"])
+            message_payload = @client.build_message_payload(response_data, context["request.msisdn"])
 
             simulator_response = {
               mode: "simulator",
@@ -359,7 +379,7 @@ module FlowChat
               would_send: message_payload,
               message_info: {
                 to: context["request.msisdn"],
-                contact_name: context["request.contact_name"],
+                contact_name: context["request.user_name"],
                 timestamp: Time.now.iso8601
               }
             }
@@ -382,8 +402,7 @@ module FlowChat
           return false unless simulator_secret && !simulator_secret.empty?
 
           # Check for simulator cookie
-          request = context.controller.request
-          simulator_cookie = request.cookies["flowchat_simulator"]
+          simulator_cookie = @controller.request.cookies["flowchat_simulator"]
           return false unless simulator_cookie
 
           # Verify the cookie is a valid HMAC signature
@@ -410,11 +429,30 @@ module FlowChat
         end
 
         def parse_request_body(request)
-          @body ||= JSON.parse(request.body.read)
+          return @body if @body
+
+          if request.body.nil?
+            FlowChat.logger.debug { "CloudApi: Request body is nil, returning empty hash" }
+            @body = {}
+          else
+            request.body.rewind if request.body.respond_to?(:rewind)
+            @body = JSON.parse(request.body.read)
+          end
         end
 
         def render_response(prompt, choices, media)
           FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
+        end
+
+        # Configure WhatsApp-specific middleware stack
+        def self.configure_middleware_stack(builder, custom_middleware)
+          FlowChat.logger.debug { "CloudApi: Configuring WhatsApp middleware stack" }
+
+          builder.use custom_middleware
+          FlowChat.logger.debug { "CloudApi: Added custom middleware" }
+
+          builder.use FlowChat::Whatsapp::Middleware::ChoiceMapper
+          FlowChat.logger.debug { "CloudApi: Added Whatsapp::Middleware::ChoiceMapper" }
         end
       end
     end

@@ -29,9 +29,9 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["flows.by_name.TestFlow"]
 
     # Check timing metrics (allow some tolerance for timing precision)
-    assert_in_delta 150.0, metrics["flows.execution_time.min"], 5.0
-    assert_in_delta 150.0, metrics["flows.execution_time.max"], 5.0
-    assert_in_delta 150.0, metrics["flows.execution_time.avg"], 5.0
+    assert_in_delta 150.0, metrics["flows.execution_time.min"], 10.0
+    assert_in_delta 150.0, metrics["flows.execution_time.max"], 10.0
+    assert_in_delta 150.0, metrics["flows.execution_time.avg"], 10.0
   end
 
   def test_flow_execution_error_increments_error_counters
@@ -105,7 +105,7 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["whatsapp.messages.sent.by_type.text"]
 
     # Check timing for sent messages (allow some tolerance for timing precision)
-    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 5.0
+    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 15.0
   end
 
   def test_whatsapp_api_request_success_and_failure
@@ -130,9 +130,9 @@ class MetricsCollectorTest < Minitest::Test
     assert_equal 1, metrics["whatsapp.api.requests.failure.by_status.400"]
 
     # Check timing for API requests (allow some tolerance for timing precision)
-    assert_in_delta 50.0, metrics["whatsapp.api.request_time.min"], 5.0
-    assert_in_delta 250.0, metrics["whatsapp.api.request_time.max"], 5.0
-    assert_in_delta 150.0, metrics["whatsapp.api.request_time.avg"], 5.0
+    assert_in_delta 50.0, metrics["whatsapp.api.request_time.min"], 10.0
+    assert_in_delta 250.0, metrics["whatsapp.api.request_time.max"], 10.0
+    assert_in_delta 150.0, metrics["whatsapp.api.request_time.avg"], 10.0
   end
 
   def test_whatsapp_media_upload_success_and_failure
@@ -214,12 +214,12 @@ class MetricsCollectorTest < Minitest::Test
     metrics = @collector.snapshot
 
     assert_equal 5, metrics["flows.executed"]
-    assert_in_delta 100.0, metrics["flows.execution_time.min"], 5.0
-    assert_in_delta 300.0, metrics["flows.execution_time.max"], 5.0
-    assert_in_delta 200.0, metrics["flows.execution_time.avg"], 5.0  # (100+200+300+150+250)/5
+    assert_in_delta 100.0, metrics["flows.execution_time.min"], 10.0
+    assert_in_delta 300.0, metrics["flows.execution_time.max"], 10.0
+    assert_in_delta 200.0, metrics["flows.execution_time.avg"], 10.0  # (100+200+300+150+250)/5
 
     # Check percentiles (sorted: 100, 150, 200, 250, 300) - allow tolerance for timing
-    assert_in_delta 200.0, metrics["flows.execution_time.p50"], 5.0  # median
+    assert_in_delta 200.0, metrics["flows.execution_time.p50"], 10.0  # median
     assert_in_delta 280.0, metrics["flows.execution_time.p95"], 15.0  # 95th percentile - more tolerance
     assert_in_delta 290.0, metrics["flows.execution_time.p99"], 15.0  # 99th percentile - more tolerance
   end

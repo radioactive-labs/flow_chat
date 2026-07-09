@@ -9,7 +9,7 @@ class MultiTenantWhatsappController < ApplicationController
     tenant = determine_tenant(request)
     whatsapp_config = get_whatsapp_config_for_tenant(tenant)
 
-    processor = FlowChat::Whatsapp::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
+    processor = FlowChat::Processor.new(self, enable_simulator: !Rails.env.production?) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
@@ -96,7 +96,7 @@ class DatabaseWhatsappController < ApplicationController
       config.app_secret = business_account.whatsapp_app_secret
     end
 
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
@@ -135,7 +135,7 @@ class EnvironmentWhatsappController < ApplicationController
       FlowChat::Whatsapp::Configuration.from_credentials
     end
 
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
@@ -193,7 +193,7 @@ class CustomWhatsappController < ApplicationController
     my_config.app_secret = "your_app_secret"
     my_config.business_account_id = "your_business_account_id"
 
-    processor = FlowChat::Whatsapp::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, my_config
       config.use_session_store FlowChat::Session::CacheSessionStore
     end

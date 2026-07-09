@@ -21,7 +21,6 @@ module FlowChat
           if intercept?
             FlowChat.logger.info { "Ussd::Pagination: Intercepting request for pagination handling - session #{session_id}" }
             type, prompt = handle_intercepted_request
-            [type, prompt, []]
           else
             # Clear pagination state for new flows
             if pagination_state.present?
@@ -41,8 +40,8 @@ module FlowChat
               end
             end
 
-            [type, prompt, []]
           end
+          [type, prompt, []]
         end
 
         private
@@ -61,15 +60,17 @@ module FlowChat
 
         def handle_intercepted_request
           FlowChat.logger.info { "Ussd::Pagination: Handling paginated request" }
-          start, finish, has_more = calculate_offsets
+          # Cache current_page to avoid multiple calculations
+          page = current_page
+          start, finish, has_more = calculate_offsets_for_page(page)
           type = (pagination_state["type"].to_sym == :terminal && !has_more) ? :terminal : :prompt
           prompt = pagination_state["prompt"][start..finish] + build_pagination_options(type, has_more)
-          set_pagination_state(current_page, start, finish)
+          set_pagination_state(page, start, finish)
 
           # Instrument pagination navigation
           instrument(Events::PAGINATION_TRIGGERED, {
             session_id: @context["session.id"],
-            current_page: current_page,
+            current_page: page,
             total_pages: calculate_total_pages,
             content_length: pagination_state["prompt"].length,
             page_limit: FlowChat::Config.ussd.pagination_page_size,
@@ -113,7 +114,10 @@ module FlowChat
 
         def calculate_offsets
           page = current_page
+          calculate_offsets_for_page(page)
+        end
 
+        def calculate_offsets_for_page(page)
           FlowChat.logger.debug { "Ussd::Pagination: Calculating offsets for page #{page}" }
 
           offset = pagination_state["offsets"][page.to_s]

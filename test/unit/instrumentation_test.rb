@@ -167,5 +167,163 @@ class InstrumentationTest < Minitest::Test
     assert_equal "webhook.verified", events::WEBHOOK_VERIFIED
     assert_equal "webhook.failed", events::WEBHOOK_FAILED
     assert_equal "media.upload", events::MEDIA_UPLOAD
+    assert_equal "api.error", events::API_ERROR
+  end
+
+  # ============================================================================
+  # REPORT_API_ERROR TESTS
+  # ============================================================================
+
+  def test_report_api_error_instruments_api_error_event
+    @test_events.clear
+
+    FlowChat::Instrumentation.report_api_error(
+      "Test API error",
+      platform: :test_platform,
+      endpoint: "/api/test"
+    )
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    refute_nil event, "Expected to find api.error.flow_chat event"
+
+    assert_equal "Test API error", event[:payload][:message]
+    assert_equal :test_platform, event[:payload][:platform]
+    assert_equal "/api/test", event[:payload][:endpoint]
+    assert event[:payload][:timestamp]
+  end
+
+  def test_report_api_error_with_exception
+    @test_events.clear
+
+    original_error = StandardError.new("Original error message")
+
+    FlowChat::Instrumentation.report_api_error(
+      "Wrapped error",
+      error: original_error,
+      platform: :whatsapp,
+      recipient: "+1234567890"
+    )
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    refute_nil event
+
+    assert_equal "Wrapped error", event[:payload][:message]
+    assert_equal :whatsapp, event[:payload][:platform]
+    assert_equal "+1234567890", event[:payload][:recipient]
+  end
+
+  def test_report_api_error_compacts_nil_values
+    @test_events.clear
+
+    FlowChat::Instrumentation.report_api_error(
+      "Error with nils",
+      platform: :telegram,
+      chat_id: nil,
+      error_code: 401
+    )
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    refute_nil event
+
+    refute event[:payload].key?(:chat_id), "Expected nil values to be compacted"
+    assert_equal 401, event[:payload][:error_code]
+  end
+
+  def test_report_api_error_reports_to_rails_error_when_available
+    @test_events.clear
+
+    reported_errors = []
+
+    # Create a simple mock Rails.error object
+    mock_rails_error = Object.new
+    mock_rails_error.define_singleton_method(:respond_to?) { |method| method == :report }
+    mock_rails_error.define_singleton_method(:report) do |exception, handled:, context:|
+      reported_errors << {exception: exception, handled: handled, context: context}
+    end
+
+    mock_rails = Module.new do
+      define_singleton_method(:respond_to?) { |method| method == :error }
+    end
+    mock_rails.define_singleton_method(:error) { mock_rails_error }
+
+    original_rails = defined?(Rails) ? Rails : nil
+    Object.send(:remove_const, :Rails) if defined?(Rails)
+    Object.const_set(:Rails, mock_rails)
+
+    begin
+      FlowChat::Instrumentation.report_api_error(
+        "Intercom error",
+        platform: :intercom,
+        conversation_id: "conv_123"
+      )
+
+      assert_equal 1, reported_errors.size
+      assert reported_errors.first[:exception].is_a?(StandardError)
+      assert_equal "Intercom error", reported_errors.first[:exception].message
+      assert_equal true, reported_errors.first[:handled]
+      assert_equal :intercom, reported_errors.first[:context][:platform]
+    ensure
+      Object.send(:remove_const, :Rails)
+      Object.const_set(:Rails, original_rails) if original_rails
+    end
+  end
+
+  def test_report_api_error_uses_provided_exception_for_rails_error
+    @test_events.clear
+
+    original_exception = ArgumentError.new("Bad argument")
+    reported_errors = []
+
+    mock_rails_error = Object.new
+    mock_rails_error.define_singleton_method(:respond_to?) { |method| method == :report }
+    mock_rails_error.define_singleton_method(:report) do |exception, handled:, context:|
+      reported_errors << {exception: exception, handled: handled, context: context}
+    end
+
+    mock_rails = Module.new do
+      define_singleton_method(:respond_to?) { |method| method == :error }
+    end
+    mock_rails.define_singleton_method(:error) { mock_rails_error }
+
+    original_rails = defined?(Rails) ? Rails : nil
+    Object.send(:remove_const, :Rails) if defined?(Rails)
+    Object.const_set(:Rails, mock_rails)
+
+    begin
+      FlowChat::Instrumentation.report_api_error(
+        "Error with exception",
+        error: original_exception,
+        platform: :telegram
+      )
+
+      assert_equal 1, reported_errors.size
+      assert_same original_exception, reported_errors.first[:exception]
+      assert_equal true, reported_errors.first[:handled]
+    ensure
+      Object.send(:remove_const, :Rails)
+      Object.const_set(:Rails, original_rails) if original_rails
+    end
+  end
+
+  def test_report_api_error_works_without_rails
+    @test_events.clear
+
+    # Ensure Rails is not defined
+    original_rails = Rails if defined?(Rails)
+    Object.send(:remove_const, :Rails) if defined?(Rails)
+
+    begin
+      # Should not raise
+      FlowChat::Instrumentation.report_api_error(
+        "Error without Rails",
+        platform: :whatsapp
+      )
+
+      event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+      refute_nil event
+      assert_equal "Error without Rails", event[:payload][:message]
+    ensure
+      Object.const_set(:Rails, original_rails) if original_rails
+    end
   end
 end

@@ -23,12 +23,12 @@ module FlowChat
       end
 
       def default_config_key
-        "ussd"
+        :ussd
       end
 
-      def simulator_configurations
+      def configurations
         {
-          "ussd" => {
+          ussd: {
             name: "USSD (Nalo)",
             description: "USSD integration using Nalo",
             processor_type: "ussd",
@@ -41,7 +41,7 @@ module FlowChat
               session_timeout: 300
             }
           },
-          "whatsapp" => {
+          whatsapp: {
             name: "WhatsApp (Cloud API)",
             description: "WhatsApp integration using Cloud API",
             processor_type: "whatsapp",
@@ -52,6 +52,18 @@ module FlowChat
             settings: {
               phone_number: default_phone_number,
               contact_name: default_contact_name
+            }
+          },
+          http: {
+            name: "HTTP API",
+            description: "HTTP integration with JSON request/response",
+            processor_type: "http",
+            gateway: "http_simple",
+            endpoint: "/http/webhook",
+            icon: "🌐",
+            color: "#0066cc",
+            settings: {
+              user_id: default_phone_number
             }
           }
         }
@@ -71,7 +83,7 @@ module FlowChat
           default_phone_number: default_phone_number,
           default_contact_name: default_contact_name,
           default_config_key: default_config_key,
-          configurations: simulator_configurations
+          configurations: configurations
         }
       end
 

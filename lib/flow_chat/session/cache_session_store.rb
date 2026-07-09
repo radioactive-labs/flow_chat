@@ -111,23 +111,7 @@ module FlowChat
       private
 
       def session_key
-        return "flow_chat:session:nil_context" unless @context
-
-        gateway = @context["request.gateway"]
-        msisdn = @context["request.msisdn"]
-
-        key = case gateway
-        when :whatsapp_cloud_api
-          "flow_chat:session:whatsapp:#{msisdn}"
-        when :nalo, :nsano
-          session_id = @context["request.id"]
-          "flow_chat:session:ussd:#{session_id}:#{msisdn}"
-        else
-          "flow_chat:session:unknown:#{msisdn}"
-        end
-
-        FlowChat.logger.debug { "CacheSessionStore: Generated session key: #{key}" }
-        key
+        "flow_chat:cached_session:#{@context["session.id"]}"
       end
 
       def session_ttl

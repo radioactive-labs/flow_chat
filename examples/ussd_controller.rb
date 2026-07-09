@@ -5,10 +5,10 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      # Use Rails session for USSD (shorter sessions)
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      # Use cache session store for USSD
+      config.use_session_store FlowChat::Session::CacheSessionStore
 
       # Enable durable sessions (optional)
       config.use_durable_sessions  # Configures flow+platform isolation with durable sessions
@@ -194,9 +194,9 @@ class UssdController < ApplicationController
     FlowChat::Config.ussd.pagination_next_option = "#"
     FlowChat::Config.ussd.pagination_back_option = "*"
 
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
     processor.run WelcomeFlow, :main_page
@@ -228,16 +228,16 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::RailsSessionStore
+      config.use_session_store FlowChat::Session::CacheSessionStore
       config.use_middleware LoggingMiddleware  # Add custom logging
       config.use_durable_sessions           # Enable durable sessions
-      
+
       # Or configure session boundaries explicitly:
       # config.use_session_config(
       #   boundaries: [:flow, :platform],     # which boundaries to enforce
-      #   hash_phone_numbers: true            # hash phone numbers for privacy
+      #   hash_identifiers: true            # hash phone numbers for privacy
       # )
     end
 
@@ -252,7 +252,7 @@ class UssdController < ApplicationController
   skip_forgery_protection
 
   def process_request
-    processor = FlowChat::Ussd::Processor.new(self) do |config|
+    processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Ussd::Gateway::Nalo
       # Use cache store for longer session persistence
       config.use_session_store FlowChat::Session::CacheSessionStore
