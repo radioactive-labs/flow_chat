@@ -75,18 +75,26 @@ differs by platform and is preserved as-parsed (WhatsApp: `:image, :document,
 
 ### 2. `FlowChat::App` wiring (`lib/flow_chat/app.rb`)
 
-Replace the three `nil` stubs:
+Replace the `nil` stubs. Inbound media is normalized to a list because a single
+message can carry multiple media items on some platforms (Intercom attachments),
+while WhatsApp/Telegram carry exactly one:
 
-- `media` → returns `FlowChat::Media.new(context["request.media"], platform:,
-  client:)` when `context["request.media"]` is present, else `nil`. The client is
-  chosen from context by platform (`whatsapp.client` / `telegram.client` /
-  `intercom.client`; `nil` for HTTP).
+- `media_items` → `Array<FlowChat::Media>`. Reads `context["request.media"]`, which
+  may be a single hash (WhatsApp/Telegram) or an array of hashes (Intercom, HTTP).
+  Normalizes shape (`raw.is_a?(Array) ? raw : [raw]`), maps each to
+  `FlowChat::Media`, returns `[]` when none. This is the one place shape is
+  normalized — the WhatsApp/Telegram gateways are **not** changed.
+- `media` → `media_items.first` (the ergonomic single-media accessor; `nil` when
+  none). Common case for WhatsApp/Telegram flows.
 - `location` → returns `context["request.location"]` (hash or `nil`).
-- `contact_name` → returns the contact's name from `context["request.contact"]`.
-- `contact` → returns the full `context["request.contact"]` hash (added for parity
-  with `media`/`location`).
+- `contact_name` → returns `context["request.user_name"]` (the sender's display
+  name, as set by the gateways).
+- `contact` → returns `context["request.contact"]` (a contact card the user
+  *shared*, distinct from the sender; `nil` when none).
 
-A small private `media_client` helper maps platform → context client key.
+Each `FlowChat::Media` is built with the platform client chosen from context
+(`whatsapp.client` / `telegram.client` / `intercom.client`; `nil` for HTTP). A small
+private `media_client` helper maps platform → context client key.
 
 ### 3. Telegram client (`lib/flow_chat/telegram/client.rb`)
 
@@ -100,21 +108,26 @@ Telegram requires a `getFile` round-trip before download. Add:
 
 ### 4. Intercom gateway inbound parsing (`lib/flow_chat/intercom/gateway/intercom_api.rb`)
 
-In the latest-user-message extraction path, parse `attachments` (Intercom conversation
-parts carry `name`, `url`, `content_type`, `type`). When an attachment is present,
-set:
+In the latest-user-message extraction path, parse `attachments` (an **array** —
+Intercom conversation parts and the conversation `source` each carry
+`attachments` with `name`, `url`, `content_type`, `type`). Map **all** attachments:
 
 ```ruby
-context["request.media"] = {
-  type: <mapped from content_type/type>,
-  url: attachment["url"],
-  mime_type: attachment["content_type"],
-  filename: attachment["name"]
-}
+media = attachments.map do |a|
+  {
+    type: intercom_media_type(a["content_type"]),  # image/* → :image, else :document
+    url: a["url"],
+    mime_type: a["content_type"],
+    filename: a["name"]
+  }
+end
+context["request.media"] = media   # array, one entry per attachment
 context.input = FlowChat::Input::MEDIA
 ```
 
-First attachment only (consistent with the single-media model used elsewhere).
+A single Intercom message legitimately carries multiple attachments, so the array
+form is required here. `intercom_media_type` maps `content_type`: `image/*` →
+`:image`, `video/*` → `:video`, `audio/*` → `:audio`, otherwise `:document`.
 
 ### 5. HTTP gateway inbound parsing (`lib/flow_chat/http/gateway/simple.rb`)
 
@@ -139,7 +152,8 @@ behavior for existing HTTP callers.
 Webhook → Gateway parses payload → context["request.media"] = {...}
         → context.input = "$media$"
         → Session::Middleware → Executor → Flow
-Flow: app.media → FlowChat::Media(data, platform, client)
+Flow: app.media_items → [FlowChat::Media(data, platform, client), ...]  (normalized)
+      app.media       → media_items.first  (single-media convenience)
       app.media.download → client.download_media / download_file / GET url
 ```
 
@@ -157,10 +171,14 @@ Flow: app.media → FlowChat::Media(data, platform, client)
   dispatch per platform (WhatsApp id, Telegram file_id, URL-based) with mocked clients.
 - **Unit — Telegram client** (`test/unit/telegram/client_test.rb`): `get_file`,
   `file_url`, `download_file` against a stubbed API.
+- **Unit — `App` normalization** (in `media_test.rb` or app test): `media_items`
+  returns `[]` with no media, one item for a single hash, and N items for an array;
+  `media` returns the first item or `nil`.
 - **Integration** (`test/integration/media_support_test.rb`): extend with inbound
   cases — `app.media` returns a populated `FlowChat::Media` for WhatsApp, Telegram,
-  Intercom, and HTTP; `app.location` and `app.contact` populated where applicable;
-  `app.media` is `nil` for a plain text message.
+  Intercom, and HTTP; Intercom with multiple attachments yields
+  `app.media_items.size == 2`; `app.location` and `app.contact` populated where
+  applicable; `app.media` is `nil` and `app.media_items` is `[]` for plain text.
 
 ## Files
 
