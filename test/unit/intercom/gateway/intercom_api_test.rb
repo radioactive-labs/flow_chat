@@ -150,6 +150,24 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal "conversation.user.created", @context["intercom.topic"]
   end
 
+  def test_webhook_media_with_body_sets_caption_on_first_item
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = "<p>nice <strong>photo</strong></p>"
+    webhook_body["data"]["item"]["source"]["attachments"] = [
+      {"name" => "a.png", "url" => "https://i/a.png", "content_type" => "image/png"}
+    ]
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_equal FlowChat::Input::MEDIA, @context.input
+    assert_equal 1, @context["request.media"].size
+    assert_equal "nice **photo**", @context["request.media"][0][:caption]
+  end
+
   def test_webhook_notification_conversation_user_replied
     webhook_body = build_conversation_reply_webhook
     setup_post_request_with_webhook_and_app_call(webhook_body)

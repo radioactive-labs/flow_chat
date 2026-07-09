@@ -164,7 +164,8 @@ module FlowChat
               file_id: photo["file_id"],
               file_unique_id: photo["file_unique_id"],
               width: photo["width"],
-              height: photo["height"]
+              height: photo["height"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["video"]
@@ -176,7 +177,8 @@ module FlowChat
               width: video["width"],
               height: video["height"],
               duration: video["duration"],
-              mime_type: video["mime_type"]
+              mime_type: video["mime_type"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["audio"]
@@ -188,7 +190,8 @@ module FlowChat
               duration: audio["duration"],
               mime_type: audio["mime_type"],
               title: audio["title"],
-              performer: audio["performer"]
+              performer: audio["performer"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["document"]
@@ -198,7 +201,8 @@ module FlowChat
               file_id: doc["file_id"],
               file_unique_id: doc["file_unique_id"],
               file_name: doc["file_name"],
-              mime_type: doc["mime_type"]
+              mime_type: doc["mime_type"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["voice"]
@@ -208,7 +212,8 @@ module FlowChat
               file_id: voice["file_id"],
               file_unique_id: voice["file_unique_id"],
               duration: voice["duration"],
-              mime_type: voice["mime_type"]
+              mime_type: voice["mime_type"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["sticker"]
@@ -222,7 +227,8 @@ module FlowChat
               is_animated: sticker["is_animated"],
               is_video: sticker["is_video"],
               emoji: sticker["emoji"],
-              set_name: sticker["set_name"]
+              set_name: sticker["set_name"],
+              caption: message["caption"]
             }
             context.input = FlowChat::Input::MEDIA
           elsif message["contact"]

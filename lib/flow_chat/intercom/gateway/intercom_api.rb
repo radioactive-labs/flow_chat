@@ -142,9 +142,12 @@ module FlowChat
             if latest_message
               context["request.message_id"] = latest_message[:id]
               if latest_message[:media]
-                context["request.media"] = latest_message[:media]
+                media = latest_message[:media]
+                body = latest_message[:body]
+                media[0][:caption] = @client.parse_message(body) if body.present? && media.any?
+                context["request.media"] = media
                 context.input = FlowChat::Input::MEDIA
-                FlowChat.logger.debug { "IntercomApi: Media received - #{latest_message[:media].size} attachment(s)" }
+                FlowChat.logger.debug { "IntercomApi: Media received - #{media.size} attachment(s)" }
               else
                 # Convert HTML to markdown for message body
                 raw_body = latest_message[:body] || ""

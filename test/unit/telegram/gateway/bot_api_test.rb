@@ -151,6 +151,22 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
     assert_equal "AgACAgIAAxkBAAI", context["request.media"][:file_id]
   end
 
+  def test_post_request_photo_message_captures_caption
+    payload = create_photo_message_payload("AgACAgIAAxkBAAI", 12347)
+    payload["message"]["caption"] = "my caption"
+
+    context = create_context_with_request(
+      method: :post,
+      body: payload
+    )
+
+    @gateway.call(context)
+
+    assert_equal "$media$", context.input
+    assert_equal :photo, context["request.media"][:type]
+    assert_equal "my caption", context["request.media"][:caption]
+  end
+
   def test_post_request_document_message_processing
     context = create_context_with_request(
       method: :post,
