@@ -343,6 +343,27 @@ class MediaSupportTest < Minitest::Test
     assert_equal [], app.media_items
   end
 
+  def test_media_receives_platform_client_from_context
+    # Note: a raw Minitest::Mock cannot be stored in Context (its indifferent-access
+    # hash calls is_a? on stored values, which the mock intercepts). Use a stub client
+    # that records the delegated call to prove the platform->client wiring.
+    client = Class.new do
+      attr_reader :requested_id
+
+      def get_media_url(id)
+        @requested_id = id
+        "https://cdn/x.jpg"
+      end
+    end.new
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["whatsapp.client"] = client
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "https://cdn/x.jpg", app.media.url
+    assert_equal "MID", client.requested_id
+  end
+
   def test_location_and_contact_exposed_via_app
     @whatsapp_context["request.platform"] = :whatsapp
     @whatsapp_context["request.location"] = {latitude: 1.0, longitude: 2.0}
