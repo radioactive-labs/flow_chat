@@ -3,13 +3,15 @@ module FlowChat
     attr_reader :user_input
 
     def initialize(input)
-      @user_input = input
+      # Always work with a FlowChat::Input so `submitted?` (text OR attachment)
+      # gates the turn, and validate/transform receive the rich turn. A bare
+      # string (or nil) is wrapped as text.
+      @user_input = input.is_a?(FlowChat::Input) ? input : FlowChat::Input.new(text: input)
     end
 
     def ask(msg, choices: nil, transform: nil, validate: nil, media: nil)
-      if user_input.present?
-        input = user_input
-        validation_error = validate.call(input) if validate.present?
+      if user_input.submitted?
+        validation_error = validate.call(user_input) if validate.present?
 
         if validation_error.present?
           # Use config to determine whether to combine validation error with original message
@@ -21,8 +23,7 @@ module FlowChat
           prompt!(message, choices: choices, media: media)
         end
 
-        input = transform.call(input) if transform.present?
-        return input
+        return transform.present? ? transform.call(user_input) : user_input.to_s
       end
 
       # Pass raw message and media separately to the renderer

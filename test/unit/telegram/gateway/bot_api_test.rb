@@ -126,7 +126,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$location$", context.input
+    assert_equal "", context.input
     expected_location = {
       "latitude" => 51.5074,
       "longitude" => -0.1278
@@ -146,7 +146,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :photo, context["request.media"][:type]
     assert_equal "AgACAgIAAxkBAAI", context["request.media"][:file_id]
   end
@@ -162,7 +162,8 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    # The caption becomes the turn's text (input); no sentinel when text is present.
+    assert_equal "my caption", context.input
     assert_equal :photo, context["request.media"][:type]
     assert_equal "my caption", context["request.media"][:caption]
   end
@@ -175,7 +176,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :document, context["request.media"][:type]
     assert_equal "BQACAgIAAxkBAAI", context["request.media"][:file_id]
     assert_equal "report.pdf", context["request.media"][:file_name]
@@ -190,7 +191,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :voice, context["request.media"][:type]
     assert_equal "AwACAgIAAxkBAAI", context["request.media"][:file_id]
     assert_equal 10, context["request.media"][:duration]
@@ -208,7 +209,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$contact$", context.input
+    assert_equal "", context.input
     assert_equal "+15551234567", context["request.contact"][:phone_number]
     assert_equal "Jane", context["request.contact"][:first_name]
     assert_equal "Doe", context["request.contact"][:last_name]

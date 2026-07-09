@@ -53,7 +53,6 @@ module FlowChat
               url: params["media_url"],
               mime_type: params["mime_type"].presence
             }
-            context.input = FlowChat::Input::MEDIA if context.input.blank?
           end
 
           # Instrument message received when user provides input

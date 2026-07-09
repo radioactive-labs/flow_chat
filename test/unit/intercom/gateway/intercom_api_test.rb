@@ -150,7 +150,7 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal "conversation.user.created", @context["intercom.topic"]
   end
 
-  def test_webhook_media_with_body_sets_caption_on_first_item
+  def test_webhook_media_with_body_routes_body_to_input
     webhook_body = build_conversation_created_webhook
     webhook_body["data"]["item"]["source"]["body"] = "<p>nice <strong>photo</strong></p>"
     webhook_body["data"]["item"]["source"]["attachments"] = [
@@ -163,9 +163,28 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     @gateway.call(@context)
 
-    assert_equal FlowChat::Input::MEDIA, @context.input
+    # The body (markdown-parsed) becomes the turn's text; media is a separate channel.
+    assert_equal "nice **photo**", @context.input
     assert_equal 1, @context["request.media"].size
-    assert_equal "nice **photo**", @context["request.media"][0][:caption]
+    assert_equal :image, @context["request.media"][0][:type]
+  end
+
+  def test_webhook_media_without_body_leaves_input_blank
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = nil
+    webhook_body["data"]["item"]["source"]["attachments"] = [
+      {"name" => "a.png", "url" => "https://i/a.png", "content_type" => "image/png"}
+    ]
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # Text-less media yields an empty input; the media is carried on a separate channel.
+    assert_equal "", @context.input
+    assert_equal 1, @context["request.media"].size
   end
 
   def test_webhook_notification_conversation_user_replied

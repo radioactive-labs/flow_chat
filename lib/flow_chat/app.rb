@@ -4,7 +4,7 @@ module FlowChat
 
     def initialize(context)
       @context = context
-      @input = context.input
+      @input = build_input
       @navigation_stack = []
     end
 
@@ -17,7 +17,10 @@ module FlowChat
 
       user_input = prepare_user_input
       prompt = FlowChat::Prompt.new user_input
-      @input = nil # input is being submitted to prompt so we clear it
+      # The turn has been handed to a screen; later screens in this run must not
+      # re-consume it. We mark it consumed rather than discarding it, so the
+      # read accessors (text/media/...) stay available for the rest of the run.
+      @input_consumed = true
 
       value = yield prompt
       session.set(key, value)
@@ -27,7 +30,7 @@ module FlowChat
     def go_back
       return false if navigation_stack.empty?
 
-      @context.input = nil
+      @input_consumed = true
       current_screen = navigation_stack.last
       session.delete(current_screen)
 
@@ -63,28 +66,38 @@ module FlowChat
       context["request.timestamp"]
     end
 
+    # The sender's display name — distinct from a contact card they may share
+    # (that's #contact).
     def contact_name
       context["request.user_name"]
     end
 
-    def contact
-      context["request.contact"]
+    # Read accessors for the turn delegate to the Input value object, which is
+    # the single source of truth for this turn's text and attachments.
+    def text
+      input.text
+    end
+
+    # Always an Array<FlowChat::Media> (empty when none) — a list even on
+    # single-media platforms, so callers iterate uniformly.
+    def media
+      input.media
     end
 
     def location
-      context["request.location"]
+      input.location
     end
 
-    def media
-      media_items.first
+    def contact
+      input.contact
     end
 
-    def media_items
-      raw = context["request.media"]
-      return [] unless raw
+    def attachment
+      input.attachment
+    end
 
-      items = raw.is_a?(Array) ? raw : [raw]
-      items.map { |data| FlowChat::Media.new(data, platform: platform, client: media_client) }
+    def attachment_type
+      input.attachment_type
     end
 
     def session
@@ -93,11 +106,33 @@ module FlowChat
 
     protected
 
+    # The turn as a FlowChat::Input value object. Its #present? accounts for
+    # attachments, so a caption-less photo still answers a screen even though its
+    # text is blank. Built once and kept for the whole run (see #screen).
+    def build_input
+      FlowChat::Input.new(
+        text: context.input,
+        media: wrap_media(context["request.media"]),
+        location: context["request.location"],
+        contact: context["request.contact"]
+      )
+    end
+
+    def wrap_media(raw)
+      return [] unless raw
+
+      items = raw.is_a?(Array) ? raw : [raw]
+      items.map { |data| FlowChat::Media.new(data, platform: platform, client: media_client) }
+    end
+
     def prepare_user_input
+      return nil if @input_consumed
+
       user_input = input
       if platform != :ussd && session.get(FlowChat::Input::START).nil?
-        session.set(FlowChat::Input::START, user_input)
-        user_input = nil
+        # Store the text (a serializable string), not the Input object.
+        session.set(FlowChat::Input::START, user_input.to_s)
+        return nil
       end
       user_input
     end

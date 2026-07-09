@@ -265,13 +265,16 @@ class GoBackTest < Minitest::Test
     @context.input = "Services"
     @context["request.platform"] = :ussd
     app = FlowChat::App.new(@context)
-    main_choice = app.screen(:main_menu) { |prompt| prompt.user_input }
+    main_choice = app.screen(:main_menu) { |prompt| prompt.user_input.to_s }
     assert_equal "Services", main_choice
 
-    # Step 2: Services menu (with fresh input)
-    @context.input = "Back"  # Set input for services menu
-    app.instance_variable_set(:@input, @context.input)  # Restore input since it was cleared
-    services_choice = app.screen(:services_menu) { |prompt| prompt.user_input }
+    # Step 2: Second request — a fresh app with new input (each request builds
+    # its own app; the session is shared). Main menu replays from cache, and the
+    # services screen consumes the new input.
+    @context.input = "Back"
+    app = FlowChat::App.new(@context)
+    app.screen(:main_menu) { |prompt| prompt.user_input.to_s }  # cached "Services"
+    services_choice = app.screen(:services_menu) { |prompt| prompt.user_input.to_s }
     assert_equal "Back", services_choice
 
     # Step 3: User chooses to go back

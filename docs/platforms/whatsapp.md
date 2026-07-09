@@ -321,28 +321,32 @@ end
 
 ### Handling Incoming Media
 
+`app.media` is always a list of `FlowChat::Media` (empty when none), so iterate:
+
 ```ruby
 def handle_media_upload
-  if app.media
-    media_type = app.media["type"]
-    media_id = app.media["id"]
-    
-    case media_type
-    when "image"
-      app.say "Thanks for the image! Processing..."
-      process_image(media_id)
-    when "document"
-      app.say "Document received. Reviewing..."
-      process_document(media_id)
-    when "audio"
-      app.say "Got your voice message!"
-      process_audio(media_id)
+  if app.media.any?
+    app.media.each do |item|
+      case item.type   # canonical: :image, :document, :audio, ...
+      when :image
+        app.say "Thanks for the image! Processing..."
+        process_image(item)
+      when :document
+        app.say "Document received. Reviewing..."
+        process_document(item)
+      when :audio
+        app.say "Got your voice message!"
+        process_audio(item)
+      end
     end
   else
     app.say "Please send a photo of your receipt."
   end
 end
 ```
+
+Each `item` exposes `type`/`raw_type`, `mime_type`, `filename`, `caption`,
+`url`, and `download` (raw bytes) — see the [gateway context variables](../gateway-context-variables.md#accessing-the-turn-in-flows) reference.
 
 ## 📤 WhatsApp Client API
 

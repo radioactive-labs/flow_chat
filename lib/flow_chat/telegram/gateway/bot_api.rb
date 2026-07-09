@@ -155,7 +155,7 @@ module FlowChat
               "latitude" => message["location"]["latitude"],
               "longitude" => message["location"]["longitude"]
             }
-            context.input = FlowChat::Input::LOCATION
+            context.input = ""
           elsif message["photo"]
             # Photos come as array, take highest resolution (last)
             photo = message["photo"].last
@@ -167,7 +167,7 @@ module FlowChat
               height: photo["height"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["video"]
             video = message["video"]
             context["request.media"] = {
@@ -180,7 +180,7 @@ module FlowChat
               mime_type: video["mime_type"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["audio"]
             audio = message["audio"]
             context["request.media"] = {
@@ -193,7 +193,7 @@ module FlowChat
               performer: audio["performer"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["document"]
             doc = message["document"]
             context["request.media"] = {
@@ -204,7 +204,7 @@ module FlowChat
               mime_type: doc["mime_type"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["voice"]
             voice = message["voice"]
             context["request.media"] = {
@@ -215,7 +215,7 @@ module FlowChat
               mime_type: voice["mime_type"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["sticker"]
             sticker = message["sticker"]
             context["request.media"] = {
@@ -230,7 +230,7 @@ module FlowChat
               set_name: sticker["set_name"],
               caption: message["caption"]
             }
-            context.input = FlowChat::Input::MEDIA
+            context.input = message["caption"].presence || ""
           elsif message["contact"]
             context["request.contact"] = {
               phone_number: message["contact"]["phone_number"],
@@ -238,7 +238,7 @@ module FlowChat
               last_name: message["contact"]["last_name"],
               user_id: message["contact"]["user_id"]
             }
-            context.input = FlowChat::Input::CONTACT
+            context.input = ""
           else
             context.input = ""
           end

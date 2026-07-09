@@ -112,17 +112,19 @@ end
 
 ## Notes
 
-⁴ **WhatsApp input**: Text for text messages, `"$location$"` for location, `"$media$"` for media (image, document, audio, video, sticker), `"$contact$"` for shared contacts, or button/list reply IDs.
+⁴ **WhatsApp input**: The turn's text — the message text, a media caption, or a button/list reply ID. `""` for a structured turn (location, media, contact) that carries no text. The structured payload itself is on `request.media`/`request.location`/`request.contact`.
 
-⁵ **Intercom input**: Text content or `nil` for events without user messages.
+⁵ **Intercom input**: The message text (media caption / body), or `""`/`nil` for turns without text.
 
-⁶ **Telegram input**: Text for text messages, callback data for inline keyboard responses, `"$location$"` for location, `"$media$"` for media (photo, video, audio, document, voice, sticker), `"$contact$"` for shared contacts.
+⁶ **Telegram input**: The turn's text — message text, callback data, or a media caption. `""` for a structured turn (location, media, contact) with no text.
+
+> **Note:** `context.input` is always plain text now. The old `"$media$"`/`"$location$"`/`"$contact$"` sentinels have been removed — a structured turn with no text sets `input` to `""` and carries its payload on `request.media`/`request.location`/`request.contact`. In flows, read `app.input` (a `FlowChat::Input`) or its accessors; see below.
 
 ## Media Type Reference
 
-WhatsApp, Telegram, Intercom, and HTTP all set `request.media` with a `:type` symbol when inbound media is received (USSD is text-only and never sets media). WhatsApp and Telegram carry a single media item, while Intercom may set an **array** of media (one entry per attachment). HTTP callers submit inbound media via the `media_url` request param (with optional `media_type` and `mime_type`).
+WhatsApp, Telegram, Intercom, and HTTP all set `request.media` when inbound media is received (USSD is text-only and never sets media). WhatsApp and Telegram carry a single item, while Intercom may carry several (one per attachment). HTTP callers submit inbound media via the `media_url` request param (with optional `media_type` and `mime_type`).
 
-The raw `:type` in the table below is the platform-native value. When you access media through `app.media`, `media.type` returns a **normalized** value (`:photo` → `:image`, `:voice` → `:audio`) and `media.raw_type` returns the native value.
+The raw `:type` in the table below is the platform-native value. When you access media through `app.media` (a list of `FlowChat::Media`), each item's `type` is a **normalized** value (`:photo` → `:image`, `:voice` → `:audio`) and `raw_type` returns the native value.
 
 | Media Type | WhatsApp | Telegram | Additional Fields |
 |------------|----------|----------|-------------------|
@@ -133,76 +135,75 @@ The raw `:type` in the table below is the platform-native value. When you access
 | `:document` | ✓ | ✓ | id/file_id, mime_type, filename |
 | `:sticker` | ✓ | ✓ | id/file_id, emoji, set_name, is_animated |
 
-### Accessing Media in Flows
+### Accessing the Turn in Flows
 
-The recommended way to work with inbound media is through the high-level `app` accessors. They wrap the raw request data in `FlowChat::Media` objects and normalize platform differences (e.g. WhatsApp's `id` vs Telegram's `file_id`, `:filename` vs `:file_name`):
+Every turn is a `FlowChat::Input` value object, available as `app.input`. A turn
+has two independent axes: **text** and an optional **attachment**. Text and media
+can arrive together (a captioned photo); `location` and `contact` always arrive on
+their own. The value object exposes both, and `app` provides shortcut accessors.
 
 ```ruby
-# Preferred: use the app accessors
-photo = app.screen(:upload) { |prompt| prompt.ask "Please send a photo" }
+# Text is always safe to read — "" when the turn carried no text (e.g. a
+# caption-less photo). It holds the caption/body when media is attached.
+message = app.text
 
-if app.media
-  app.media.type       # canonical: :image, :video, :audio, :document, :sticker
-  app.media.raw_type   # platform-native: e.g. :photo/:voice on Telegram
-  app.media.mime_type
-  app.media.caption    # user's caption/message text, when present
-  app.media.filename
-  url   = app.media.url        # a fetchable URL for the media
-  bytes = app.media.download   # the raw file bytes
-end
-
-# A single inbound message may carry several media items (e.g. Intercom attachments)
-app.media_items.each do |item|
-  process(item.download)
-end
-
-# Location and shared contacts
-if app.location
+# Branch on the attachment kind, not on a magic input value:
+case app.attachment_type
+when :media
+  # app.media is ALWAYS a list — iterate, so you never drop extra attachments
+  app.media.each do |item|
+    item.type        # canonical: :image, :video, :audio, :document, :sticker
+    item.raw_type    # platform-native: e.g. :photo/:voice on Telegram
+    item.mime_type
+    item.filename
+    url   = item.url        # a fetchable URL
+    bytes = item.download   # the raw file bytes
+  end
+when :location
   lat = app.location[:latitude]
   lng = app.location[:longitude]
-end
-
-if app.contact
+when :contact
   name = app.contact[:name]
 end
-app.contact_name   # the sender's display name
+
+app.contact_name   # the sender's display name (distinct from a shared contact)
 ```
 
-- `app.media` → the first inbound `FlowChat::Media` item, or `nil`.
-- `app.media_items` → `Array<FlowChat::Media>` (WhatsApp/Telegram carry one item; Intercom may carry several).
-- `media.type` → a canonical type (`:image`, `:video`, `:audio`, `:document`, `:sticker`) normalized across platforms; `media.raw_type` returns the platform-native value (Telegram's `:photo`/`:voice`).
-- `media.caption` → the caption/text the user sent alongside the media (Telegram message caption, Intercom body, WhatsApp caption). For a multi-attachment Intercom message the body is attached to the first item.
-- `app.location` → the `request.location` hash, or `nil`.
-- `app.contact` → the shared contact card hash, or `nil`.
-- `app.contact_name` → the sender's display name (`request.user_name`).
+Accessors (all shortcuts to the `app.input` value object):
 
-`media.url` resolves a fetchable URL per platform (WhatsApp via `client.get_media_url`, Telegram via `getFile`, Intercom/HTTP use the direct URL), and `media.download` returns the raw file bytes.
+- `app.text` → the turn's text (typed message or the caption/body sent with an attachment). Always a string; `""` when there is no text.
+- `app.attachment_type` → `:media` / `:location` / `:contact` / `nil` — the discriminator to branch on.
+- `app.attachment` → the payload of `attachment_type`: the media **list**, or the location / contact hash, or `nil`.
+- `app.media` → **always** an `Array<FlowChat::Media>` (empty when none) — a list even on single-media platforms, so you iterate uniformly and never silently drop the extra attachments a message can carry.
+- `media` item `type` → canonical (`:image`, `:video`, `:audio`, `:document`, `:sticker`); `raw_type` → platform-native (Telegram's `:photo`/`:voice`). `url` resolves a fetchable URL per platform (WhatsApp `get_media_url`, Telegram `getFile`, Intercom/HTTP direct URL); `download` returns the raw bytes.
+- `app.location` → the location hash, or `nil`.
+- `app.contact` → the shared contact card hash, or `nil`.
+- `app.contact_name` → the sender's display name.
+
+The `FlowChat::Input` object also behaves like its text for string operations, so
+validators and transforms read naturally — and can inspect the attachment:
+
+```ruby
+app.screen(:photo) do |prompt|
+  prompt.ask "Send your ID photo",
+    validate: ->(input) { "Please attach a photo" unless input.media.any? }
+end
+
+app.screen(:name) do |prompt|
+  # input.strip / input.blank? etc. operate on the text
+  prompt.ask "Your name?", transform: ->(input) { input.strip.titleize }
+end
+```
+
+A turn is considered answered (`input.submitted?`) when it has text **or** an
+attachment — so a caption-less photo still satisfies a screen.
 
 #### Lower-level access
 
-The raw request hashes are still available, and you can dispatch on `app.input` against the special input sentinels:
+Prefer the accessors above. The raw request hashes remain available if you need them:
 
 ```ruby
-FlowChat::Input::LOCATION  # "$location$"
-FlowChat::Input::MEDIA     # "$media$"
-FlowChat::Input::CONTACT   # "$contact$"
-FlowChat::Input::START     # "$start$" (session marker)
+app.context["request.media"]     # raw Hash, or Array for Intercom
+app.context["request.location"]
+app.context["request.contact"]
 ```
-
-```ruby
-case app.input
-when FlowChat::Input::MEDIA
-  media = app.context["request.media"]   # raw Hash (or Array for Intercom)
-  file_id = media[:file_id] || media[:id]
-
-when FlowChat::Input::LOCATION
-  location = app.context["request.location"]
-  lat, lng = location["latitude"], location["longitude"]
-
-when FlowChat::Input::CONTACT
-  contact = app.context["request.contact"]
-  phone = contact[:phone_number]
-end
-```
-
-Prefer `app.media` / `app.media_items` over the raw hashes — they handle multiple attachments and cross-platform field naming for you.

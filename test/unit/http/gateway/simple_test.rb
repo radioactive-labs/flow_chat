@@ -265,7 +265,7 @@ class HttpSimpleGatewayTest < Minitest::Test
     assert_equal :image, @context["request.media"][:type]
     assert_equal "https://x/a.jpg", @context["request.media"][:url]
     assert_equal "image/jpeg", @context["request.media"][:mime_type]
-    assert_equal FlowChat::Input::MEDIA, @context.input
+    assert_equal "", @context.input
   end
 
   def test_inbound_media_defaults_type_to_document
@@ -279,7 +279,7 @@ class HttpSimpleGatewayTest < Minitest::Test
     @gateway.call(@context)
 
     assert_equal :document, @context["request.media"][:type]
-    assert_equal FlowChat::Input::MEDIA, @context.input
+    assert_equal "", @context.input
   end
 
   def test_text_input_takes_precedence_over_media

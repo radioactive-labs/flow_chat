@@ -308,15 +308,15 @@ class MediaSupportTest < Minitest::Test
   # ==========================================================================
 
   def test_whatsapp_inbound_media_exposed_via_app
-    @whatsapp_context.input = FlowChat::Input::MEDIA
+    @whatsapp_context.input = ""
     @whatsapp_context["request.platform"] = :whatsapp
     @whatsapp_context["request.media"] = {type: :image, id: "MID", mime_type: "image/jpeg", caption: "hi"}
     app = FlowChat::App.new(@whatsapp_context)
 
-    assert_instance_of FlowChat::Media, app.media
-    assert_equal :image, app.media.type
-    assert_equal "MID", app.media.id
-    assert_equal 1, app.media_items.size
+    assert_equal 1, app.media.size
+    assert_instance_of FlowChat::Media, app.media.first
+    assert_equal :image, app.media.first.type
+    assert_equal "MID", app.media.first.id
   end
 
   def test_intercom_inbound_multiple_media_exposed_via_app
@@ -329,9 +329,9 @@ class MediaSupportTest < Minitest::Test
     ]
     app = FlowChat::App.new(ctx)
 
-    assert_equal 2, app.media_items.size
-    assert_equal "https://i/1.png", app.media.url
-    assert_equal :document, app.media_items.last.type
+    assert_equal 2, app.media.size
+    assert_equal "https://i/1.png", app.media.first.url
+    assert_equal :document, app.media.last.type
   end
 
   def test_inbound_media_absent_returns_nil_and_empty
@@ -339,8 +339,7 @@ class MediaSupportTest < Minitest::Test
     @whatsapp_context["request.platform"] = :whatsapp
     app = FlowChat::App.new(@whatsapp_context)
 
-    assert_nil app.media
-    assert_equal [], app.media_items
+    assert_equal [], app.media
   end
 
   def test_media_receives_platform_client_from_context
@@ -360,8 +359,53 @@ class MediaSupportTest < Minitest::Test
     @whatsapp_context["request.media"] = {type: :image, id: "MID"}
     app = FlowChat::App.new(@whatsapp_context)
 
-    assert_equal "https://cdn/x.jpg", app.media.url
+    assert_equal "https://cdn/x.jpg", app.media.first.url
     assert_equal "MID", client.requested_id
+  end
+
+  def test_text_returns_caption_and_attachment_type_discriminates
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = "look at this"  # caption routed to input by the gateway
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "look at this", app.text
+    assert_equal :media, app.attachment_type
+  end
+
+  def test_text_blank_for_text_less_media
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = ""
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "", app.text
+    assert_equal :media, app.attachment_type
+  end
+
+  def test_text_and_attachment_type_for_plain_text_turn
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = "hello"
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "hello", app.text
+    assert_nil app.attachment_type
+  end
+
+  def test_attachment_type_for_location_and_contact
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = ""
+    @whatsapp_context["request.location"] = {latitude: 1.0}
+    location_app = FlowChat::App.new(@whatsapp_context)
+    assert_equal :location, location_app.attachment_type
+    assert_equal "", location_app.text
+
+    ctx = FlowChat::Context.new
+    ctx.session = create_test_session_store
+    ctx["request.platform"] = :whatsapp
+    ctx.input = ""
+    ctx["request.contact"] = {name: "Jane"}
+    assert_equal :contact, FlowChat::App.new(ctx).attachment_type
   end
 
   def test_location_and_contact_exposed_via_app
