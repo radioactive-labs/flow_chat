@@ -46,6 +46,17 @@ module FlowChat
           context["http.user_agent"] = request.user_agent
           context.input = params["input"].presence || ""
 
+          # Inbound media (optional): callers may submit a media URL
+          if params["media_url"].present?
+            media_type = params["media_type"].presence&.to_sym
+            media_type = :document unless FlowChat::Media::CANONICAL_TYPES.include?(media_type)
+            context["request.media"] = {
+              type: media_type,
+              url: params["media_url"],
+              mime_type: params["mime_type"].presence
+            }
+          end
+
           # Instrument message received when user provides input
           if context.input.present?
             instrument(Events::MESSAGE_RECEIVED, {

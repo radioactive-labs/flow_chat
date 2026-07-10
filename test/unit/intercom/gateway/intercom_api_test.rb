@@ -150,6 +150,43 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal "conversation.user.created", @context["intercom.topic"]
   end
 
+  def test_webhook_media_with_body_routes_body_to_input
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = "<p>nice <strong>photo</strong></p>"
+    webhook_body["data"]["item"]["source"]["attachments"] = [
+      {"name" => "a.png", "url" => "https://i/a.png", "content_type" => "image/png"}
+    ]
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # The body (markdown-parsed) becomes the turn's text; media is a separate channel.
+    assert_equal "nice **photo**", @context.input
+    assert_equal 1, @context["request.media"].size
+    assert_equal :image, @context["request.media"][0][:type]
+  end
+
+  def test_webhook_media_without_body_leaves_input_blank
+    webhook_body = build_conversation_created_webhook
+    webhook_body["data"]["item"]["source"]["body"] = nil
+    webhook_body["data"]["item"]["source"]["attachments"] = [
+      {"name" => "a.png", "url" => "https://i/a.png", "content_type" => "image/png"}
+    ]
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    # Text-less media yields an empty input; the media is carried on a separate channel.
+    assert_equal "", @context.input
+    assert_equal 1, @context["request.media"].size
+  end
+
   def test_webhook_notification_conversation_user_replied
     webhook_body = build_conversation_reply_webhook
     setup_post_request_with_webhook_and_app_call(webhook_body)
@@ -571,6 +608,75 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.replied")
 
     assert_nil result
+  end
+
+  def test_extract_maps_multiple_attachments_to_media_array
+    conversation = {
+      "source" => {
+        "id" => "msg_1",
+        "body" => "see attached",
+        "attachments" => [
+          {"name" => "a.png", "url" => "https://i/a.png", "content_type" => "image/png"},
+          {"name" => "b.pdf", "url" => "https://i/b.pdf", "content_type" => "application/pdf"}
+        ]
+      }
+    }
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.created")
+
+    assert_equal 2, result[:media].size
+    assert_equal :image, result[:media][0][:type]
+    assert_equal "https://i/a.png", result[:media][0][:url]
+    assert_equal "image/png", result[:media][0][:mime_type]
+    assert_equal "a.png", result[:media][0][:filename]
+    assert_equal :document, result[:media][1][:type]
+  end
+
+  def test_extract_created_event_with_only_attachments_no_body
+    conversation = {
+      "source" => {
+        "id" => "msg_2",
+        "attachments" => [
+          {"name" => "v.mp4", "url" => "https://i/v.mp4", "content_type" => "video/mp4"}
+        ]
+      }
+    }
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.created")
+
+    refute_nil result
+    assert_equal 1, result[:media].size
+    assert_equal :video, result[:media][0][:type]
+  end
+
+  def test_extract_reply_event_with_attachments
+    conversation = {
+      "conversation_parts" => {
+        "conversation_parts" => [
+          {
+            "id" => "part_1",
+            "part_type" => "comment",
+            "body" => "here",
+            "author" => {"type" => "user"},
+            "attachments" => [
+              {"name" => "s.mp3", "url" => "https://i/s.mp3", "content_type" => "audio/mpeg"}
+            ]
+          }
+        ]
+      }
+    }
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.replied")
+
+    assert_equal 1, result[:media].size
+    assert_equal :audio, result[:media][0][:type]
+  end
+
+  def test_extract_text_only_message_has_no_media_key
+    conversation = {
+      "source" => {"id" => "msg_3", "body" => "just text"}
+    }
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.created")
+
+    assert_equal "just text", result[:body]
+    refute result.key?(:media)
   end
 
   def test_secure_compare_equal_strings

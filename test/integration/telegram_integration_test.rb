@@ -225,7 +225,7 @@ class TelegramIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$location$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal({"latitude" => 51.5074, "longitude" => -0.1278}, captured_context["request.location"])
   end
 
@@ -248,7 +248,7 @@ class TelegramIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal :photo, captured_context["request.media"][:type]
     assert_equal "large", captured_context["request.media"][:file_id]
   end

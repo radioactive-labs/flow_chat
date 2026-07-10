@@ -338,7 +338,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$location$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal 51.5074, captured_context["request.location"][:latitude]
     assert_equal(-0.1278, captured_context["request.location"][:longitude])
     assert_equal "London", captured_context["request.location"][:name]
@@ -359,7 +359,8 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    # The caption becomes the turn's text (input); no sentinel when text is present.
+    assert_equal "Test image", captured_context.input
     assert_equal :image, captured_context["request.media"][:type]
     assert_equal "media123", captured_context["request.media"][:id]
     assert_equal "image/jpeg", captured_context["request.media"][:mime_type]
@@ -380,7 +381,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    assert_equal "Test document", captured_context.input
     assert_equal :document, captured_context["request.media"][:type]
     assert_equal "doc123", captured_context["request.media"][:id]
     assert_equal "application/pdf", captured_context["request.media"][:mime_type]
@@ -399,7 +400,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal :audio, captured_context["request.media"][:type]
     assert_equal "audio123", captured_context["request.media"][:id]
   end
@@ -418,7 +419,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    assert_equal "Test video", captured_context.input
     assert_equal :video, captured_context["request.media"][:type]
     assert_equal "video123", captured_context["request.media"][:id]
     assert_equal "video/mp4", captured_context["request.media"][:mime_type]
@@ -437,7 +438,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$contact$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal "Jane Smith", captured_context["request.contact"][:name]
     assert_equal "+1234567890", captured_context["request.contact"][:phone_number]
   end
@@ -456,7 +457,7 @@ class WhatsappIntegrationTest < Minitest::Test
       captured_context = context.dup
     end
 
-    assert_equal "$media$", captured_context.input
+    assert_equal "", captured_context.input
     assert_equal :sticker, captured_context["request.media"][:type]
     assert_equal "sticker123", captured_context["request.media"][:id]
     assert_equal true, captured_context["request.media"][:animated]
