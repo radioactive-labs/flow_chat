@@ -332,7 +332,7 @@ module FlowChat
               sha256: media_data["sha256"],
               animated: media_data["animated"]
             }
-            # The caption (if any) is the turn's text; fall back to the marker for text-less media.
+            # The caption (if any) is the turn's text; a text-less media message has blank input.
             context.input = media_data["caption"].presence || ""
             FlowChat.logger.debug { "CloudApi: Media received - Type: #{message["type"]}, ID: #{media_data["id"]}" }
           when "contacts"

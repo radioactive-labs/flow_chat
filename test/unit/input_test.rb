@@ -77,6 +77,15 @@ class InputTest < Minitest::Test
     assert FlowChat::Input.new(text: "yes") == "yes"
   end
 
+  def test_equality_between_two_inputs_compares_their_text
+    assert_equal FlowChat::Input.new(text: "yes"), FlowChat::Input.new(text: "yes")
+    refute_equal FlowChat::Input.new(text: "yes"), FlowChat::Input.new(text: "no")
+  end
+
+  def test_equality_with_a_non_string_stays_false
+    refute_equal FlowChat::Input.new(text: "5"), 5
+  end
+
   def test_to_s_is_the_text
     assert_equal "hello", FlowChat::Input.new(text: "hello").to_s
     assert_equal "", FlowChat::Input.new.to_s

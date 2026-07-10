@@ -13,7 +13,12 @@ module FlowChat
       raise ArgumentError, "screen has already been presented" if navigation_stack.include?(key)
 
       navigation_stack << key
-      return session.get(key) if session.get(key).present?
+      # A screen is answered once its key is stored — even when the stored value is
+      # blank (a caption-less attachment yields ""). Guard on presence-in-session
+      # (non-nil), not truthiness, so media-only (and false/blank) answers stick
+      # instead of re-asking every turn.
+      cached = session.get(key)
+      return cached unless cached.nil?
 
       user_input = prepare_user_input
       prompt = FlowChat::Prompt.new user_input
@@ -130,9 +135,13 @@ module FlowChat
 
       user_input = input
       if platform != :ussd && session.get(FlowChat::Input::START).nil?
-        # Store the text (a serializable string), not the Input object.
+        # First inbound message of the session. Mark it started (store the text, a
+        # serializable string — not the Input object), then swallow a text-only
+        # opener: the classic "wake the flow / show the first screen" behavior.
+        # An opener that carries an attachment is let through so the first screen
+        # can consume it rather than silently dropping the media/location/contact.
         session.set(FlowChat::Input::START, user_input.to_s)
-        return nil
+        return nil unless user_input.attachment?
       end
       user_input
     end

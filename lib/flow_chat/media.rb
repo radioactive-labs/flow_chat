@@ -10,6 +10,10 @@ module FlowChat
     # Telegram uses :photo/:voice where WhatsApp uses :image/:audio.
     NORMALIZED_TYPES = {photo: :image, voice: :audio}.freeze
 
+    # The canonical media types FlowChat recognizes across platforms. Gateways
+    # that accept a caller-supplied type (e.g. HTTP) validate against this set.
+    CANONICAL_TYPES = %i[image video audio document sticker].freeze
+
     attr_reader :platform, :client
 
     def initialize(data, platform:, client: nil)
@@ -56,9 +60,10 @@ module FlowChat
       @data.dup
     end
 
-    # Resolve a fetchable URL for the media.
+    # Resolve a fetchable URL for the media. Memoized so repeated reads don't
+    # re-issue the platform lookup (WhatsApp get_media_url / Telegram getFile).
     def url
-      case platform
+      @url ||= case platform
       when :whatsapp then client.get_media_url(id)
       when :telegram then client.file_url(file_id)
       else @data[:url]

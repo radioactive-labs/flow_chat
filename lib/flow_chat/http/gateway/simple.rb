@@ -48,8 +48,10 @@ module FlowChat
 
           # Inbound media (optional): callers may submit a media URL
           if params["media_url"].present?
+            media_type = params["media_type"].presence&.to_sym
+            media_type = :document unless FlowChat::Media::CANONICAL_TYPES.include?(media_type)
             context["request.media"] = {
-              type: (params["media_type"].presence || "document").to_sym,
+              type: media_type,
               url: params["media_url"],
               mime_type: params["mime_type"].presence
             }

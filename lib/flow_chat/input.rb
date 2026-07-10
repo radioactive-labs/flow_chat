@@ -63,6 +63,7 @@ module FlowChat
     end
 
     def ==(other)
+      other = other.to_s if other.is_a?(FlowChat::Input)
       @text == other
     end
 

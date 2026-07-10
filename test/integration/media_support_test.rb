@@ -420,6 +420,73 @@ class MediaSupportTest < Minitest::Test
     assert_equal "Jane", app.contact[:name]
   end
 
+  # ==========================================================================
+  # SCREEN PERSISTENCE FOR ATTACHMENT-ONLY TURNS
+  # ==========================================================================
+
+  def test_media_only_screen_persists_across_turns
+    session = create_test_session_store
+    session.set("$start$", "2023-12-01T10:00:00Z")
+
+    # Turn 1: a caption-less photo answers the screen (blank text, media attached).
+    ctx1 = FlowChat::Context.new
+    ctx1.session = session
+    ctx1["request.platform"] = :whatsapp
+    ctx1.input = ""
+    ctx1["request.media"] = {type: :image, id: "MID"}
+    FlowChat::App.new(ctx1).screen(:photo) { |prompt| prompt.ask "Send a photo" }
+
+    # Turn 2: a different message arrives. The screen must be remembered (its
+    # block must NOT run again) even though the stored answer is blank.
+    ctx2 = FlowChat::Context.new
+    ctx2.session = session
+    ctx2["request.platform"] = :whatsapp
+    ctx2.input = "hello"
+    reasked = false
+    FlowChat::App.new(ctx2).screen(:photo) do |prompt|
+      reasked = true
+      prompt.ask "Send a photo"
+    end
+
+    refute reasked, "a media-only answer must persist, not re-ask every turn"
+  end
+
+  def test_first_turn_media_is_consumed_not_swallowed
+    session = create_test_session_store # no "$start$" -> this is the opening message
+
+    ctx = FlowChat::Context.new
+    ctx.session = session
+    ctx["request.platform"] = :whatsapp
+    ctx.input = ""
+    ctx["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(ctx)
+
+    ran = false
+    app.screen(:photo) do |prompt|
+      ran = true
+      prompt.ask "Send a photo"
+    end
+
+    assert ran, "the first screen should execute"
+    refute_nil session.get(:photo), "an opening attachment should be consumed, not dropped"
+    refute_nil session.get("$start$"), "the session should be marked started"
+  end
+
+  def test_first_turn_text_only_is_swallowed_to_show_first_screen
+    session = create_test_session_store # no "$start$"
+
+    ctx = FlowChat::Context.new
+    ctx.session = session
+    ctx["request.platform"] = :whatsapp
+    ctx.input = "hi"
+    app = FlowChat::App.new(ctx)
+
+    assert_raises(FlowChat::Interrupt::Prompt) do
+      app.screen(:name) { |prompt| prompt.ask "Your name?" }
+    end
+    assert_nil session.get(:name), "a text-only opener wakes the flow rather than answering the first screen"
+  end
+
   private
 
   def create_test_session_store

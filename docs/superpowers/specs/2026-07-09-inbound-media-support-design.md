@@ -1,7 +1,12 @@
 # Inbound Media Support — Design
 
 **Date:** 2026-07-09
-**Status:** Approved (design)
+**Status:** Superseded (historical). This document describes the original design as
+approved. The shipped API diverged during implementation: the `$media$`/`$location$`/
+`$contact$` input sentinels were removed in favor of a `FlowChat::Input` turn value
+object (`context.input` is always plain text), and `app.media` is now **always** an
+`Array<FlowChat::Media>` (the interim `media_items` accessor was dropped). For the
+current API, see `docs/gateway-context-variables.md` and `docs/platforms/whatsapp.md`.
 
 ## Problem
 

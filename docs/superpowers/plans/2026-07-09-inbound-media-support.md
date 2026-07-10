@@ -1,5 +1,12 @@
 # Inbound Media Support Implementation Plan
 
+> **Status: Superseded (historical).** This plan reflects the original approach. The
+> shipped implementation diverged: input sentinels (`FlowChat::Input::MEDIA`/`$media$`,
+> etc.) were replaced by a `FlowChat::Input` turn value object (`context.input` is
+> always plain text), and `app.media` is now **always** an `Array<FlowChat::Media>`
+> (the `media_items` accessor described below was dropped). See
+> `docs/gateway-context-variables.md` for the current API.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers-extended-cc:subagent-driven-development (recommended) or superpowers-extended-cc:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Expose inbound media (and location/contact) to flows across WhatsApp, Telegram, Intercom, and HTTP via a `FlowChat::Media` value object with metadata plus `url`/`download`.
