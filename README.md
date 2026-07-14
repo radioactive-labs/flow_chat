@@ -3,392 +3,234 @@
 [![CI](https://github.com/radioactive-labs/flow_chat/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/radioactive-labs/flow_chat/actions/workflows/ci.yml)
 [![Gem Version](https://badge.fury.io/rb/flow_chat.svg)](https://badge.fury.io/rb/flow_chat)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Ruby](https://img.shields.io/badge/ruby-%3E%3D%202.3.0-red.svg)](https://www.ruby-lang.org/)
-[![Rails](https://img.shields.io/badge/rails-%3E%3D%206.0-red.svg)](https://rubyonrails.org/)
+[![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.0-red.svg)](https://www.ruby-lang.org/)
 
-FlowChat is a powerful Rails framework for building sophisticated conversational interfaces across **multiple platforms** with a **pluggable gateway architecture**. Create interactive flows with menus, prompts, validation, media support, and session management using a unified, intuitive API that works across USSD, WhatsApp, Telegram, HTTP, and any custom platforms you build.
+**Write a conversation as an ordinary Ruby method. FlowChat runs it across stateless webhooks, on every messaging channel.**
 
-## ✨ Key Features
-
-- **🔄 Unified API**: Single codebase that works across all platforms
-- **🔌 Pluggable Gateways**: Extensible architecture supporting multiple backends per platform
-- **📱 Multi-Platform**: Out of the box support for USSD, WhatsApp, Telegram, HTTP, and more, with simulator for testing
-- **🎯 Screen-Based Navigation**: Intuitive screen() method for building conversational flows
-- **💾 Advanced Session Management**: Flexible session boundaries and storage options
-- **🔧 Middleware Architecture**: Extensible middleware system for custom processing
-- **🎨 Rich Prompts**: Support for text, media, selections, yes/no prompts, validation, and transformations
-- **📊 Built-in Instrumentation**: Comprehensive logging and metrics collection
-- **🧪 Testing Support**: Built-in simulator for development and testing
-- **🏢 Multi-Tenancy**: In-built support for custom configuration per tenant and URL-based isolation
-- **🚀 Background Processing**: Job queue support for WhatsApp messaging
-
-## 🚀 Quick Start
-
-### Installation
-
-Add FlowChat to your Rails application:
+A USSD or chat webhook is stateless: each message arrives as an isolated POST with no memory of the ones before it. The usual answer is a hand-rolled state machine: persist the current step, switch on it when the next message comes in, run the transition, persist the next step, repeat. FlowChat replaces that machine with a session and a replay engine, so you write the flow as a synchronous script that reads top to bottom.
 
 ```ruby
-# Gemfile
-gem 'flow_chat'
-```
-
-```bash
-bundle install
-```
-
-### Define your flow
-
-```ruby
-# app/flow_chat/welcome_flow.rb
-
-class WelcomeFlow < FlowChat::Flow
+class RegistrationFlow < FlowChat::Flow
   def main_page
-    name = app.screen(:name) do |prompt|
-      prompt.ask "Welcome! What's your name?",
-        transform: ->(input) { input.strip.titleize }
+    name = app.screen(:name) { |prompt| prompt.ask "What's your name?" }
+
+    email = app.screen(:email) do |prompt|
+      prompt.ask "Your email?", validate: ->(input) { "Invalid email" unless input.include?("@") }
     end
 
-    choice = app.screen(:main_menu) do |prompt|
-      prompt.select "Hi #{name}! Choose:", {
-        "1" => "Account Info",
-        "2" => "Make Payment",
-        "3" => "Support"
-      }
-    end
-
-    case choice
-    when "1"
-      show_account_info
-    when "2"
-      make_payment  
-    when "3"
-      app.say "Call us: 123-456-7890"
-    end
-  end
-
-  # ... implement your flow methods
-end
-```
-
-### Basic USSD Application
-
-```ruby
-# app/controllers/ussd_controller.rb
-class UssdController < ApplicationController
-  skip_forgery_protection
-
-  def process_request
-    processor = FlowChat::Processor.new(self) do |config|
-      config.use_gateway FlowChat::Ussd::Gateway::Nalo
-      config.use_session_store FlowChat::Session::CacheSessionStore
-    end
-
-    processor.run WelcomeFlow, :main_page
+    app.say "Welcome #{name}!"
   end
 end
 ```
 
-### Basic WhatsApp Application
+Each `screen` returns its stored answer when one exists and re-prompts when it does not. The method runs top to bottom on every turn and blocks on the first screen that has no answer yet. The same flow runs unchanged on USSD, WhatsApp, Telegram, and HTTP, with per-platform rendering.
+
+## How the replay engine works
+
+There is no saved program counter. On each webhook FlowChat rebuilds the app from the request and re-runs your flow method from the first line.
+
+`app.screen(key)` is the fast-forward mechanism. When the session already holds a value for `key`, `screen` returns `session.get(key)` immediately and never yields. When it does not, `screen` yields a `FlowChat::Prompt`. If that prompt calls `ask` (or `select`, `yes?`) and no input is available yet, it raises `FlowChat::Interrupt::Prompt`. The interrupt unwinds the flow back to the Executor, which turns it into a rendered prompt and returns the response to the gateway.
+
+The next webhook replays the same method from the top. Every screen that already has a stored answer is skipped in place. The screen that raised last time now sees the incoming input, runs its `validate` and `transform`, stores the accepted value with `session.set(key, value)`, and returns it, so execution falls through into the next screen. The flow advances one screen per turn without ever holding state between requests beyond the session hash.
+
+Two rules follow from this design:
+
+- One inbound message is consumed by one screen per turn. Once a screen takes the turn's input, later screens in the same run see no input and will prompt.
+- A given screen key may be presented only once per run. Re-entering a key raises `ArgumentError`; use distinct keys or `app.go_back` to revisit.
+
+## Installation
+
+Add the gem to your Gemfile:
 
 ```ruby
+gem "flow_chat"
+```
+
+Then run `bundle install`. FlowChat requires Ruby 3.0 or newer.
+
+The cache-backed session store needs a cache. Set it once during boot, for example in an initializer:
+
+```ruby
+FlowChat::Config.cache = Rails.cache
+```
+
+Without a cache configured, `FlowChat::Session::CacheSessionStore` raises when it tries to read or write a session. There are no migrations and no generators to run.
+
+## Wiring a platform
+
+Build a processor, choose a gateway and session store, and run your flow:
+
+```ruby
+processor = FlowChat::Processor.new(self) do |config|
+  config.use_gateway FlowChat::Ussd::Gateway::Nalo
+  config.use_session_store FlowChat::Session::CacheSessionStore
+end
+
+processor.run RegistrationFlow, :main_page
+```
+
+Point your controller's webhook action at this code (`self` is the controller). Each platform has its own gateway class:
+
+| Platform | Gateway class | Platform symbol | Rendering |
+|---|---|---|---|
+| USSD | `FlowChat::Ussd::Gateway::Nalo` | `:ussd` | Numbered text menus, pagination, media as URL text |
+| WhatsApp | `FlowChat::Whatsapp::Gateway::CloudApi` | `:whatsapp` | Reply buttons (<=3 choices), lists (>3), rich media |
+| Telegram | `FlowChat::Telegram::Gateway::BotApi` | `:telegram` | Inline keyboards, rich media, HTML |
+| HTTP | `FlowChat::Http::Gateway::Simple` | `:http` | JSON responses (testing, custom clients) |
+| Intercom | `FlowChat::Intercom::Gateway::IntercomApi` | `:intercom` | Live-chat replies |
+
+The same `RegistrationFlow` runs on any row by changing only `config.use_gateway`. To build a gateway for a platform not listed here, see [docs/gateway-development.md](docs/gateway-development.md).
+
+## Building flows
+
+A flow is a class that inherits `FlowChat::Flow` and reads and writes the conversation through `app`. Each unit of interaction is a screen:
+
+```ruby
+value = app.screen(:key) { |prompt| prompt.ask "..." }
+```
+
+The block receives a `FlowChat::Prompt`. Its methods:
+
+| Method | Signature | Behavior |
+|---|---|---|
+| `ask` | `ask(msg, choices: nil, transform: nil, validate: nil, media: nil)` | Prompt for free input; validate, then transform, then return the value |
+| `select` | `select(msg, choices, media: nil, error_message: "Invalid selection:")` | Prompt for one of `choices`; returns the chosen key |
+| `yes?` | `yes?(msg)` | A `select` over Yes/No; returns `true` or `false` |
+| `say` | `say(msg, media: nil)` | Send a terminal message and end the flow |
+
+Details:
+
+- `validate` is a callable that returns an error string when the input is rejected and `nil` when it passes. The received argument behaves like the input text (`input.include?("@")`, `input.to_i`, `input.strip`), and also exposes `media`, `location`, and `contact` for attachment-carrying turns.
+- `transform` is a callable that maps the accepted input to the value `screen` stores and returns.
+- `choices` may be an Array (`["Yes", "No"]`) or a Hash (`{ "1" => "Account", "2" => "Support" }`). With a Hash, `select` returns the key.
+- Passing `media:` together with more than 3 `choices` raises `ArgumentError`. Use media or a longer choice list, not both.
+
+`app.say` outside a block ends the flow from anywhere:
+
+```ruby
+def main_page
+  confirmed = app.screen(:confirm) { |prompt| prompt.yes? "Place the order?" }
+  app.say("Cancelled.") unless confirmed
+  # ...
+end
+```
+
+To send the user back to the previous screen, call `app.go_back`. It clears the current screen's stored answer and restarts the flow from the top, so the earlier screen prompts again. Remember that a screen key may appear only once per run: reuse of a key in a single pass raises `ArgumentError`.
+
+## Media and rich input
+
+An inbound turn is a `FlowChat::Input`. Read what the user sent through these accessors on `app`:
+
+| Accessor | Returns |
+|---|---|
+| `app.text` | The message text (`""` when the turn carries only an attachment) |
+| `app.media` | An Array of `FlowChat::Media` (empty array when none) |
+| `app.location` | The shared location payload, or `nil` |
+| `app.contact` | The shared contact card, or `nil` |
+| `app.attachment_type` | `:media`, `:location`, `:contact`, or `nil` |
+
+Reading an inbound photo:
+
+```ruby
+def main_page
+  app.screen(:photo) do |prompt|
+    prompt.ask "Send a photo of the receipt."
+  end
+
+  photo = app.media.first
+  if photo
+    photo.type       # => :image  (a Symbol; normalized across platforms)
+    photo.mime_type  # => "image/jpeg"
+    photo.caption    # => the caption text, or nil
+    bytes = photo.download   # raw bytes, or nil on failure
+    link  = photo.url        # a fetchable URL, or nil
+  end
+end
+```
+
+`app.media` is always an Array, so read a single item with `app.media.first` and check for `nil`; the type is a Symbol, read with `app.media.first&.type`. A caption-less photo still answers a screen: an attachment counts as submitted even when the text is blank.
+
+To send media outbound, pass `media:` to `ask` or `say`:
+
+```ruby
+app.say "Here you go", media: { type: :image, url: "https://example.com/receipt.png" }
+```
+
+Caveat: a `Media` object that has been deserialized from a session store or a background job has lost its live platform client, so `url` and `download` return `nil`. If you need the bytes, call `download` eagerly in the same request that received the media, before the value round-trips through a session or job.
+
+## Sessions
+
+The default session boundaries are `[:flow, :gateway, :platform]`: a session is scoped to one flow, on one gateway, on one platform. Convenience methods adjust this:
+
+| Method | Effect |
+|---|---|
+| `use_durable_sessions` | Key the session on a stable per-user identifier so it survives USSD session-id rotation across a conversation |
+| `use_cross_platform_sessions` | Narrow the boundary to flow only, so one session is shared across platforms (for example USSD and WhatsApp) |
+| `use_url_isolation` | Add a `:url` boundary for per-tenant or per-host isolation |
+| `use_session_config(boundaries:, identifier:, hash_identifiers:, &block)` | Set boundaries, the identifier, and identifier hashing directly for full control |
+
+```ruby
+processor = FlowChat::Processor.new(self) do |config|
+  config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+  config.use_session_store FlowChat::Session::CacheSessionStore
+  config.use_durable_sessions
+end
+```
+
+See [docs/configuration.md](docs/configuration.md) for the full set of session options.
+
+## Platform differences
+
+The flow code is the same everywhere, but each platform imposes limits that the rendering respects and that you should keep in mind:
+
+| Platform | Limits and behavior |
+|---|---|
+| USSD | Pages are split at 140 characters by default; media is rendered as a text line containing a URL, not an inline attachment; async processing is not available. |
+| WhatsApp | Reply-button titles are truncated near 20 characters and list titles near 24; a list section holds at most 10 rows. WhatsApp's 24-hour customer-service window and its template requirement are not abstracted away: you manage message templates yourself. |
+| Telegram | Choice taps arrive as callback queries; choices render as inline keyboards; message text supports HTML formatting. |
+| HTTP | Requests and responses are JSON; each request must supply `session_id` and `user_id`. |
+
+Platform guides: [docs/platforms/ussd.md](docs/platforms/ussd.md), [docs/platforms/whatsapp.md](docs/platforms/whatsapp.md), [docs/platforms/telegram.md](docs/platforms/telegram.md).
+
+## Background processing
+
+For platforms with an outbound API, you can acknowledge the webhook immediately and run the flow in a background job. Register a factory once, then call it from the webhook:
+
+```ruby
+# config/initializers/flow_chat.rb
+FlowChat::Factory.register(:whatsapp) do |controller|
+  processor = FlowChat::Processor.new(controller) do |config|
+    config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
+    config.use_session_store FlowChat::Session::CacheSessionStore
+    config.use_async(factory: :whatsapp)
+  end
+  processor.run RegistrationFlow, :main_page
+end
+
 # app/controllers/whatsapp_controller.rb
-class WhatsappController < ApplicationController
-  skip_forgery_protection
-
-  def webhook
-    processor = FlowChat::Processor.new(self) do |config|
-      config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi
-      config.use_session_store FlowChat::Session::CacheSessionStore
-    end
-
-    processor.run WelcomeFlow, :main_page
-  end
+def webhook
+  FlowChat::Factory.execute(:whatsapp, controller: self)
 end
 ```
 
-### Basic Telegram Application
+The webhook enqueues `GenericAsyncJob` and returns; the job re-runs the same factory in the background, where the gateway detects the background context and processes the flow inline before sending the reply through the platform API. USSD does not support async, since it depends on a synchronous request-response cycle. See [docs/factory-pattern.md](docs/factory-pattern.md) and [docs/async-background-processing.md](docs/async-background-processing.md).
 
-```ruby
-# app/controllers/telegram_controller.rb
-class TelegramController < ApplicationController
-  skip_forgery_protection
+## Instrumentation
 
-  def webhook
-    processor = FlowChat::Processor.new(self) do |config|
-      config.use_gateway FlowChat::Telegram::Gateway::BotApi
-      config.use_session_store FlowChat::Session::CacheSessionStore
-    end
+FlowChat emits `ActiveSupport::Notifications` events for flow execution, session lifecycle, and gateway activity. `FlowChat.metrics` collects counters over those events. See [docs/instrumentation.md](docs/instrumentation.md).
 
-    processor.run WelcomeFlow, :main_page
-  end
-end
-```
+## Testing
 
-### Basic HTTP API Application
+FlowChat ships a web simulator for driving flows locally without a real gateway, useful during development. It requires `FlowChat::Config.simulator_secret` to be set. See [docs/testing.md](docs/testing.md).
 
-```ruby
-# app/controllers/api_controller.rb
-class ApiController < ApplicationController
-  def chat
-    processor = FlowChat::Processor.new(self) do |config|
-      config.use_gateway FlowChat::Http::Gateway::Simple
-      config.use_session_store FlowChat::Session::CacheSessionStore
-    end
+## Development
 
-    processor.run WelcomeFlow, :main_page
-  end
-end
-```
-> Same WelcomeFlow works across ALL platforms!
+Run the test suite with `rake test`. To run a single file, use `ruby -Itest test/unit/some_test.rb`. Architecture background is in [docs/architecture.md](docs/architecture.md) and [docs/getting-started.md](docs/getting-started.md).
 
+## Contributing
 
-## 🏗️ Architecture
+Bug reports and pull requests are welcome on [GitHub](https://github.com/radioactive-labs/flow_chat). Please add tests for behavior changes and keep them passing.
 
-FlowChat uses a **composition-based architecture** with these core components:
-
-- **Processor**: Orchestrates request processing through middleware stack
-- **Gateway**: Platform-specific request/response handling (Nalo, WhatsApp Cloud API)
-- **App**: Unified application interface with screen-based navigation
-- **Session**: Flexible session management with configurable boundaries
-- **Middleware**: Extensible processing pipeline
-
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│   Gateway   │ -> │ Session      │ -> │ Custom      │
-│             │    │ Middleware   │    │ Middleware  │
-└─────────────┘    └──────────────┘    └─────────────┘
-                                              │
-                                              v
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐
-│ Flow/Action │ <- │   Executor   │ <- │     App     │
-│             │    │              │    │             │
-└─────────────┘    └──────────────┘    └─────────────┘
-```
-
-## 🔌 Pluggable Gateway Architecture
-
-FlowChat's power comes from its pluggable gateway system. Each platform can have multiple gateway implementations:
-
-```ruby
-# Create your own SMS gateway
-class MyCompany::Sms::Gateway::Twilio
-  def initialize(app, config)
-    @app = app
-    @config = config
-  end
-
-  def call(context)
-    # Parse Twilio webhook, set context values
-    context["request.msisdn"] = params["From"]
-    context["request.platform"] = :sms
-    context.input = params["Body"]
-    
-    # Process through middleware
-    type, prompt, choices, media = @app.call(context)
-    
-    # Send response via Twilio API
-    send_sms_response(prompt, to: context["request.msisdn"])
-  end
-
-  # Optional: Configure platform-specific middleware
-  def self.configure_middleware_stack(builder, custom_middleware)
-    builder.use MyCompany::Sms::MessageTransformMiddleware
-    builder.use custom_middleware
-  end
-end
-
-# Use your custom gateway
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_gateway MyCompany::Sms::Gateway::Twilio, sms_config
-end
-```
-
-## 📚 Documentation
-
-### Getting Started
-- [**Getting Started Guide**](docs/getting-started.md) - Comprehensive setup and first app
-- [**Architecture Overview**](docs/architecture.md) - Deep dive into FlowChat's design
-- [**Configuration**](docs/configuration.md) - Complete configuration reference
-
-### Platform Guides
-- [**USSD Development**](docs/platforms/ussd.md) - USSD-specific features and examples
-- [**WhatsApp Development**](docs/platforms/whatsapp.md) - WhatsApp Business API integration
-- [**Telegram Development**](docs/platforms/telegram.md) - Telegram Bot API integration
-- [**HTTP Development**](docs/platforms/http.md) 🚧 - API endpoints and webhooks
-- [**Multi-Platform Apps**](docs/platforms/multi-platform.md) 🚧 - Building unified experiences
-
-### Advanced Topics
-- [**Gateway Development**](docs/gateway-development.md) - Creating custom gateways and platforms
-- [**Session Management**](docs/session-management.md) 🚧 - Session boundaries and storage
-- [**Middleware Development**](docs/middleware.md) 🚧 - Creating custom middleware
-- [**Testing & Simulation**](docs/testing.md) - Testing strategies and simulator usage
-- [**Background Jobs**](docs/background-jobs.md) 🚧 - Async processing for WhatsApp
-- [**Instrumentation**](docs/instrumentation.md) - Monitoring, logging, and error tracking
-
-### API Reference
-- [**Core API**](docs/api-reference/core.md) 🚧 - Processor, App, Flow classes
-- [**Prompts & Validation**](docs/api-reference/prompts.md) 🚧 - Interactive prompts and validation
-- [**Gateways**](docs/api-reference/gateways.md) 🚧 - Platform gateway interfaces
-- [**Session Stores**](docs/api-reference/session-stores.md) 🚧 - Session storage options
-
-## 🎯 Core Concepts
-
-### Screen-Based Navigation
-
-Build conversational flows using the intuitive `screen()` method:
-
-```ruby
-def registration_flow
-  # Each screen automatically handles state and navigation
-  email = app.screen(:email) do |prompt|
-    prompt.ask "Enter your email:",
-      validate: ->(input) { 
-        "Invalid email" unless input.include?("@")
-      }
-  end
-
-  name = app.screen(:name) do |prompt|
-    prompt.ask "Enter your full name:",
-      transform: ->(input) { input.strip.titleize }
-  end
-
-  # Confirmation screen with rich prompts
-  confirmed = app.screen(:confirm) do |prompt|
-    prompt.yes? "Confirm registration for #{name} (#{email})?"
-  end
-
-  if confirmed
-    create_user(name, email)
-    app.say "Welcome #{name}! Registration complete."
-  else
-    app.say "Registration cancelled."
-  end
-end
-```
-
-### Multi-Platform Compatibility
-
-Write once, run everywhere:
-
-```ruby
-class MenuFlow < FlowChat::Flow
-  def main_menu
-    choice = app.screen(:menu) do |prompt|
-      prompt.select "Choose an option:", {
-        "info" => "📋 Information",      # Rich for WhatsApp
-        "help" => "❓ Help",             # Falls back to text for USSD  
-        "exit" => "👋 Exit"
-      }
-    end
-    
-    # Same logic works on both platforms
-    handle_choice(choice)
-  end
-end
-```
-
-### Flexible Session Management
-
-Configure sessions for your use case:
-
-```ruby
-# Durable sessions across timeouts
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_durable_sessions  # Uses user identifier (usually phone number) for session ID
-end
-
-# Cross-platform sessions
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_cross_platform_sessions  # Share sessions between platforms (e.g. USSD & WhatsApp)
-end
-
-# URL-based multi-tenancy
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_url_isolation  # tenant1.app.com vs tenant2.app.com
-end
-```
-
-## 🛠️ Supported Platforms & Gateways
-
-| Platform | Available Gateways | Features |
-|----------|-------------------|----------|
-| **USSD** | `Nalo` ✅, Custom | Pagination, choice mapping, session management |
-| **WhatsApp** | `CloudApi` ✅, Custom | Rich media, buttons, lists, templates, background jobs |
-| **Telegram** | `BotApi` ✅, Custom | Inline keyboards, rich media, callbacks, group chats |
-| **HTTP** | `Simple` ✅, Custom | Testing, webhooks, API endpoints, JSON responses |
-| **Simulator** | Built-in ✅ | Development testing, conversation replay, flow debugging |
-| **Custom** | *Your Gateway* | Implement any platform by creating a gateway class |
-
-*✅ = Included with FlowChat*
-
-### Gateway Examples
-
-```ruby
-# Built-in gateways (included with FlowChat)
-config.use_gateway FlowChat::Ussd::Gateway::Nalo
-config.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, whatsapp_config
-config.use_gateway FlowChat::Telegram::Gateway::BotApi, telegram_config
-config.use_gateway FlowChat::Http::Gateway::Simple
-
-# Custom gateway examples (you would build these)
-config.use_gateway MyCompany::Sms::Gateway::Twilio, twilio_config
-config.use_gateway MyCompany::Slack::Gateway::BoltJS, slack_config
-```
-
-## 📦 Example Applications
-
-- [**USSD Banking App**](docs/examples/ussd-banking.md) 🚧 - Complete banking flow with validation
-- [**WhatsApp Customer Service**](docs/examples/whatsapp-support.md) 🚧 - Media support and templates  
-- [**HTTP API Chatbot**](docs/examples/http-api.md) 🚧 - JSON API for web/mobile integration
-- [**Multi-Platform E-commerce**](docs/examples/multi-platform-shop.md) 🚧 - Unified shopping across USSD, WhatsApp, and HTTP
-- [**Multi-Tenant SaaS**](docs/examples/multi-tenant.md) 🚧 - URL-based tenant isolation
-- [**Custom Gateway Example**](docs/examples/custom-gateway.md) 🚧 - Building a Telegram gateway
-
-## 🧪 Testing & Development
-
-FlowChat includes a built-in simulator interface for easy development and testing:
-
-```ruby
-# Simulator is automatically enabled in development
-processor = FlowChat::Processor.new(self) do |config|
-  config.use_gateway FlowChat::Ussd::Gateway::Nalo  # or any gateway
-end
-
-# Explicitly control simulator mode if needed
-processor = FlowChat::Processor.new(self, enable_simulator: false) do |config|
-  # Disable simulator even in development
-end
-```
-
-The simulator provides a web interface for testing your flows during development. It works the same regardless of which gateway you're using, allowing you to test your conversational logic before deploying to actual platforms.
-
-**Learn more**: [Testing & Simulation Guide](docs/testing.md)
-
-## 🤝 Contributing
-
-We welcome contributions!
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
+## License
 
 FlowChat is released under the [MIT License](LICENSE.txt).
-
-## 🆘 Support
-
-- **Documentation**: Comprehensive guides in the [docs/](docs/) directory
-- **Issues**: [GitHub Issues](https://github.com/radioactive-labs/flow_chat/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/radioactive-labs/flow_chat/discussions)
-
-## 🏢 Commercial Support
-
-FlowChat is developed by [Radioactive Labs](https://github.com/radioactive-labs). Commercial support, custom development, and consulting services are available.
-
----
-
-**Ready to build amazing conversational experiences?** Check out the [Getting Started Guide](docs/getting-started.md) to create your first FlowChat application.
