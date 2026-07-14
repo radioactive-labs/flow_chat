@@ -104,7 +104,7 @@ module FlowChat
 
           extract_message_content!(message, context)
 
-          if context.input.present?
+          if inbound_message?(context)
             instrument(Events::MESSAGE_RECEIVED, {
               from: from["id"].to_s,
               message: context.input,

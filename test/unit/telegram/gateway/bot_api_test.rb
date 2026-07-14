@@ -151,6 +151,22 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
     assert_equal "AgACAgIAAxkBAAI", context["request.media"][:file_id]
   end
 
+  def test_caption_less_media_still_instruments_message_received
+    context = create_context_with_request(
+      method: :post,
+      body: create_photo_message_payload("AgACAgIAAxkBAAI", 12347)
+    )
+
+    events = []
+    ActiveSupport::Notifications.subscribe("message.received.flow_chat") { |e| events << e }
+    @gateway.call(context)
+
+    assert_equal 1, events.size, "a caption-less photo must still emit MESSAGE_RECEIVED"
+    assert_equal "photo", events.first.payload[:message_type]
+  ensure
+    ActiveSupport::Notifications.unsubscribe("message.received.flow_chat")
+  end
+
   def test_post_request_photo_message_captures_caption
     payload = create_photo_message_payload("AgACAgIAAxkBAAI", 12347)
     payload["message"]["caption"] = "my caption"

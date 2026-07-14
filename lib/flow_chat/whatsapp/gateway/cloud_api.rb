@@ -184,7 +184,7 @@ module FlowChat
             # Extract message content based on type
             extract_message_content!(message, context)
 
-            if context.input.present?
+            if inbound_message?(context)
               # Use instrumentation for message received
               instrument(Events::MESSAGE_RECEIVED, {
                 from: phone_number,

@@ -57,8 +57,8 @@ module FlowChat
             }
           end
 
-          # Instrument message received when user provides input
-          if context.input.present?
+          # Instrument message received when user provides input (text or media)
+          if inbound_message?(context)
             instrument(Events::MESSAGE_RECEIVED, {
               from: context["request.user_id"],
               message: context.input,
