@@ -303,6 +303,190 @@ class MediaSupportTest < Minitest::Test
     assert_equal "https://example.com/image.jpg", error1.media[:url]
   end
 
+  # ==========================================================================
+  # INBOUND MEDIA / LOCATION / CONTACT EXPOSURE
+  # ==========================================================================
+
+  def test_whatsapp_inbound_media_exposed_via_app
+    @whatsapp_context.input = ""
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["request.media"] = {type: :image, id: "MID", mime_type: "image/jpeg", caption: "hi"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal 1, app.media.size
+    assert_instance_of FlowChat::Media, app.media.first
+    assert_equal :image, app.media.first.type
+    assert_equal "MID", app.media.first.id
+  end
+
+  def test_intercom_inbound_multiple_media_exposed_via_app
+    ctx = FlowChat::Context.new
+    ctx.session = create_test_session_store
+    ctx["request.platform"] = :intercom
+    ctx["request.media"] = [
+      {type: :image, url: "https://i/1.png", mime_type: "image/png"},
+      {type: :document, url: "https://i/2.pdf", mime_type: "application/pdf"}
+    ]
+    app = FlowChat::App.new(ctx)
+
+    assert_equal 2, app.media.size
+    assert_equal "https://i/1.png", app.media.first.url
+    assert_equal :document, app.media.last.type
+  end
+
+  def test_inbound_media_absent_returns_nil_and_empty
+    @whatsapp_context.input = "just text"
+    @whatsapp_context["request.platform"] = :whatsapp
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal [], app.media
+  end
+
+  def test_media_receives_platform_client_from_context
+    # Note: a raw Minitest::Mock cannot be stored in Context (its indifferent-access
+    # hash calls is_a? on stored values, which the mock intercepts). Use a stub client
+    # that records the delegated call to prove the platform->client wiring.
+    client = Class.new do
+      attr_reader :requested_id
+
+      def get_media_url(id)
+        @requested_id = id
+        "https://cdn/x.jpg"
+      end
+    end.new
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["whatsapp.client"] = client
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "https://cdn/x.jpg", app.media.first.url
+    assert_equal "MID", client.requested_id
+  end
+
+  def test_text_returns_caption_and_attachment_type_discriminates
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = "look at this"  # caption routed to input by the gateway
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "look at this", app.text
+    assert_equal :media, app.attachment_type
+  end
+
+  def test_text_blank_for_text_less_media
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = ""
+    @whatsapp_context["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "", app.text
+    assert_equal :media, app.attachment_type
+  end
+
+  def test_text_and_attachment_type_for_plain_text_turn
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = "hello"
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal "hello", app.text
+    assert_nil app.attachment_type
+  end
+
+  def test_attachment_type_for_location_and_contact
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context.input = ""
+    @whatsapp_context["request.location"] = {latitude: 1.0}
+    location_app = FlowChat::App.new(@whatsapp_context)
+    assert_equal :location, location_app.attachment_type
+    assert_equal "", location_app.text
+
+    ctx = FlowChat::Context.new
+    ctx.session = create_test_session_store
+    ctx["request.platform"] = :whatsapp
+    ctx.input = ""
+    ctx["request.contact"] = {name: "Jane"}
+    assert_equal :contact, FlowChat::App.new(ctx).attachment_type
+  end
+
+  def test_location_and_contact_exposed_via_app
+    @whatsapp_context["request.platform"] = :whatsapp
+    @whatsapp_context["request.location"] = {latitude: 1.0, longitude: 2.0}
+    @whatsapp_context["request.user_name"] = "John Doe"
+    @whatsapp_context["request.contact"] = {name: "Jane", first_name: "Jane"}
+    app = FlowChat::App.new(@whatsapp_context)
+
+    assert_equal 1.0, app.location[:latitude]
+    assert_equal "John Doe", app.contact_name
+    assert_equal "Jane", app.contact[:name]
+  end
+
+  # ==========================================================================
+  # SCREEN PERSISTENCE FOR ATTACHMENT-ONLY TURNS
+  # ==========================================================================
+
+  def test_media_only_screen_persists_across_turns
+    session = create_test_session_store
+    session.set("$start$", "2023-12-01T10:00:00Z")
+
+    # Turn 1: a caption-less photo answers the screen (blank text, media attached).
+    ctx1 = FlowChat::Context.new
+    ctx1.session = session
+    ctx1["request.platform"] = :whatsapp
+    ctx1.input = ""
+    ctx1["request.media"] = {type: :image, id: "MID"}
+    FlowChat::App.new(ctx1).screen(:photo) { |prompt| prompt.ask "Send a photo" }
+
+    # Turn 2: a different message arrives. The screen must be remembered (its
+    # block must NOT run again) even though the stored answer is blank.
+    ctx2 = FlowChat::Context.new
+    ctx2.session = session
+    ctx2["request.platform"] = :whatsapp
+    ctx2.input = "hello"
+    reasked = false
+    FlowChat::App.new(ctx2).screen(:photo) do |prompt|
+      reasked = true
+      prompt.ask "Send a photo"
+    end
+
+    refute reasked, "a media-only answer must persist, not re-ask every turn"
+  end
+
+  def test_first_turn_media_is_consumed_not_swallowed
+    session = create_test_session_store # no "$start$" -> this is the opening message
+
+    ctx = FlowChat::Context.new
+    ctx.session = session
+    ctx["request.platform"] = :whatsapp
+    ctx.input = ""
+    ctx["request.media"] = {type: :image, id: "MID"}
+    app = FlowChat::App.new(ctx)
+
+    ran = false
+    app.screen(:photo) do |prompt|
+      ran = true
+      prompt.ask "Send a photo"
+    end
+
+    assert ran, "the first screen should execute"
+    refute_nil session.get(:photo), "an opening attachment should be consumed, not dropped"
+    refute_nil session.get("$start$"), "the session should be marked started"
+  end
+
+  def test_first_turn_text_only_is_swallowed_to_show_first_screen
+    session = create_test_session_store # no "$start$"
+
+    ctx = FlowChat::Context.new
+    ctx.session = session
+    ctx["request.platform"] = :whatsapp
+    ctx.input = "hi"
+    app = FlowChat::App.new(ctx)
+
+    assert_raises(FlowChat::Interrupt::Prompt) do
+      app.screen(:name) { |prompt| prompt.ask "Your name?" }
+    end
+    assert_nil session.get(:name), "a text-only opener wakes the flow rather than answering the first screen"
+  end
+
   private
 
   def create_test_session_store

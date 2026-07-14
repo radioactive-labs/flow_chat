@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#4f46c9"/>
+  <!-- two overlapping speech bubbles: a dialogue between two sides -->
+  <path d="M16 7h8a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-1v3l-3-3h-4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" fill="none" stroke="#fff" stroke-width="1.7" opacity="0.6"/>
+  <path d="M8 13h8a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-4l-3 3v-3H8a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2z" fill="#fff"/>
+</svg>

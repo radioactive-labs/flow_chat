@@ -4,7 +4,7 @@ module FlowChat
 
     def initialize(context)
       @context = context
-      @input = context.input
+      @input = build_input
       @navigation_stack = []
     end
 
@@ -13,11 +13,19 @@ module FlowChat
       raise ArgumentError, "screen has already been presented" if navigation_stack.include?(key)
 
       navigation_stack << key
-      return session.get(key) if session.get(key).present?
+      # A screen is answered once its key is stored — even when the stored value is
+      # blank (a caption-less attachment yields ""). Guard on presence-in-session
+      # (non-nil), not truthiness, so media-only (and false/blank) answers stick
+      # instead of re-asking every turn.
+      cached = session.get(key)
+      return cached unless cached.nil?
 
       user_input = prepare_user_input
       prompt = FlowChat::Prompt.new user_input
-      @input = nil # input is being submitted to prompt so we clear it
+      # The turn has been handed to a screen; later screens in this run must not
+      # re-consume it. We mark it consumed rather than discarding it, so the
+      # read accessors (text/media/...) stay available for the rest of the run.
+      @input_consumed = true
 
       value = yield prompt
       session.set(key, value)
@@ -27,7 +35,12 @@ module FlowChat
     def go_back
       return false if navigation_stack.empty?
 
-      @context.input = nil
+      # go_back raises RestartFlow, which the executor handles by rebuilding a
+      # fresh App from this same context. A per-instance @input_consumed flag
+      # would be lost on that rebuild, so clear the turn on the shared context
+      # too — otherwise the restarted screen re-consumes the back-trigger
+      # input/attachment as its answer instead of re-prompting.
+      clear_turn!
       current_screen = navigation_stack.last
       session.delete(current_screen)
 
@@ -63,16 +76,38 @@ module FlowChat
       context["request.timestamp"]
     end
 
+    # The sender's display name — distinct from a contact card they may share
+    # (that's #contact).
     def contact_name
-      nil
+      context["request.user_name"]
+    end
+
+    # Read accessors for the turn delegate to the Input value object, which is
+    # the single source of truth for this turn's text and attachments.
+    def text
+      input.text
+    end
+
+    # Always an Array<FlowChat::Media> (empty when none) — a list even on
+    # single-media platforms, so callers iterate uniformly.
+    def media
+      input.media
     end
 
     def location
-      nil
+      input.location
     end
 
-    def media
-      nil
+    def contact
+      input.contact
+    end
+
+    def attachment
+      input.attachment
+    end
+
+    def attachment_type
+      input.attachment_type
     end
 
     def session
@@ -81,13 +116,59 @@ module FlowChat
 
     protected
 
+    # Discard the current turn so a rebuilt App (after RestartFlow) sees an empty
+    # inbound message instead of re-consuming it. Clears both this instance and
+    # the shared context, since the restart builds a new instance from context.
+    def clear_turn!
+      @input_consumed = true
+      @input = FlowChat::Input.new
+      context.input = nil
+      context["request.media"] = nil
+      context["request.location"] = nil
+      context["request.contact"] = nil
+    end
+
+    # The turn as a FlowChat::Input value object. Its #present? accounts for
+    # attachments, so a caption-less photo still answers a screen even though its
+    # text is blank. Built once and kept for the whole run (see #screen).
+    def build_input
+      FlowChat::Input.new(
+        text: context.input,
+        media: wrap_media(context["request.media"]),
+        location: context["request.location"],
+        contact: context["request.contact"]
+      )
+    end
+
+    def wrap_media(raw)
+      return [] unless raw
+
+      items = raw.is_a?(Array) ? raw : [raw]
+      items.map { |data| FlowChat::Media.new(data, platform: platform, client: media_client) }
+    end
+
     def prepare_user_input
+      return nil if @input_consumed
+
       user_input = input
       if platform != :ussd && session.get(FlowChat::Input::START).nil?
-        session.set(FlowChat::Input::START, user_input)
-        user_input = nil
+        # First inbound message of the session. Mark it started (store the text, a
+        # serializable string — not the Input object), then swallow a text-only
+        # opener: the classic "wake the flow / show the first screen" behavior.
+        # An opener that carries an attachment is let through so the first screen
+        # can consume it rather than silently dropping the media/location/contact.
+        session.set(FlowChat::Input::START, user_input.to_s)
+        return nil unless user_input.attachment?
       end
       user_input
+    end
+
+    def media_client
+      case platform
+      when :whatsapp then context["whatsapp.client"]
+      when :telegram then context["telegram.client"]
+      when :intercom then context["intercom.client"]
+      end
     end
   end
 end

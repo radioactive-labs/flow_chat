@@ -126,7 +126,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$location$", context.input
+    assert_equal "", context.input
     expected_location = {
       "latitude" => 51.5074,
       "longitude" => -0.1278
@@ -146,9 +146,42 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :photo, context["request.media"][:type]
     assert_equal "AgACAgIAAxkBAAI", context["request.media"][:file_id]
+  end
+
+  def test_caption_less_media_still_instruments_message_received
+    context = create_context_with_request(
+      method: :post,
+      body: create_photo_message_payload("AgACAgIAAxkBAAI", 12347)
+    )
+
+    events = []
+    ActiveSupport::Notifications.subscribe("message.received.flow_chat") { |e| events << e }
+    @gateway.call(context)
+
+    assert_equal 1, events.size, "a caption-less photo must still emit MESSAGE_RECEIVED"
+    assert_equal "photo", events.first.payload[:message_type]
+  ensure
+    ActiveSupport::Notifications.unsubscribe("message.received.flow_chat")
+  end
+
+  def test_post_request_photo_message_captures_caption
+    payload = create_photo_message_payload("AgACAgIAAxkBAAI", 12347)
+    payload["message"]["caption"] = "my caption"
+
+    context = create_context_with_request(
+      method: :post,
+      body: payload
+    )
+
+    @gateway.call(context)
+
+    # The caption becomes the turn's text (input); no sentinel when text is present.
+    assert_equal "my caption", context.input
+    assert_equal :photo, context["request.media"][:type]
+    assert_equal "my caption", context["request.media"][:caption]
   end
 
   def test_post_request_document_message_processing
@@ -159,7 +192,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :document, context["request.media"][:type]
     assert_equal "BQACAgIAAxkBAAI", context["request.media"][:file_id]
     assert_equal "report.pdf", context["request.media"][:file_name]
@@ -174,7 +207,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$media$", context.input
+    assert_equal "", context.input
     assert_equal :voice, context["request.media"][:type]
     assert_equal "AwACAgIAAxkBAAI", context["request.media"][:file_id]
     assert_equal 10, context["request.media"][:duration]
@@ -192,7 +225,7 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     @gateway.call(context)
 
-    assert_equal "$contact$", context.input
+    assert_equal "", context.input
     assert_equal "+15551234567", context["request.contact"][:phone_number]
     assert_equal "Jane", context["request.contact"][:first_name]
     assert_equal "Doe", context["request.contact"][:last_name]

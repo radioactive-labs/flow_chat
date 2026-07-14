@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FlowChat: conversational interfaces for Rails</title>
+  <meta name="description" content="A Rails framework for building conversational flows that run across USSD, WhatsApp, Telegram, and HTTP. Write a conversation as an ordinary Ruby method; FlowChat replays it across stateless webhooks.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#fdfdfc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#101317" media="(prefers-color-scheme: dark)">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="FlowChat: conversational interfaces for Rails">
+  <meta property="og:description" content="Write a conversation as an ordinary Ruby method. FlowChat replays it across stateless webhooks, on every messaging channel: USSD, WhatsApp, Telegram, and HTTP.">
+  <meta property="og:url" content="https://radioactive-labs.github.io/flow_chat/">
+  <meta property="og:image" content="https://radioactive-labs.github.io/flow_chat/og.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="FlowChat, conversational interfaces for Rails: one flow across USSD, WhatsApp, Telegram, and HTTP.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FlowChat: conversational interfaces for Rails">
+  <meta name="twitter:description" content="Write a conversation as an ordinary Ruby method. FlowChat replays it across stateless webhooks, on every messaging channel.">
+  <meta name="twitter:image" content="https://radioactive-labs.github.io/flow_chat/og.png">
+  <script>
+    // Restore the saved theme before first paint, so there's no flash on refresh.
+    (function () {
+      try {
+        var t = localStorage.getItem("flowchat-theme");
+        if (t) document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+  <style>
+    :root {
+      --bg:    #fdfdfc;
+      --fg:    #1c1f24;
+      --soft:  #5b636e;
+      --link:  #4038b0;
+      --code-bg: #f2f3f5;
+      --rule:  #e3e5e8;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101317; --fg: #d9dde3; --soft: #8b93a0; --link: #a9b2f8;
+        --code-bg: #191d23; --rule: #262b32;
+      }
+    }
+    :root[data-theme="light"] { --bg:#fdfdfc; --fg:#1c1f24; --soft:#5b636e; --link:#4038b0; --code-bg:#f2f3f5; --rule:#e3e5e8; }
+    :root[data-theme="dark"]  { --bg:#101317; --fg:#d9dde3; --soft:#8b93a0; --link:#a9b2f8; --code-bg:#191d23; --rule:#262b32; }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--sans);
+      font-size: 18px;
+      line-height: 1.62;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 48rem; margin: 0 auto; padding: 4.5rem 1.5rem 5rem; position: relative; }
+
+    .theme-toggle {
+      position: absolute; top: 1.5rem; right: 1.5rem;
+      font-family: var(--mono); font-size: 0.74rem; color: var(--soft);
+      background: none; border: 0; cursor: pointer; padding: 0.2rem;
+      text-decoration: underline; text-underline-offset: 2px;
+    }
+    .theme-toggle:hover { color: var(--link); }
+
+    h1 {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      margin: 0 0 1.4rem;
+    }
+    h2 {
+      font-size: 1.02rem;
+      font-weight: 600;
+      margin: 2.8rem 0 0.9rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--rule);
+      color: var(--fg);
+    }
+    p { margin: 0 0 1.1rem; }
+    .lede { font-size: 1.12rem; }
+    .sub { color: var(--soft); }
+    a { color: var(--link); text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 1px; }
+    a:hover { text-decoration-thickness: 2px; }
+
+    .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.2rem 0 1.8rem; align-items: center; }
+    .badges a { display: inline-flex; text-decoration: none; }
+    .badges img { height: 20px; display: block; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      background: var(--code-bg);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 0.95rem 1.1rem;
+      overflow-x: auto;
+      margin: 0 0 1.1rem;
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; font-size: 0.8rem; }
+    .cmt { color: var(--soft); }
+
+    ul { margin: 0 0 1.1rem; padding-left: 1.2rem; }
+    li { margin-bottom: 0.5rem; }
+    li b { font-weight: 600; }
+
+    .links { list-style: none; padding: 0; margin: 0.4rem 0 0; }
+    .links li { margin-bottom: 0.55rem; display: flex; gap: 0.7rem; }
+    .links .what { color: var(--soft); min-width: 6.5rem; display: inline-block; }
+
+    footer {
+      margin-top: 3.2rem; padding-top: 1.1rem; border-top: 1px solid var(--rule);
+      font-family: var(--mono); font-size: 0.78rem; color: var(--soft);
+    }
+    :focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <button id="theme-toggle" class="theme-toggle" type="button">dark mode</button>
+    <h1>FlowChat</h1>
+
+    <p class="lede">Write a conversation as an ordinary Ruby method. FlowChat runs it across stateless webhooks, on every messaging channel.</p>
+
+    <p class="sub">FlowChat is a Rails framework for conversational interfaces. A USSD or chat webhook has no memory of the last message; FlowChat replaces the hand-rolled state machine with a session and a replay engine, so the same flow runs on USSD, WhatsApp, Telegram, and HTTP, with per-platform rendering. Ruby 3.0+.</p>
+
+    <p class="badges">
+      <a href="https://rubygems.org/gems/flow_chat"><img alt="Gem Version" src="https://badge.fury.io/rb/flow_chat.svg"></a>
+      <a href="https://github.com/radioactive-labs/flow_chat/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/radioactive-labs/flow_chat/actions/workflows/ci.yml/badge.svg?branch=master"></a>
+      <a href="https://www.ruby-lang.org/"><img alt="Ruby >= 3.0" src="https://img.shields.io/badge/ruby-%3E%3D%203.0-red.svg"></a>
+      <a href="https://opensource.org/licenses/MIT"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg"></a>
+    </p>
+
+    <h2>Install</h2>
+    <pre><code><span class="cmt"># Gemfile</span>
+gem "flow_chat"</code></pre>
+    <pre><code>bundle install</code></pre>
+    <p class="sub">Set a cache for the session store, for example <code>FlowChat::Config.cache = Rails.cache</code>. No migrations, no generators.</p>
+
+    <h2>The 30-second tour</h2>
+    <p>A flow is a class of straight-line Ruby. Each <code>screen</code> is one step in the conversation:</p>
+    <pre><code>class RegistrationFlow &lt; FlowChat::Flow
+  def main_page
+    name = app.screen(:name) { |prompt| prompt.ask "What's your name?" }
+
+    email = app.screen(:email) do |prompt|
+      prompt.ask "Your email?", validate: -&gt;(input) { "Invalid email" unless input.include?("@") }
+    end
+
+    app.say "Welcome #{name}!"
+  end
+end</code></pre>
+    <p class="sub">FlowChat re-runs this method from the top on every webhook. Each <code>screen</code> returns its stored answer when the session has one and re-prompts when it does not, so the method reads as a synchronous script even though each turn is a separate request.</p>
+
+    <h2>What you get</h2>
+    <ul>
+      <li><b>One flow, every channel.</b> The same flow class runs on USSD, WhatsApp, Telegram, and HTTP. FlowChat renders numbered menus for USSD, reply buttons and lists for WhatsApp, inline keyboards for Telegram.</li>
+      <li><b>Stateful flows over stateless webhooks.</b> A replay engine reconstructs progress from the session, so you write linear Ruby with normal <code>if</code> and <code>case</code>, not a state machine.</li>
+      <li><b>Rich prompts.</b> <code>ask</code>, <code>select</code>, and <code>yes?</code>, with validation and transforms, and buttons or lists where the platform supports them.</li>
+      <li><b>Inbound and outbound media.</b> Read photos, location, and contacts through one <code>FlowChat::Input</code> value object, and send media back with a single <code>media:</code> option.</li>
+      <li><b>Flexible sessions.</b> Configurable boundaries, durable per-user sessions that survive USSD timeouts, and cross-platform or URL isolation.</li>
+      <li><b>Background processing.</b> Acknowledge the webhook and run the flow in a job, with a factory that builds one processor for both the webhook and the job.</li>
+    </ul>
+
+    <h2>Documentation</h2>
+    <ul class="links">
+      <li><span class="what">Guide &amp; API</span><a href="https://github.com/radioactive-labs/flow_chat#readme">github.com/radioactive-labs/flow_chat</a></li>
+      <li><span class="what">Getting started</span><a href="https://github.com/radioactive-labs/flow_chat/blob/master/docs/getting-started.md">docs/getting-started.md</a></li>
+      <li><span class="what">Gem</span><a href="https://rubygems.org/gems/flow_chat">rubygems.org/gems/flow_chat</a></li>
+    </ul>
+
+    <footer>MIT License · Radioactive Labs</footer>
+  </div>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById("theme-toggle");
+      function effective() {
+        var t = root.getAttribute("data-theme");
+        if (t) return t;
+        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      function label() { btn.textContent = (effective() === "dark" ? "light" : "dark") + " mode"; }
+      btn.addEventListener("click", function () {
+        var next = effective() === "dark" ? "light" : "dark";
+        root.setAttribute("data-theme", next);
+        try { localStorage.setItem("flowchat-theme", next); } catch (e) {}
+        label();
+      });
+      label();
+    })();
+  </script>
+</body>
+</html>

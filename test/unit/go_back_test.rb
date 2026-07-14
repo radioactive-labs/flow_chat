@@ -106,6 +106,33 @@ class GoBackTest < Minitest::Test
     assert_nil app.session.get(:screen2)  # Current screen deleted
   end
 
+  def test_go_back_does_not_let_restarted_screen_consume_the_back_trigger_input
+    # go_back raises RestartFlow; the executor rebuilds a fresh App from the same
+    # context. The back-trigger input ("0") must NOT be consumed as the answer to
+    # the re-prompted screen — it should re-prompt instead.
+    @context["request.platform"] = :ussd
+    @context.input = "A"
+    first = FlowChat::App.new(@context)
+    first.screen(:one) { |prompt| prompt.ask("one?") }  # consumes "A"
+
+    # Second request: user hits "back" while on screen :two.
+    @context.input = "0"
+    second = FlowChat::App.new(@context)
+    second.screen(:one) { |prompt| prompt.ask("one?") }  # cached "A"
+    assert_raises(FlowChat::Interrupt::RestartFlow) do
+      second.screen(:two) { |prompt| second.go_back }
+    end
+
+    # Executor retry: brand-new App from the same (now-cleared) context.
+    third = FlowChat::App.new(@context)
+    third.screen(:one) { |prompt| prompt.ask("one?") }  # cached "A"
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      third.screen(:two) { |prompt| prompt.ask("two?") }
+    end
+    assert_equal "two?", error.prompt
+    assert_nil third.session.get(:two), "back-trigger input must not answer the restarted screen"
+  end
+
   def test_go_back_returns_false_with_empty_navigation_stack
     app = FlowChat::App.new(@context)
     assert_empty app.navigation_stack
@@ -265,13 +292,16 @@ class GoBackTest < Minitest::Test
     @context.input = "Services"
     @context["request.platform"] = :ussd
     app = FlowChat::App.new(@context)
-    main_choice = app.screen(:main_menu) { |prompt| prompt.user_input }
+    main_choice = app.screen(:main_menu) { |prompt| prompt.user_input.to_s }
     assert_equal "Services", main_choice
 
-    # Step 2: Services menu (with fresh input)
-    @context.input = "Back"  # Set input for services menu
-    app.instance_variable_set(:@input, @context.input)  # Restore input since it was cleared
-    services_choice = app.screen(:services_menu) { |prompt| prompt.user_input }
+    # Step 2: Second request — a fresh app with new input (each request builds
+    # its own app; the session is shared). Main menu replays from cache, and the
+    # services screen consumes the new input.
+    @context.input = "Back"
+    app = FlowChat::App.new(@context)
+    app.screen(:main_menu) { |prompt| prompt.user_input.to_s }  # cached "Services"
+    services_choice = app.screen(:services_menu) { |prompt| prompt.user_input.to_s }
     assert_equal "Back", services_choice
 
     # Step 3: User chooses to go back

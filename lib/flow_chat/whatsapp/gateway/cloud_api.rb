@@ -184,7 +184,7 @@ module FlowChat
             # Extract message content based on type
             extract_message_content!(message, context)
 
-            if context.input.present?
+            if inbound_message?(context)
               # Use instrumentation for message received
               instrument(Events::MESSAGE_RECEIVED, {
                 from: phone_number,
@@ -319,7 +319,7 @@ module FlowChat
               address: message.dig("location", "address")
             }
             context["request.location"] = location
-            context.input = FlowChat::Input::LOCATION
+            context.input = ""
             FlowChat.logger.debug { "CloudApi: Location received - Lat: #{location[:latitude]}, Lng: #{location[:longitude]}" }
           when "image", "document", "audio", "video", "sticker"
             media_data = message[message["type"]]
@@ -332,7 +332,8 @@ module FlowChat
               sha256: media_data["sha256"],
               animated: media_data["animated"]
             }
-            context.input = FlowChat::Input::MEDIA
+            # The caption (if any) is the turn's text; a text-less media message has blank input.
+            context.input = media_data["caption"].presence || ""
             FlowChat.logger.debug { "CloudApi: Media received - Type: #{message["type"]}, ID: #{media_data["id"]}" }
           when "contacts"
             # WhatsApp sends contacts as an array, take the first one
@@ -346,7 +347,7 @@ module FlowChat
                 phones: phones.map { |p| p["phone"] },
                 phone_number: phones.first&.dig("phone")
               }
-              context.input = FlowChat::Input::CONTACT
+              context.input = ""
               FlowChat.logger.debug { "CloudApi: Contact received - Name: #{context["request.contact"][:name]}" }
             end
           end

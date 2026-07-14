@@ -141,10 +141,18 @@ module FlowChat
 
             if latest_message
               context["request.message_id"] = latest_message[:id]
-              # Convert HTML to markdown for message body
-              raw_body = latest_message[:body] || ""
-              context.input = @client.parse_message(raw_body)
-              FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
+              if latest_message[:media]
+                media = latest_message[:media]
+                body = latest_message[:body]
+                context["request.media"] = media
+                context.input = body.present? ? @client.parse_message(body) : ""
+                FlowChat.logger.debug { "IntercomApi: Media received - #{media.size} attachment(s)" }
+              else
+                # Convert HTML to markdown for message body
+                raw_body = latest_message[:body] || ""
+                context.input = @client.parse_message(raw_body)
+                FlowChat.logger.debug { "IntercomApi: Message content extracted - Event: #{event_type}, Input: '#{context.input}'" }
+              end
             elsif @allowed_webhook_topics.include?(event_type)
               # No message but event is explicitly allowed - process without message
               context.input = nil
@@ -270,11 +278,12 @@ module FlowChat
           when "conversation.user.created"
             # For new conversations, get the initial message from source
             source = conversation["source"]
-            if source && source["body"]
+            if source && (source["body"] || source["attachments"]&.any?)
               {
                 id: source["id"],
-                body: source["body"]
-              }
+                body: source["body"],
+                media: extract_attachments(source)
+              }.compact
             end
           when "conversation.user.replied"
             # For replies, get the latest user message from conversation_parts
@@ -291,9 +300,33 @@ module FlowChat
               latest_part = user_parts.last
               {
                 id: latest_part["id"],
-                body: latest_part["body"]
-              }
+                body: latest_part["body"],
+                media: extract_attachments(latest_part)
+              }.compact
             end
+          end
+        end
+
+        def extract_attachments(raw)
+          attachments = raw["attachments"] || []
+          return nil if attachments.empty?
+
+          attachments.map do |a|
+            {
+              type: intercom_media_type(a["content_type"]),
+              url: a["url"],
+              mime_type: a["content_type"],
+              filename: a["name"]
+            }
+          end
+        end
+
+        def intercom_media_type(content_type)
+          case content_type
+          when %r{\Aimage/} then :image
+          when %r{\Avideo/} then :video
+          when %r{\Aaudio/} then :audio
+          else :document
           end
         end
 

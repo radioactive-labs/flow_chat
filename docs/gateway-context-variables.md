@@ -1,171 +1,155 @@
-# Gateway Context Variables
+# Gateway context variables
 
-This document describes all context variables set by each gateway in FlowChat.
+Every gateway parses its platform's webhook into a common set of context values. Flows and middleware read these instead of platform-specific request shapes, which is what lets one flow run everywhere. This document lists what each gateway sets.
 
-## All Context Variables
+## All context variables
 
 | Variable | USSD Nalo | HTTP Simple | WhatsApp Cloud API | Telegram Bot API | Intercom API | Description |
 |----------|-----------|-------------|-------------------|------------------|--------------|-------------|
-| **Common Variables** |
-| `request.id` | ✓ Session ID | ✓ From user_params | ✓ Phone number | ✓ Chat ID | ✓ Conversation ID | Unique identifier for the session/conversation |
-| `request.user_id` | ✓ = msisdn | ✓ From user_params | ✓ Phone number | ✓ Telegram user ID | ✓ Contact ID | User/contact identifier |
-| `request.user_name` | ✗ | ✓ (optional) | ✓ (optional) | ✓ First + Last name | ✓ (optional) | User's display name |
-| `request.username` | ✗ | ✗ | ✗ | ✓ Telegram username | ✗ | Telegram @username |
-| `request.msisdn` | ✓ | ✓ (optional) | ✓ | ✗ | ✓ (optional) | E.164 phone number |
-| `request.email` | ✗ | ✓ (optional) | ✗ | ✗ | ✓ (optional) | User email |
-| `request.message_id` | ✓ UUID | ✓ UUID | ✓ WhatsApp ID | ✓ Telegram msg ID | ✓ (optional) | Message identifier |
-| `request.timestamp` | ✓ Current | ✓ Current | ✓ Current | ✓ From message | ✓ Current | ISO8601 timestamp |
-| `request.gateway` | ✓ `:nalo` | ✓ `:http_simple` | ✓ `:whatsapp_cloud_api` | ✓ `:telegram_bot_api` | ✓ `:intercom_api` | Gateway name |
-| `request.platform` | ✓ `:ussd` | ✓ `:http` | ✓ `:whatsapp` | ✓ `:telegram` | ✓ `:intercom` | Platform type |
-| `request.body` | ✓ | ✓ | ✓ | ✓ | ✓ | Raw request body (stringified keys) |
-| `request.input` | ✓ Text | ✓ Text | ✓ Varies⁴ | ✓ Varies⁶ | ✓ Text/nil⁵ | User's input message |
-| **WhatsApp-Specific** |
-| `request.location` | ✗ | ✗ | ✓ | ✓ | ✗ | Location data (when input is `"$location$"`) |
-| `request.media` | ✗ | ✗ | ✓ | ✓ | ✗ | Media metadata (when input is `"$media$"`) |
-| `request.contact` | ✗ | ✗ | ✗ | ✓ | ✗ | Contact data (when input is `"$contact$"`) |
-| `whatsapp.business.phone_number` | ✗ | ✗ | ✓ | ✗ | ✗ | Business phone number (E.164) |
-| `whatsapp.business.phone_number_id` | ✗ | ✗ | ✓ | ✗ | ✗ | WhatsApp phone number ID |
-| `whatsapp.client` | ✗ | ✗ | ✓ | ✗ | ✗ | WhatsApp client instance |
-| **Telegram-Specific** |
-| `telegram.client` | ✗ | ✗ | ✗ | ✓ | ✗ | Telegram client instance |
-| `telegram.chat_type` | ✗ | ✗ | ✗ | ✓ | ✗ | Chat type (private, group, supergroup, channel) |
-| `telegram.callback_query_id` | ✗ | ✗ | ✗ | ✓ (callbacks) | ✗ | Callback query ID for inline keyboard responses |
-| `telegram.original_message_id` | ✗ | ✗ | ✗ | ✓ (callbacks) | ✗ | Original message ID that triggered callback |
-| **HTTP-Specific** |
-| `http.method` | ✗ | ✓ | ✗ | ✗ | ✗ | HTTP method (GET/POST) |
-| `http.path` | ✗ | ✓ | ✗ | ✗ | ✗ | Request path |
-| `http.user_agent` | ✗ | ✓ | ✗ | ✗ | ✗ | User agent header |
-| **Intercom-Specific** |
-| `intercom.client` | ✗ | ✗ | ✗ | ✗ | ✓ | Intercom client instance |
-| `intercom.topic` | ✗ | ✗ | ✗ | ✗ | ✓ | Webhook event type |
+| **Common** |
+| `request.id` | Session id | From user_params | Phone number | Chat id | Conversation id | Session or conversation identifier |
+| `request.user_id` | = msisdn | From user_params | Phone number | Telegram user id | Contact id | Stable per-user identifier |
+| `request.user_name` | none | optional | optional | First and last name | optional | Sender display name |
+| `request.username` | none | none | none | Telegram @username | none | Telegram username |
+| `request.msisdn` | set | optional | set | none | optional | E.164 phone number |
+| `request.email` | none | optional | none | none | optional | User email |
+| `request.message_id` | UUID | UUID | WhatsApp id | Telegram msg id | optional | Message identifier |
+| `request.timestamp` | Current | Current | Current | From message | Current | ISO8601 timestamp |
+| `request.gateway` | `:nalo` | `:http_simple` | `:whatsapp_cloud_api` | `:telegram_bot_api` | `:intercom_api` | Gateway symbol |
+| `request.platform` | `:ussd` | `:http` | `:whatsapp` | `:telegram` | `:intercom` | Platform symbol |
+| `request.body` | set | set | set | set | set | Raw request body, string keys |
+| `request.input` | Text | Text | Text (note 1) | Text (note 2) | Text or nil (note 3) | The turn's text |
+| **Structured attachments** |
+| `request.location` | none | none | set | set | none | Location payload |
+| `request.media` | none | via `media_url` | set | set | set (may be several) | Media metadata |
+| `request.contact` | none | none | none | set | none | Contact payload |
+| **WhatsApp** |
+| `whatsapp.business.phone_number` | | | E.164 business number | | | |
+| `whatsapp.business.phone_number_id` | | | WhatsApp phone number id | | | |
+| `whatsapp.client` | | | client instance | | | |
+| **Telegram** |
+| `telegram.client` | | | | client instance | | |
+| `telegram.chat_type` | | | | private, group, supergroup, channel | | |
+| `telegram.callback_query_id` | | | | on callbacks | | |
+| `telegram.original_message_id` | | | | on callbacks | | |
+| **HTTP** |
+| `http.method` | | GET or POST | | | | |
+| `http.path` | | Request path | | | | |
+| `http.user_agent` | | User agent header | | | | |
+| **Intercom** |
+| `intercom.client` | | | | | client instance | |
+| `intercom.topic` | | | | | Webhook event type | |
 
+Notes on `request.input`:
 
-## Accessing Variables in Flows
+1. WhatsApp: the message text, a media caption, or a button/list reply id. `""` for a structured turn (location, media, contact) that carries no text.
+2. Telegram: the message text, callback data, or a media caption. `""` for a structured turn with no text.
+3. Intercom: the message text or body, or `""`/`nil` for turns without text.
+
+`context.input` is always plain text. There are no `"$media$"`/`"$location$"`/`"$contact$"` sentinel values: a structured turn with no text sets `input` to `""` and carries its payload on `request.media`, `request.location`, or `request.contact`. In flows, read `app.input` (a `FlowChat::Input`) or its accessors, described below.
+
+## Reading the turn in a flow
+
+Prefer the accessors on `app` over reading context keys directly. Every turn is a `FlowChat::Input` value object with two independent axes: text and an optional attachment. Text and media can arrive together (a captioned photo); location and contact arrive on their own.
 
 ```ruby
 class MyFlow < FlowChat::Flow
   def start
-    # Common variables (all gateways)
-    user_id = app.context["request.user_id"]
-    user_name = app.context["request.user_name"]  # Available from WhatsApp, Intercom, HTTP (optional)
-    msisdn = app.context["request.msisdn"]        # Available from USSD, WhatsApp, HTTP (optional)
-    email = app.context["request.email"]          # Available from HTTP (optional)
-    platform = app.context["request.platform"]
-    input = app.context["request.input"]
-
-    # Or use convenience methods
-    user_id = app.user_id
+    # Identity and platform, available on every platform.
+    user_id  = app.user_id
     platform = app.platform
-    input = app.input
+    msisdn   = app.msisdn
 
-    # Platform-specific variables
-    case app.platform
-    when :whatsapp
-      client = app.context["whatsapp.client"]
+    # The turn's text. Always a string, "" when the turn carried no text.
+    message = app.text
 
-      # Handle special input types
-      if input == "$location$"
-        location = app.context["request.location"]
-        lat = location[:latitude]
-        lng = location[:longitude]
+    # Branch on the attachment kind, not on a magic input value.
+    case app.attachment_type
+    when :media
+      app.media.each do |item|   # always a list; iterate so you never drop extra attachments
+        item.type       # canonical: :image, :video, :audio, :document, :sticker
+        item.raw_type   # platform-native: :photo or :voice on Telegram
+        item.mime_type
+        item.filename
+        link  = item.url        # a fetchable URL, or nil
+        bytes = item.download   # the raw file bytes, or nil
       end
-
-    when :telegram
-      client = app.context["telegram.client"]
-      chat_type = app.context["telegram.chat_type"]
-      username = app.context["request.username"]  # @username
-
-      # Handle special input types
-      case input
-      when "$location$"
-        location = app.context["request.location"]
-        lat = location["latitude"]
-        lng = location["longitude"]
-      when "$media$"
-        media = app.context["request.media"]
-        file_id = media[:file_id]
-        media_type = media[:type]  # :photo, :document, :voice
-      when "$contact$"
-        contact = app.context["request.contact"]
-        phone = contact[:phone_number]
-      end
-
-    when :intercom
-      topic = app.context["intercom.topic"]
-      client = app.context["intercom.client"]
-
-      # Handle events without messages
-      if input.nil?
-        # Event without user message (e.g., admin-initiated)
-      end
-
-    when :http
-      method = app.context["http.method"]
-      user_agent = app.context["http.user_agent"]
-
-    when :ussd
-      msisdn = app.context["request.msisdn"]
+    when :location
+      lat = app.location[:latitude]
+      lng = app.location[:longitude]
+    when :contact
+      name = app.contact[:name]
     end
   end
 end
 ```
 
-## Notes
+Accessors, all shortcuts to the `app.input` value object:
 
-⁴ **WhatsApp input**: Text for text messages, `"$location$"` for location, `"$media$"` for media (image, document, audio, video, sticker), `"$contact$"` for shared contacts, or button/list reply IDs.
+- `app.text`: the turn's text, or the caption sent with an attachment. Always a string, `""` when there is no text.
+- `app.attachment_type`: `:media`, `:location`, `:contact`, or `nil`, the discriminator to branch on.
+- `app.attachment`: the payload of `attachment_type` (the media list, the location hash, the contact hash, or `nil`).
+- `app.media`: always an `Array<FlowChat::Media>` (empty when none), a list even on single-media platforms, so you iterate uniformly.
+- `app.location`: the location hash, or `nil`.
+- `app.contact`: the shared contact card hash, or `nil`.
+- `app.contact_name`: the sender's display name (distinct from a shared contact card).
 
-⁵ **Intercom input**: Text content or `nil` for events without user messages.
+## Media
 
-⁶ **Telegram input**: Text for text messages, callback data for inline keyboard responses, `"$location$"` for location, `"$media$"` for media (photo, video, audio, document, voice, sticker), `"$contact$"` for shared contacts.
+WhatsApp, Telegram, Intercom, and HTTP set `request.media` for inbound media (USSD is text-only and never sets it). WhatsApp and Telegram carry a single item; Intercom may carry several, one per attachment. HTTP callers submit inbound media through the `media_url` request param, with optional `media_type` and `mime_type`.
 
-## Media Type Reference
+A `FlowChat::Media` item's `type` is a normalized value; `raw_type` is the platform-native value. The normalization maps `:photo` to `:image` and `:voice` to `:audio`, so `type` is one of `:image`, `:video`, `:audio`, `:document`, `:sticker`.
 
-Both WhatsApp and Telegram set `request.media` with a `:type` symbol when media is received:
+| Media type | WhatsApp | Telegram | Fields |
+|------------|----------|----------|--------|
+| `:image` (Telegram `:photo`) | yes | yes | id or file_id, mime_type, width, height |
+| `:video` | yes | yes | id or file_id, mime_type, duration, width, height |
+| `:audio` | yes | yes | id or file_id, mime_type, duration, title, performer |
+| `:voice` | no | yes | file_id, mime_type, duration |
+| `:document` | yes | yes | id or file_id, mime_type, filename |
+| `:sticker` | yes | yes | id or file_id, emoji, set_name, is_animated |
 
-| Media Type | WhatsApp | Telegram | Additional Fields |
-|------------|----------|----------|-------------------|
-| `:image` / `:photo` | ✓ `:image` | ✓ `:photo` | id/file_id, mime_type, width, height |
-| `:video` | ✓ | ✓ | id/file_id, mime_type, duration, width, height |
-| `:audio` | ✓ | ✓ | id/file_id, mime_type, duration, title, performer |
-| `:voice` | ✗ | ✓ | file_id, mime_type, duration |
-| `:document` | ✓ | ✓ | id/file_id, mime_type, filename |
-| `:sticker` | ✓ | ✓ | id/file_id, emoji, set_name, is_animated |
+`item.url` resolves a fetchable URL per platform (WhatsApp `get_media_url`, Telegram `getFile`, Intercom and HTTP use the direct URL). `item.download` returns the raw bytes.
 
-### Accessing Media in Flows
+### Inspecting attachments in validate and transform
 
-FlowChat provides constants for special input markers:
+The `FlowChat::Input` object behaves like its text for string operations, so validators and transforms read naturally, and it also exposes the attachment:
 
 ```ruby
-FlowChat::Input::LOCATION  # "$location$"
-FlowChat::Input::MEDIA     # "$media$"
-FlowChat::Input::CONTACT   # "$contact$"
-FlowChat::Input::START     # "$start$" (session marker)
+app.screen(:photo) do |prompt|
+  prompt.ask "Send your ID photo",
+    validate: ->(input) { "Please attach a photo" unless input.media.any? }
+end
+
+app.screen(:name) do |prompt|
+  prompt.ask "Your name?", transform: ->(input) { input.strip.titleize }
+end
 ```
 
-Example usage:
+A turn counts as answered (`input.submitted?`) when it has text or an attachment, so a caption-less photo still satisfies a screen.
+
+### What a screen should return
+
+`prompt.ask` and `prompt.select` return a string (the text, or your `transform`'s result), and that string is what gets stored as the screen's answer. Return those from screen blocks.
+
+`prompt.user_input` is the raw `FlowChat::Input` object, useful inside a `validate` or `transform` when you want the attachment, but avoid returning it as a screen's value:
 
 ```ruby
-case app.input
-when FlowChat::Input::MEDIA
-  media = app.context["request.media"]
+# Good: persists a string.
+name = app.screen(:name) { |prompt| prompt.ask "Your name?" }
 
-  case media[:type]
-  when :photo, :image
-    file_id = media[:file_id] || media[:id]
-  when :video
-    duration = media[:duration]
-  when :document
-    filename = media[:file_name] || media[:filename]
-  when :sticker
-    emoji = media[:emoji]
-  end
+# Avoid: persists the whole Input object into the session store.
+raw = app.screen(:raw) { |prompt| prompt.user_input }
+```
 
-when FlowChat::Input::LOCATION
-  location = app.context["request.location"]
-  lat, lng = location["latitude"], location["longitude"]
+Whatever a screen returns is stored in the session and serialized by the store (`CacheSessionStore` uses `Marshal`). A `FlowChat::Media` serializes without its live platform client, so a media object deserialized from the session has no client and its `url` and `download` return `nil` rather than raising. Fetch media during the turn it arrives, while the client is present; do not rely on downloading it from a stored answer on a later turn.
 
-when FlowChat::Input::CONTACT
-  contact = app.context["request.contact"]
-  phone = contact[:phone_number]
-end
+### Lower-level access
+
+The raw request hashes remain available if you need them, but prefer the accessors above:
+
+```ruby
+app.context["request.media"]     # raw Hash, or Array for Intercom
+app.context["request.location"]
+app.context["request.contact"]
 ```

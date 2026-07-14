@@ -18,6 +18,20 @@ module FlowChat
       self.class.instrument(event_name, enriched_payload, &block)
     end
 
+    # True when this turn carries something to process — text OR a structured
+    # attachment (media/location/contact). Gateways gate MESSAGE_RECEIVED on this
+    # so caption-less media, locations, and contacts are still instrumented: they
+    # set a blank input string (not the old "$media$"-style sentinel), so a plain
+    # `context.input.present?` check would silently drop them.
+    def inbound_message?(context)
+      return false unless context
+
+      context.input.present? ||
+        !context["request.media"].nil? ||
+        !context["request.location"].nil? ||
+        !context["request.contact"].nil?
+    end
+
     class_methods do
       def instrument(event_name, payload = {}, &block)
         FlowChat::Instrumentation.instrument(event_name, payload, &block)

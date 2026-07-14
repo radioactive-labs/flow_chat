@@ -118,7 +118,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal expected_location, context["request.location"]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.location123", context["request.message_id"]
-    assert_equal FlowChat::Input::LOCATION, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_media_message_processing
@@ -135,7 +135,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_nil context["request.media"][:caption]
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.media123", context["request.message_id"]
-    assert_equal FlowChat::Input::MEDIA, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_video_message_processing
@@ -149,7 +149,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :video, context["request.media"][:type]
     assert_equal "vid123", context["request.media"][:id]
     assert_equal "video/mp4", context["request.media"][:mime_type]
-    assert_equal FlowChat::Input::MEDIA, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_audio_message_processing
@@ -163,7 +163,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :audio, context["request.media"][:type]
     assert_equal "aud123", context["request.media"][:id]
     assert_equal "audio/ogg", context["request.media"][:mime_type]
-    assert_equal FlowChat::Input::MEDIA, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_document_message_processing
@@ -178,7 +178,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "doc123", context["request.media"][:id]
     assert_equal "application/pdf", context["request.media"][:mime_type]
     assert_equal "report.pdf", context["request.media"][:filename]
-    assert_equal FlowChat::Input::MEDIA, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_sticker_message_processing
@@ -193,7 +193,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "sticker123", context["request.media"][:id]
     assert_equal "image/webp", context["request.media"][:mime_type]
     assert_equal false, context["request.media"][:animated]
-    assert_equal FlowChat::Input::MEDIA, context.input
+    assert_equal "", context.input
   end
 
   def test_post_request_contact_message_processing
@@ -209,7 +209,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_includes context["request.contact"][:phones], "+1234567890"
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.contact123", context["request.message_id"]
-    assert_equal FlowChat::Input::CONTACT, context.input
+    assert_equal "", context.input
   end
 
   def test_media_type_is_symbol_not_string

@@ -617,4 +617,49 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     assert result["ok"]
   end
+
+  # ============================================================================
+  # INBOUND MEDIA DOWNLOAD TESTS
+  # ============================================================================
+
+  def test_get_file_calls_getFile
+    stub_request(:post, "https://api.telegram.org/bot#{@config.bot_token}/getFile")
+      .with(body: hash_including("file_id" => "FID"))
+      .to_return(status: 200, body: {"ok" => true, "result" => {"file_path" => "photos/f.jpg"}}.to_json)
+
+    result = @client.get_file("FID")
+    assert_equal "photos/f.jpg", result.dig("result", "file_path")
+  end
+
+  def test_file_url_builds_download_url
+    stub_request(:post, "https://api.telegram.org/bot#{@config.bot_token}/getFile")
+      .to_return(status: 200, body: {"ok" => true, "result" => {"file_path" => "photos/f.jpg"}}.to_json)
+
+    assert_equal "https://api.telegram.org/file/bot#{@config.bot_token}/photos/f.jpg", @client.file_url("FID")
+  end
+
+  def test_file_url_returns_nil_without_file_path
+    stub_request(:post, "https://api.telegram.org/bot#{@config.bot_token}/getFile")
+      .to_return(status: 200, body: {"ok" => false}.to_json)
+
+    assert_nil @client.file_url("FID")
+  end
+
+  def test_download_file_returns_body_on_success
+    stub_request(:post, "https://api.telegram.org/bot#{@config.bot_token}/getFile")
+      .to_return(status: 200, body: {"ok" => true, "result" => {"file_path" => "photos/f.jpg"}}.to_json)
+    stub_request(:get, "https://api.telegram.org/file/bot#{@config.bot_token}/photos/f.jpg")
+      .to_return(status: 200, body: "IMAGEBYTES")
+
+    assert_equal "IMAGEBYTES", @client.download_file("FID")
+  end
+
+  def test_download_file_returns_nil_on_http_error
+    stub_request(:post, "https://api.telegram.org/bot#{@config.bot_token}/getFile")
+      .to_return(status: 200, body: {"ok" => true, "result" => {"file_path" => "photos/f.jpg"}}.to_json)
+    stub_request(:get, "https://api.telegram.org/file/bot#{@config.bot_token}/photos/f.jpg")
+      .to_return(status: 404, body: "nope")
+
+    assert_nil @client.download_file("FID")
+  end
 end
