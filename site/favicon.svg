@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#4f46c9"/>
+  <!-- a chat bubble with a typing indicator, a conversation in progress -->
+  <path d="M7 8h18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H13l-4 4v-4H7a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z" fill="#fff"/>
+  <circle cx="11.5" cy="14.5" r="1.5" fill="#4f46c9"/>
+  <circle cx="16" cy="14.5" r="1.5" fill="#4f46c9"/>
+  <circle cx="20.5" cy="14.5" r="1.5" fill="#4f46c9"/>
+</svg>

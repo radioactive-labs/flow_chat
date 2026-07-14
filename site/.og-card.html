@@ -1,0 +1,91 @@
+<!doctype html>
+<!--
+  Source for the social preview image (og.png), rendered at 1200x630.
+  Regenerate after editing this file:
+
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --headless --disable-gpu --hide-scrollbars --force-device-scale-factor=1 \
+      --window-size=1200,630 \
+      --screenshot="site/og.png" "file://$PWD/site/.og-card.html"
+
+  Any headless Chromium works. Keep the window size at 1200x630 (the 1.91:1
+  ratio OpenGraph/Twitter scrapers expect). This file is a dotfile so it stays
+  out of normal listings; it is only ever opened locally to produce og.png.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1200px; height: 630px; }
+  :root {
+    --bg: #101317; --fg: #d9dde3; --soft: #8b93a0; --accent: #8b83f0;
+    --rule: #262b32; --code-bg: #191d23;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    overflow: hidden;
+  }
+  .frame {
+    position: absolute; inset: 64px 72px;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .top { display: flex; align-items: center; gap: 28px; }
+  .glyph { width: 108px; height: 108px; flex: none; display: block; }
+  .wordmark {
+    font-family: var(--mono);
+    font-size: 68px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .tagline {
+    font-size: 40px;
+    line-height: 1.32;
+    max-width: 1010px;
+    font-weight: 400;
+  }
+  .tagline b { font-weight: 600; }
+  .foot {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 24px;
+    color: var(--soft);
+    border-top: 1px solid var(--rule);
+    padding-top: 22px;
+  }
+  .foot .r { color: var(--accent); }
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="top">
+      <svg class="glyph" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <rect width="32" height="32" rx="7" fill="#4f46c9"/>
+        <path d="M7 8h18a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H13l-4 4v-4H7a2 2 0 0 1-2-2V10a2 2 0 0 1 2-2z" fill="#fff"/>
+        <circle cx="11.5" cy="14.5" r="1.5" fill="#4f46c9"/>
+        <circle cx="16" cy="14.5" r="1.5" fill="#4f46c9"/>
+        <circle cx="20.5" cy="14.5" r="1.5" fill="#4f46c9"/>
+      </svg>
+      <div class="wordmark">FlowChat</div>
+    </div>
+
+    <div class="tagline">
+      Write a conversation as an ordinary Ruby method. FlowChat replays it across
+      stateless webhooks, on <b>USSD</b>, <b>WhatsApp</b>, <b>Telegram</b>, and
+      <b>HTTP</b>.
+    </div>
+
+    <div class="foot">
+      <span>Conversational interfaces for Rails</span>
+      <span class="r">Radioactive Labs</span>
+    </div>
+  </div>
+</body>
+</html>
