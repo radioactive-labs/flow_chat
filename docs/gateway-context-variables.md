@@ -198,6 +198,32 @@ end
 A turn is considered answered (`input.submitted?`) when it has text **or** an
 attachment — so a caption-less photo still satisfies a screen.
 
+#### What a screen should return
+
+`prompt.ask` and `prompt.select` return a **string** (the text, or your
+`transform`'s result), which is what gets persisted as the screen's answer. Keep
+returning those from screen blocks.
+
+`prompt.user_input` is the raw `FlowChat::Input` object — useful inside a
+`validate`/`transform` where you want the attachment, but **avoid returning it as
+a screen's value**:
+
+```ruby
+# Good — persists a string:
+name = app.screen(:name) { |prompt| prompt.ask "Your name?" }
+
+# Avoid — persists the whole Input object into the session store:
+raw  = app.screen(:raw)  { |prompt| prompt.user_input }
+```
+
+Whatever a screen block returns is stored in the session and serialized by the
+session store (`CacheSessionStore` uses `Marshal`). To keep this safe even if an
+`Input`/`Media` is stored this way, `FlowChat::Media` serializes without its live
+platform client — a deserialized media therefore has no client, so `#url` and
+`#download` return `nil` rather than raising. Fetch media during the turn it
+arrives (while the client is present); don't rely on downloading it from a
+persisted answer on a later turn.
+
 #### Lower-level access
 
 Prefer the accessors above. The raw request hashes remain available if you need them:

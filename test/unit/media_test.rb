@@ -50,14 +50,30 @@ class MediaTest < Minitest::Test
     client.verify
   end
 
-  def test_telegram_url_and_download_delegate_to_client
+  def test_telegram_url_delegates_to_client_and_download_fetches_resolved_url
     client = Minitest::Mock.new
+    # file_url is resolved once (getFile) and memoized; download reuses it via a
+    # direct fetch rather than issuing a second getFile through download_file.
     client.expect(:file_url, "https://tg/file.jpg", ["FID"])
-    client.expect(:download_file, "TGBYTES", ["FID"])
     m = FlowChat::Media.new({type: :photo, file_id: "FID"}, platform: :telegram, client: client)
     assert_equal "https://tg/file.jpg", m.url
-    assert_equal "TGBYTES", m.download
+
+    response = fake_response(success: true, body: "TGBYTES")
+    http = Minitest::Mock.new
+    http.expect(:use_ssl=, nil, [true])
+    http.expect(:get, response, ["/file.jpg"])
+    Net::HTTP.stub(:new, http) do
+      assert_equal "TGBYTES", m.download
+    end
     client.verify
+    http.verify
+  end
+
+  def test_download_returns_nil_when_client_lookup_raises
+    client = Object.new
+    client.define_singleton_method(:download_media) { |_id| raise "boom" }
+    m = FlowChat::Media.new({type: :image, id: "MID"}, platform: :whatsapp, client: client)
+    assert_nil m.download
   end
 
   def test_url_based_platform_uses_direct_url
@@ -108,6 +124,29 @@ class MediaTest < Minitest::Test
     Net::HTTP.stub(:new, ->(*) { raise SocketError, "getaddrinfo: nodename nor servname provided" }) do
       assert_nil m.download
     end
+  end
+
+  def test_media_is_marshal_safe_and_drops_client
+    client = Object.new
+    m = FlowChat::Media.new({type: :image, id: "MID", caption: "hi"}, platform: :whatsapp, client: client)
+
+    restored = Marshal.load(Marshal.dump(m))
+
+    assert_equal :image, restored.type
+    assert_equal "MID", restored.id
+    assert_equal "hi", restored.caption
+    assert_nil restored.client
+    assert_nil restored.download, "a client-less restored media degrades to nil, not a crash"
+  end
+
+  def test_input_holding_media_is_marshal_safe
+    m = FlowChat::Media.new({type: :image, id: "MID"}, platform: :whatsapp, client: Object.new)
+    input = FlowChat::Input.new(text: "hi", media: [m])
+
+    restored = Marshal.load(Marshal.dump(input))
+
+    assert_equal "hi", restored.text
+    assert_equal "MID", restored.media.first.id
   end
 
   private
