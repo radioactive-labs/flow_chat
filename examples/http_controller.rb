@@ -41,12 +41,12 @@ class HttpController < ApplicationController
       )
     end
 
-    processor.run WelcomeFlow, :main_page
+    processor.run HttpWelcomeFlow, :main_page
   end
 end
 
 # Example flow for HTTP gateway
-class WelcomeFlow < FlowChat::Flow
+class HttpWelcomeFlow < FlowChat::Flow
   def main_page
     name = app.screen(:name) do |prompt|
       prompt.ask "Hello! What's your name?",
@@ -87,7 +87,7 @@ class WelcomeFlow < FlowChat::Flow
     if continue
       features_demo
     else
-      app.say "Thanks for trying FlowChat HTTP Gateway! 👋"
+      app.say "Thanks for trying the FlowChat HTTP gateway!"
     end
   end
 
@@ -115,7 +115,7 @@ class WelcomeFlow < FlowChat::Flow
   def media_demo
     app.say "FlowChat supports rich media in HTTP responses!",
       media: {
-        url: "https://via.placeholder.com/300x200.png?text=FlowChat+HTTP",
+        url: "https://example.com/images/flowchat-http-demo.png",
         type: :image,
         caption: "FlowChat HTTP Gateway Demo"
       }
@@ -146,9 +146,9 @@ class WelcomeFlow < FlowChat::Flow
     timestamp = app.session.get("demo_timestamp")
 
     app.say "Session Demo:"
-    app.say "• This is visit ##{counter} in this session"
-    app.say "• Session started at: #{timestamp}"
-    app.say "• Session data persists across HTTP requests"
-    app.say "• Session ID: #{app.session.context["session.id"]}"
+    app.say "This is visit ##{counter} in this session"
+    app.say "Session started at: #{timestamp}"
+    app.say "Session data persists across HTTP requests"
+    app.say "Session ID: #{app.context["session.id"]}"
   end
 end

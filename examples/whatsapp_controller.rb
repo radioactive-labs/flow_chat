@@ -11,7 +11,7 @@ class WhatsappController < ApplicationController
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
-    processor.run WelcomeFlow, :main_page
+    processor.run WhatsappWelcomeFlow, :main_page
   rescue => e
     Rails.logger.error "Error processing WhatsApp webhook: #{e.message}"
     head :internal_server_error
@@ -30,7 +30,7 @@ class CustomWhatsappController < ApplicationController
       config.use_session_store FlowChat::Session::CacheSessionStore
     end
 
-    processor.run WelcomeFlow, :main_page
+    processor.run WhatsappWelcomeFlow, :main_page
   rescue => e
     Rails.logger.error "Error processing WhatsApp webhook: #{e.message}"
     head :internal_server_error
@@ -39,7 +39,8 @@ class CustomWhatsappController < ApplicationController
   private
 
   def build_whatsapp_config
-    config = FlowChat::Whatsapp::Configuration.new
+    # Configuration#initialize requires a name; pass nil for an anonymous one.
+    config = FlowChat::Whatsapp::Configuration.new(nil)
 
     case Rails.env
     when "development", "test"
@@ -66,7 +67,7 @@ class CustomWhatsappController < ApplicationController
 end
 
 # Example flow for WhatsApp
-class WelcomeFlow < FlowChat::Flow
+class WhatsappWelcomeFlow < FlowChat::Flow
   def main_page
     name = app.screen(:name) do |prompt|
       prompt.ask "Hello! What's your name?",
@@ -75,9 +76,9 @@ class WelcomeFlow < FlowChat::Flow
 
     choice = app.screen(:main_menu) do |prompt|
       prompt.select "Hi #{name}! How can I help?", {
-        "info" => "📋 Get Information",
-        "support" => "🆘 Contact Support",
-        "feedback" => "💬 Give Feedback"
+        "info" => "Get Information",
+        "support" => "Contact Support",
+        "feedback" => "Give Feedback"
       }
     end
 
@@ -94,36 +95,36 @@ class WelcomeFlow < FlowChat::Flow
   private
 
   def show_info
-    app.say "📍 Located at 123 Main Street\n🕒 Hours: Mon-Fri 9AM-6PM\n📞 Call: (555) 123-4567"
+    app.say "Located at 123 Main Street\nHours: Mon-Fri 9AM-6PM\nCall: (555) 123-4567"
   end
 
   def contact_support
     method = app.screen(:contact_method) do |prompt|
       prompt.select "How would you like to contact us?", {
-        "call" => "📞 Call Us",
-        "email" => "📧 Email Us"
+        "call" => "Call Us",
+        "email" => "Email Us"
       }
     end
 
     case method
     when "call"
-      app.say "📞 Call us at (555) 123-4567"
+      app.say "Call us at (555) 123-4567"
     when "email"
-      app.say "📧 Email us at support@example.com"
+      app.say "Email us at support@example.com"
     end
   end
 
   def collect_feedback
     rating = app.screen(:rating) do |prompt|
-      prompt.select "Rate our service:", ["⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐⭐⭐"]
+      prompt.select "Rate our service (1-5):", ["1", "2", "3", "4", "5"]
     end
 
     feedback = app.screen(:feedback_text) do |prompt|
       prompt.ask "Any additional comments?"
     end
 
-    save_feedback(app.phone_number, rating, feedback)
-    app.say "Thank you for your feedback! 🙏"
+    save_feedback(app.msisdn, rating, feedback)
+    app.say "Thank you for your feedback!"
   end
 
   def save_feedback(phone, rating, feedback)

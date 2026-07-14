@@ -21,15 +21,17 @@
 # 3. Named Configuration Example (for multi-tenant apps)
 class MultiTenantIntercomSetup
   def self.setup_configurations
-    # Main company configuration
-    FlowChat::Intercom::Configuration.new("main") do |config|
+    # Passing a name registers the configuration under that name, so you can
+    # fetch it later with Configuration.get(:main). Set attributes with tap;
+    # Configuration.new does not yield a block.
+    FlowChat::Intercom::Configuration.new("main").tap do |config|
       config.access_token = Rails.application.credentials.dig(:intercom, :main, :access_token)
       config.client_secret = Rails.application.credentials.dig(:intercom, :main, :client_secret)
       config.admin_id = Rails.application.credentials.dig(:intercom, :main, :admin_id)
     end
 
     # Enterprise customer configuration
-    FlowChat::Intercom::Configuration.new("enterprise") do |config|
+    FlowChat::Intercom::Configuration.new("enterprise").tap do |config|
       config.access_token = Rails.application.credentials.dig(:intercom, :enterprise, :access_token)
       config.client_secret = Rails.application.credentials.dig(:intercom, :enterprise, :client_secret)
       config.admin_id = Rails.application.credentials.dig(:intercom, :enterprise, :admin_id)
@@ -53,12 +55,12 @@ class TenantAwareIntercomController < ApplicationController
   skip_forgery_protection
 
   def webhook
-    # Get tenant-specific configuration
+    # Fetch the named configuration registered in setup_configurations above.
     tenant = params[:tenant] || "main"
-    FlowChat::Intercom::Configuration.get(tenant)
+    tenant_config = FlowChat::Intercom::Configuration.get(tenant)
 
     processor = FlowChat::Processor.new(self) do |config|
-      config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, config
+      config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, tenant_config
       config.use_session_store FlowChat::Session::CacheSessionStore
       config.use_session_config(
         boundaries: [:flow, :url],  # Separate sessions per tenant
