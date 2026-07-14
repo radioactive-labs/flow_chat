@@ -223,9 +223,32 @@ FlowChat emits `ActiveSupport::Notifications` events for flow execution, session
 
 FlowChat ships a web simulator for driving flows locally without a real gateway, useful during development. It requires `FlowChat::Config.simulator_secret` to be set. See [docs/testing.md](docs/testing.md).
 
+## Documentation
+
+Guides:
+
+- [Getting started](docs/getting-started.md)
+- [Configuration](docs/configuration.md)
+- [Testing](docs/testing.md)
+
+Platforms:
+
+- [USSD](docs/platforms/ussd.md)
+- [WhatsApp](docs/platforms/whatsapp.md)
+- [Telegram](docs/platforms/telegram.md)
+
+Internals and advanced:
+
+- [Architecture](docs/architecture.md)
+- [Building a gateway](docs/gateway-development.md)
+- [Gateway context variables](docs/gateway-context-variables.md)
+- [Async and background processing](docs/async-background-processing.md)
+- [Factory pattern](docs/factory-pattern.md)
+- [Instrumentation](docs/instrumentation.md)
+
 ## Development
 
-Run the test suite with `rake test`. To run a single file, use `ruby -Itest test/unit/some_test.rb`. Architecture background is in [docs/architecture.md](docs/architecture.md) and [docs/getting-started.md](docs/getting-started.md).
+Run the test suite with `rake test`. To run a single file, use `ruby -Itest test/unit/some_test.rb`.
 
 ## Contributing
 
