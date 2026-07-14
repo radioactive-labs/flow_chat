@@ -35,7 +35,12 @@ module FlowChat
     def go_back
       return false if navigation_stack.empty?
 
-      @input_consumed = true
+      # go_back raises RestartFlow, which the executor handles by rebuilding a
+      # fresh App from this same context. A per-instance @input_consumed flag
+      # would be lost on that rebuild, so clear the turn on the shared context
+      # too — otherwise the restarted screen re-consumes the back-trigger
+      # input/attachment as its answer instead of re-prompting.
+      clear_turn!
       current_screen = navigation_stack.last
       session.delete(current_screen)
 
@@ -110,6 +115,18 @@ module FlowChat
     end
 
     protected
+
+    # Discard the current turn so a rebuilt App (after RestartFlow) sees an empty
+    # inbound message instead of re-consuming it. Clears both this instance and
+    # the shared context, since the restart builds a new instance from context.
+    def clear_turn!
+      @input_consumed = true
+      @input = FlowChat::Input.new
+      context.input = nil
+      context["request.media"] = nil
+      context["request.location"] = nil
+      context["request.contact"] = nil
+    end
 
     # The turn as a FlowChat::Input value object. Its #present? accounts for
     # attachments, so a caption-less photo still answers a screen even though its

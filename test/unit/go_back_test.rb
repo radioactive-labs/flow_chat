@@ -106,6 +106,33 @@ class GoBackTest < Minitest::Test
     assert_nil app.session.get(:screen2)  # Current screen deleted
   end
 
+  def test_go_back_does_not_let_restarted_screen_consume_the_back_trigger_input
+    # go_back raises RestartFlow; the executor rebuilds a fresh App from the same
+    # context. The back-trigger input ("0") must NOT be consumed as the answer to
+    # the re-prompted screen — it should re-prompt instead.
+    @context["request.platform"] = :ussd
+    @context.input = "A"
+    first = FlowChat::App.new(@context)
+    first.screen(:one) { |prompt| prompt.ask("one?") }  # consumes "A"
+
+    # Second request: user hits "back" while on screen :two.
+    @context.input = "0"
+    second = FlowChat::App.new(@context)
+    second.screen(:one) { |prompt| prompt.ask("one?") }  # cached "A"
+    assert_raises(FlowChat::Interrupt::RestartFlow) do
+      second.screen(:two) { |prompt| second.go_back }
+    end
+
+    # Executor retry: brand-new App from the same (now-cleared) context.
+    third = FlowChat::App.new(@context)
+    third.screen(:one) { |prompt| prompt.ask("one?") }  # cached "A"
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
+      third.screen(:two) { |prompt| prompt.ask("two?") }
+    end
+    assert_equal "two?", error.prompt
+    assert_nil third.session.get(:two), "back-trigger input must not answer the restarted screen"
+  end
+
   def test_go_back_returns_false_with_empty_navigation_stack
     app = FlowChat::App.new(@context)
     assert_empty app.navigation_stack
