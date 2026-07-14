@@ -40,7 +40,29 @@ end
 match "/whatsapp/webhook", to: "whatsapp#webhook", via: [:get, :post]
 ```
 
-Both verbs are needed: Meta sends a `GET` with `hub.mode=subscribe` to verify the endpoint (the gateway answers it using your `verify_token`), and `POST`s the actual messages. Each `POST` is checked against `X-Hub-Signature-256` using the app secret; a request with a bad signature is answered `200 OK` without processing, so Meta stops retrying it. Pass a named configuration object as the second argument to `use_gateway` when you run more than one WhatsApp number.
+Both verbs are needed: Meta sends a `GET` with `hub.mode=subscribe` to verify the endpoint (the gateway answers it using your `verify_token`), and `POST`s the actual messages. Each `POST` is checked against `X-Hub-Signature-256` using the app secret; a request with a bad signature is answered `200 OK` without processing, so Meta stops retrying it.
+
+With no second argument, `use_gateway` loads credentials through `FlowChat::Whatsapp::Configuration.from_credentials`, which reads the Rails credentials or environment variables above. That is the setup shown here.
+
+## Explicit and multi-tenant configuration
+
+To run more than one WhatsApp number, or to load credentials from somewhere other than Rails credentials, build a `FlowChat::Whatsapp::Configuration` and pass it as the second argument to `use_gateway`.
+
+```ruby
+config = FlowChat::Whatsapp::Configuration.new(:support).tap do |c|
+  c.access_token = tenant.whatsapp_access_token
+  c.phone_number_id = tenant.whatsapp_phone_number_id
+  c.verify_token = tenant.whatsapp_verify_token
+  c.app_secret = tenant.whatsapp_app_secret
+end
+
+processor = FlowChat::Processor.new(self) do |cfg|
+  cfg.use_gateway FlowChat::Whatsapp::Gateway::CloudApi, config
+  cfg.use_session_store FlowChat::Session::CacheSessionStore
+end
+```
+
+Passing a name to `new` registers the configuration under that name, so you can retrieve it later with `FlowChat::Whatsapp::Configuration.get(:support)`. For an unnamed configuration, use `FlowChat::Whatsapp::Configuration.new(nil)`. The configuration attributes are `access_token`, `phone_number_id`, `verify_token`, `app_secret`, `business_account_id`, and `skip_signature_validation` (set it to `true` to bypass the `X-Hub-Signature-256` check, for local testing only).
 
 ## The flow is the same
 

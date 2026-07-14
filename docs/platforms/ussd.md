@@ -27,7 +27,7 @@ end
 post "/ussd", to: "ussd#webhook"
 ```
 
-The Nalo gateway reads `USERID`, `MSISDN`, and `USERDATA` from the request and renders a JSON response with `MSG` (the text to show) and `MSGTYPE` (`true` while the session continues, `false` when it ends). The phone number is normalized to E.164 and exposed as `app.msisdn`.
+The Nalo gateway reads `USERID`, `MSISDN`, and `USERDATA` from the request and renders a JSON response with `MSG` (the text to show) and `MSGTYPE` (`true` while the session continues, `false` when it ends). The phone number is normalized to E.164 and exposed as `app.msisdn`. Nalo takes no configuration object; the aggregator identifies your service by the endpoint URL, so there are no per-gateway credentials to pass, unlike the WhatsApp and Telegram gateways.
 
 ## The flow is the same
 

@@ -38,7 +38,27 @@ end
 post "/telegram/webhook", to: "telegram#webhook"
 ```
 
-Telegram delivers updates by `POST`. Register your webhook URL with the Bot API's `setWebhook` method, passing the same `secret_token` you configured so Telegram includes it on each request. Pass a named configuration object as the second argument to `use_gateway` to run more than one bot.
+Telegram delivers updates by `POST`. Register your webhook URL with the Bot API's `setWebhook` method, passing the same `secret_token` you configured so Telegram includes it on each request.
+
+With no second argument, `use_gateway` loads credentials through `FlowChat::Telegram::Configuration.from_credentials`, which reads the Rails credentials or environment variables above. That is the setup shown here.
+
+## Explicit and multi-bot configuration
+
+To run more than one bot, or to load the token from somewhere other than Rails credentials, build a `FlowChat::Telegram::Configuration` and pass it as the second argument to `use_gateway`.
+
+```ruby
+config = FlowChat::Telegram::Configuration.new(:support).tap do |c|
+  c.bot_token = tenant.telegram_bot_token
+  c.secret_token = tenant.telegram_secret_token
+end
+
+processor = FlowChat::Processor.new(self) do |cfg|
+  cfg.use_gateway FlowChat::Telegram::Gateway::BotApi, config
+  cfg.use_session_store FlowChat::Session::CacheSessionStore
+end
+```
+
+Passing a name to `new` registers the configuration under that name, so you can retrieve it later with `FlowChat::Telegram::Configuration.get(:support)`. For an unnamed configuration, use `FlowChat::Telegram::Configuration.new(nil)`. The configuration attributes are `bot_token`, `secret_token`, and `skip_signature_validation` (set it to `true` to bypass the secret-token check, for local testing only).
 
 ## The flow is the same
 
