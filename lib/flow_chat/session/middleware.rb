@@ -161,8 +161,11 @@ module FlowChat
       end
 
       def hash_identifier(identifier)
-        # Use SHA256 but only take first 8 characters for reasonable session IDs
-        Digest::SHA256.hexdigest(identifier.to_s)[0, 8]
+        # Full SHA256 hex (64 chars). Truncating trades collision resistance for
+        # a shorter key: 8 hex chars is only 32 bits, so distinct users start
+        # colliding (birthday bound) around ~77k identifiers, and a collision
+        # means two users share a session. The full digest removes that.
+        Digest::SHA256.hexdigest(identifier.to_s)
       end
     end
   end

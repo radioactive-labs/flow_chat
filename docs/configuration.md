@@ -85,9 +85,11 @@ flow_name : platform : gateway : url : identifier
 The order of the parts is fixed regardless of the order you list boundaries in. With the default boundaries `[:flow, :gateway, :platform]`, a WhatsApp user in `RegistrationFlow` gets:
 
 ```
-registration_flow:whatsapp:whatsapp_cloud_api:a1b2c3d4
+registration_flow:whatsapp:whatsapp_cloud_api:9f86d0818...
      (flow)          (platform)     (gateway)   (hashed msisdn)
 ```
+
+The hashed identifier is shown truncated here for readability; the real key carries the full 64-character SHA256.
 
 ### What each boundary isolates
 
@@ -109,7 +111,7 @@ The identifier is chosen independently of the boundaries and always comes last. 
 | Type | Value | Hashed |
 |---|---|---|
 | `:request_id` | `context["request.id"]` | Never. It is already opaque. On USSD it is the telco session id, which rotates on timeout, so the session is ephemeral. |
-| `:msisdn` | `context["request.msisdn"]` | Yes, when `hash_identifiers` is true (the default): SHA256, first 8 characters. |
+| `:msisdn` | `context["request.msisdn"]` | Yes, when `hash_identifiers` is true (the default): the full SHA256 hex, 64 characters. |
 | `:user_id` | `context["request.user_id"]` | Yes, when `hash_identifiers` is true. |
 
 So with the default `hash_identifiers: true`, a phone number never appears in the session key in the clear, while a `request_id` passes through untouched.
@@ -125,7 +127,7 @@ registration_flow:ussd:nalo:1699_telco_session_42
 The same, but with `use_durable_sessions` (identifier `:user_id`, which Nalo sets equal to the msisdn) and hashing on. Now the user can time out and dial back into the same session:
 
 ```
-registration_flow:ussd:nalo:a1b2c3d4
+registration_flow:ussd:nalo:9f86d0818...
 ```
 
 ### Configuring sessions per processor
