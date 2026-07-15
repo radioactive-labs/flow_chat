@@ -89,7 +89,7 @@ registration_flow:whatsapp:whatsapp_cloud_api:9f86d0818...
      (flow)          (platform)     (gateway)   (hashed msisdn)
 ```
 
-The hashed identifier is shown truncated here for readability; the real key carries the full 64-character SHA256.
+The hashed identifier is shown truncated here for readability; the real key carries the 32-character (128-bit) SHA256 prefix.
 
 ### What each boundary isolates
 
@@ -111,7 +111,7 @@ The identifier is chosen independently of the boundaries and always comes last. 
 | Type | Value | Hashed |
 |---|---|---|
 | `:request_id` | `context["request.id"]` | Never. It is already opaque. On USSD it is the telco session id, which rotates on timeout, so the session is ephemeral. |
-| `:msisdn` | `context["request.msisdn"]` | Yes, when `hash_identifiers` is true (the default): the full SHA256 hex, 64 characters. |
+| `:msisdn` | `context["request.msisdn"]` | Yes, when `hash_identifiers` is true (the default): the first 32 hex characters of SHA256 (128 bits). |
 | `:user_id` | `context["request.user_id"]` | Yes, when `hash_identifiers` is true. |
 
 So with the default `hash_identifiers: true`, a phone number never appears in the session key in the clear, while a `request_id` passes through untouched.

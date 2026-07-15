@@ -267,11 +267,11 @@ class SessionMiddlewareTest < Minitest::Test
     # Should not contain raw phone number
     refute_includes session_id, "+256700123456"
 
-    # Should contain the full SHA256 hex of the phone number (64 characters)
+    # Should contain the hashed phone number (128-bit, 32 hex characters)
     parts = session_id.split(":")
     hashed_part = parts.last
-    assert_equal 64, hashed_part.length
-    assert_match(/^[a-f0-9]{64}$/, hashed_part)
+    assert_equal 32, hashed_part.length
+    assert_match(/^[a-f0-9]{32}$/, hashed_part)
   end
 
   def test_phone_number_hashing_disabled
@@ -407,8 +407,8 @@ class SessionMiddlewareTest < Minitest::Test
 
     hashed = middleware.send(:hash_identifier, "+256700123456")
 
-    # Should be the full SHA256 hex (64 characters)
-    assert_equal 64, hashed.length
+    # Should be 128-bit (32 hex characters)
+    assert_equal 32, hashed.length
 
     # Should be hexadecimal
     assert_match(/^[a-f0-9]+$/, hashed)

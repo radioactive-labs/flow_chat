@@ -161,11 +161,13 @@ module FlowChat
       end
 
       def hash_identifier(identifier)
-        # Full SHA256 hex (64 chars). Truncating trades collision resistance for
-        # a shorter key: 8 hex chars is only 32 bits, so distinct users start
-        # colliding (birthday bound) around ~77k identifiers, and a collision
-        # means two users share a session. The full digest removes that.
-        Digest::SHA256.hexdigest(identifier.to_s)
+        # First 32 hex chars of SHA256 = 128 bits. The old 8-char (32-bit)
+        # truncation was far too short: distinct users started colliding
+        # (birthday bound) around ~77k identifiers, and a collision means two
+        # users share a session. 128 bits pushes that boundary past ~2^64
+        # identifiers (collision-safe in practice) at half the length of the
+        # full 64-char digest.
+        Digest::SHA256.hexdigest(identifier.to_s)[0, 32]
       end
     end
   end
