@@ -14,11 +14,10 @@ class IntercomController < ApplicationController
       # Use cache-based session storage for longer-lived sessions
       config.use_session_store FlowChat::Session::CacheSessionStore
 
-      # Configure session boundaries - use conversation ID for session isolation
-      config.use_session_config(
-        boundaries: [:conversation], # Each conversation gets its own session
-        identifier: :conversation_id  # Use conversation ID as session key
-      )
+      # The Intercom gateway sets request.id to the conversation id, and the
+      # default identifier (:request_id) uses it, so each conversation already
+      # gets its own session. Scope by flow as well.
+      config.use_session_config(boundaries: [:flow])
     end
 
     # Run the customer support flow
@@ -160,7 +159,7 @@ class CustomerSupportFlow < FlowChat::Flow
   end
 
   def escalate_to_human(reason, team_id: nil)
-    conversation_id = app.context["request.conversation_id"]
+    conversation_id = app.context["request.id"]
 
     # Business logic: Use Intercom manager for conversation control
     if app.gateway == :intercom_api

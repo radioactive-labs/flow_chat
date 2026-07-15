@@ -102,5 +102,4 @@ end
 # - Different API versions (v1, v2, etc.)
 # - Multi-tenant endpoints with different configurations
 # - Legacy endpoints alongside new ones
-# - External HTTP servers (run examples/http_simulator_test.rb)
 # - Different flow implementations for different endpoints

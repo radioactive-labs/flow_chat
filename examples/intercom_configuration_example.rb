@@ -62,10 +62,10 @@ class TenantAwareIntercomController < ApplicationController
     processor = FlowChat::Processor.new(self) do |config|
       config.use_gateway FlowChat::Intercom::Gateway::IntercomApi, tenant_config
       config.use_session_store FlowChat::Session::CacheSessionStore
-      config.use_session_config(
-        boundaries: [:flow, :url],  # Separate sessions per tenant
-        identifier: :conversation_id
-      )
+      # request.id is the conversation id (the default :request_id identifier),
+      # so each conversation gets its own session. The :url boundary separates
+      # tenants that share the flow.
+      config.use_session_config(boundaries: [:flow, :url])
     end
 
     processor.run CustomerSupportFlow, :handle_conversation
@@ -97,24 +97,17 @@ end
 #    - Check logs for any signature validation issues
 
 # 7. Finding Your Admin ID (Required)
-# To find your admin ID for message sending, use this Rails console command:
+# The admin_id identifies which admin sends messages to a conversation.
+# FlowChat's own client only sends messages, so list admins with the official
+# intercom gem in a Rails console:
 #
 #   rails console
 #   ```
-#     config = FlowChat::Intercom::Configuration.from_credentials
-#     client = FlowChat::Intercom::Client.new(config)
-#     result = client.list_admins
-#     result["admins"].each { |admin| puts "#{admin["name"]} (#{admin["email"]}) - ID: #{admin["id"]}" }
+#     intercom = Intercom::Client.new(token: Rails.application.credentials.dig(:intercom, :access_token))
+#     intercom.admins.all.each { |admin| puts "#{admin.name} (#{admin.email}) - ID: #{admin.id}" }
 #   ```
 #
-# This will display all admins with their IDs. Copy the ID of the admin you want to use for sending messages.
-#
-# Alternative methods:
-# 1. Go to your Intercom Developer Hub (https://developers.intercom.com/)
-# 2. Navigate to your app → Configure → Basic Information
-# 3. Find the Admin ID in the app details
-#
-# The admin_id is required for sending messages from FlowChat to Intercom conversations.
-# The API uses this to identify which admin is sending the message.
+# Copy the ID of the admin you want to send from. You can also find it in the
+# Intercom Developer Hub under your app's Configure -> Basic Information.
 #
 # Note: The old bot_user_id configuration is no longer needed.

@@ -33,11 +33,13 @@ class HttpController < ApplicationController
       config.use_gateway FlowChat::Http::Gateway::Simple
       config.use_session_store FlowChat::Session::CacheSessionStore
 
-      # Configure session management
+      # The HTTP gateway sets request.user_id from the request's user_id, so key
+      # sessions on it. (:msisdn would be nil here, collapsing every caller into
+      # one session.)
       config.use_session_config(
         boundaries: [:flow, :platform],
         hash_identifiers: true,
-        identifier: :msisdn  # Use phone number for durable sessions
+        identifier: :user_id
       )
     end
 
