@@ -29,16 +29,10 @@ end
 # Example flow for handling customer conversations via Intercom
 class CustomerSupportFlow < FlowChat::Flow
   def handle_conversation
-    # Greet the user
-    greeting = if first_message?
-      "Hello! I'm here to help you. How can I assist you today?"
-    else
-      "Thanks for your message! Let me help you with that."
-    end
-
-    # Get the user's inquiry
+    # Ask the opening question. The prompt is only shown on the first unanswered
+    # turn; once the user replies, screen(:inquiry) returns their stored answer.
     inquiry = app.screen(:inquiry) do |prompt|
-      prompt.ask greeting
+      prompt.ask "Hello! I'm here to help you. How can I assist you today?"
     end
 
     # Categorize the inquiry and provide appropriate response
@@ -60,11 +54,6 @@ class CustomerSupportFlow < FlowChat::Flow
   end
 
   private
-
-  def first_message?
-    # Check if this is the first message in the conversation
-    app.session.get("message_count").nil?
-  end
 
   def categorize_inquiry(inquiry)
     # Simple keyword-based categorization
