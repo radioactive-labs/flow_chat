@@ -16,6 +16,17 @@ module FlowChat
         # Default webhook topics to process
         DEFAULT_WEBHOOK_TOPICS = ["conversation.user.created", "conversation.user.replied"].freeze
 
+        # Configure Intercom specific middleware stack
+        def self.configure_middleware_stack(builder, custom_middleware)
+          FlowChat.logger.debug { "IntercomApi: Configuring Intercom middleware stack" }
+
+          builder.use custom_middleware
+          FlowChat.logger.debug { "IntercomApi: Added custom middleware" }
+
+          builder.use FlowChat::Intercom::Middleware::ChoiceMapper
+          FlowChat.logger.debug { "IntercomApi: Added Intercom::Middleware::ChoiceMapper" }
+        end
+
         def initialize(app, config = nil, additional_webhook_topics = nil)
           @app = app
           @config = config || FlowChat::Intercom::Configuration.from_credentials

@@ -9,6 +9,17 @@ module FlowChat
 
         attr_reader :context
 
+        # Configure HTTP specific middleware stack
+        def self.configure_middleware_stack(builder, custom_middleware)
+          FlowChat.logger.debug { "Simple: Configuring HTTP middleware stack" }
+
+          builder.use custom_middleware
+          FlowChat.logger.debug { "Simple: Added custom middleware" }
+
+          builder.use FlowChat::Http::Middleware::ChoiceMapper
+          FlowChat.logger.debug { "Simple: Added Http::Middleware::ChoiceMapper" }
+        end
+
         def initialize(app, user_params)
           @app = app
           @user_params = user_params
