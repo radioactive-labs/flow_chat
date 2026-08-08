@@ -498,6 +498,8 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
     assert_equal :telegram, event.payload[:platform]
     assert_equal "123456", event.payload[:bot_id]
     assert_includes event.payload[:message], "Errno::ECONNREFUSED"
+    assert_equal "Errno::ECONNREFUSED", event.payload[:error_class],
+      "the class is the classification; the message is only for logs"
   ensure
     ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
   end

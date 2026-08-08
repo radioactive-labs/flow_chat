@@ -199,6 +199,79 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
     end
   end
 
+  # A subscriber deciding what to do about a failure reads the structured keys.
+  # Matching on the message would break the moment someone rewords a log line.
+
+  def test_authentication_error_is_typed_and_carries_its_http_code
+    error = ::Intercom::AuthenticationError.new("Invalid token", http_code: 401)
+
+    @client.intercom.stub(:conversations, ->(*) { raise error }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") { |e| events << e }
+
+      assert_raises(FlowChat::Intercom::ConfigurationError) do
+        @client.send_message("conv_123", "Hello")
+      end
+
+      payload = events.first.payload
+      assert_equal "authentication", payload[:error_type]
+      assert_equal 401, payload[:error_code]
+      assert_equal "Intercom::AuthenticationError", payload[:error_class]
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_resource_not_found_is_typed
+    error = ::Intercom::ResourceNotFound.new("Conversation not found", http_code: 404)
+
+    @client.intercom.stub(:conversations, ->(*) { raise error }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") { |e| events << e }
+
+      @client.send_message("conv_missing", "Hello")
+
+      payload = events.first.payload
+      assert_equal "resource_not_found", payload[:error_type]
+      assert_equal 404, payload[:error_code]
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_server_error_is_typed
+    error = ::Intercom::ServerError.new("Internal error", http_code: 500)
+
+    @client.intercom.stub(:conversations, ->(*) { raise error }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") { |e| events << e }
+
+      @client.send_message("conv_456", "Hello")
+
+      payload = events.first.payload
+      assert_equal "server_error", payload[:error_type]
+      assert_equal 500, payload[:error_code]
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
+  def test_a_non_intercom_exception_is_classified_by_its_class
+    @client.intercom.stub(:conversations, ->(*) { raise ArgumentError.new("bad input") }) do
+      events = []
+      ActiveSupport::Notifications.subscribe("api.error.flow_chat") { |e| events << e }
+
+      @client.send_message("conv_789", "Hello")
+
+      payload = events.first.payload
+      assert_equal "ArgumentError", payload[:error_class]
+      assert_nil payload[:error_type], "only a failure Intercom names gets a type"
+      assert_nil payload[:error_code]
+    ensure
+      ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
+    end
+  end
+
   def test_resource_not_found_instruments_api_error_event
     @client.intercom.stub(:conversations, ->(*) { raise ::Intercom::ResourceNotFound.new("Conversation not found") }) do
       events = []

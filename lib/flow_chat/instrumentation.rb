@@ -50,11 +50,24 @@ module FlowChat
     end
 
     # Shared helper for reporting API errors with instrumentation and Rails.error
-    # @param message [String] Error message
+    #
+    # `message` is prose for a human reading logs. Subscribers deciding what to
+    # do about an error should read the structured keys instead, so that
+    # rewording a message never changes behaviour somewhere else:
+    #
+    #   error_class  the exception's class, filled in here from `error`
+    #   error_type   what kind of failure it is, named by the adapter
+    #   error_code   the platform's own code, where it gives one
+    #
+    # @param message [String] Human readable description, for logs
     # @param error [Exception, nil] Original exception if available
     # @param context [Hash] Platform-specific error context (must include :platform)
     def self.report_api_error(message, error: nil, **context)
       error_context = context.compact
+
+      # An exception's class is a classification the caller already made. Carry
+      # it so a subscriber can branch on it rather than parsing the message.
+      error_context[:error_class] ||= error.class.name if error
 
       # Instrument for custom subscribers
       instrument(Events::API_ERROR, error_context.merge(message: message))

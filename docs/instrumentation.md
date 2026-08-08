@@ -25,6 +25,35 @@ Every FlowChat event is published under its name with a `.flow_chat` suffix. The
 
 Payloads are enriched with `request_id`, `session_id`, `flow_name`, `gateway`, and `platform` when the context has them, plus a `timestamp`.
 
+## Reacting to `api.error`
+
+The `message` on an `api.error` payload is prose, written for someone reading
+logs. Do not branch on it: rewording a log line would change your behaviour.
+Read these instead.
+
+| key | meaning |
+|---|---|
+| `error_class` | The exception's class, whenever one was raised. |
+| `error_type` | What kind of failure it is, named by the adapter. Intercom reports `authentication`, `resource_not_found` and `server_error`; WhatsApp passes through Meta's own `type`, such as `OAuthException`. |
+| `error_code` | The platform's own code. Telegram's `error_code`, Meta's `code`, Intercom's HTTP status. |
+
+WhatsApp also carries `error_subcode` and `error_message` from Meta, and
+Telegram carries `error_description`. Identify the connection from
+`phone_number_id`, `bot_id` or `app_id` as appropriate.
+
+Not every failure reports. Network timeouts are re-raised so your own retry
+logic sees them, and an Intercom rate limit raises `RateLimitError` rather than
+reporting, so a subscriber reacting to `api.error` will not mistake either for
+a dead credential.
+
+```ruby
+ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |*, payload|
+  next unless payload[:error_type] == "authentication"
+
+  AlertOwner.call(platform: payload[:platform], app_id: payload[:app_id])
+end
+```
+
 ## Subscribing
 
 Subscribe with `ActiveSupport::Notifications`, remembering the `.flow_chat` suffix:
