@@ -87,11 +87,13 @@ module FlowChat
         result
       rescue ::Intercom::ResourceNotFound => e
         FlowChat.logger.error { "Intercom::Client: Conversation not found: #{e.message}" }
-        report_api_error("Intercom conversation not found", error: e, conversation_id: conversation_id)
+        report_api_error("Intercom conversation not found", error: e, error_type: "resource_not_found",
+          conversation_id: conversation_id)
         nil
       rescue ::Intercom::AuthenticationError => e
         FlowChat.logger.error { "Intercom::Client: Authentication failed - check access token" }
-        report_api_error("Intercom authentication failed", error: e, conversation_id: conversation_id)
+        report_api_error("Intercom authentication failed", error: e, error_type: "authentication",
+          conversation_id: conversation_id)
         raise ConfigurationError, "Invalid Intercom access token"
       rescue ::Intercom::RateLimitExceeded
         retry_after = 60
@@ -99,7 +101,8 @@ module FlowChat
         raise RateLimitError.new("Intercom API rate limit exceeded", retry_after)
       rescue ::Intercom::ServerError => e
         FlowChat.logger.error { "Intercom::Client: Server error: #{e.message}" }
-        report_api_error("Intercom server error", error: e, conversation_id: conversation_id)
+        report_api_error("Intercom server error", error: e, error_type: "server_error",
+          conversation_id: conversation_id)
         nil
       rescue => e
         FlowChat.logger.error { "Intercom::Client: API request exception: #{e.class.name}: #{e.message}" }
@@ -140,12 +143,17 @@ module FlowChat
 
       private
 
-      def report_api_error(message, error: nil, conversation_id: nil)
+      # The Intercom gem raises a distinct class per failure and carries the
+      # HTTP status on it. Both say more than the message does, so pass them on
+      # rather than leaving a subscriber to read prose.
+      def report_api_error(message, error: nil, error_type: nil, conversation_id: nil)
         FlowChat::Instrumentation.report_api_error(
           message,
           error: error,
           platform: :intercom,
           app_id: @app_id,
+          error_type: error_type,
+          error_code: (error.http_code if error.is_a?(::Intercom::IntercomError)),
           conversation_id: conversation_id,
           admin_id: @config.admin_id
         )

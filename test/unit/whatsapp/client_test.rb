@@ -603,6 +603,8 @@ class WhatsappClientTest < Minitest::Test
     event = events.first
     assert_equal :whatsapp, event.payload[:platform]
     assert_includes event.payload[:message], "Errno::ECONNREFUSED"
+    assert_equal "Errno::ECONNREFUSED", event.payload[:error_class],
+      "the class is the classification; the message is only for logs"
   ensure
     ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
   end

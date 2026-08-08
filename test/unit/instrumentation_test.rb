@@ -192,6 +192,45 @@ class InstrumentationTest < Minitest::Test
     assert event[:payload][:timestamp]
   end
 
+  def test_report_api_error_carries_the_exception_class
+    @test_events.clear
+
+    FlowChat::Instrumentation.report_api_error(
+      "Wrapped error",
+      error: ArgumentError.new("bad input"),
+      platform: :whatsapp
+    )
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    refute_nil event
+
+    assert_equal "ArgumentError", event[:payload][:error_class],
+      "a subscriber should be able to branch on the class without parsing the message"
+  end
+
+  def test_report_api_error_leaves_an_explicit_error_class_alone
+    @test_events.clear
+
+    FlowChat::Instrumentation.report_api_error(
+      "Wrapped error",
+      error: ArgumentError.new("bad input"),
+      error_class: "Chosen::Class",
+      platform: :whatsapp
+    )
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    assert_equal "Chosen::Class", event[:payload][:error_class]
+  end
+
+  def test_report_api_error_omits_the_exception_class_when_there_is_no_exception
+    @test_events.clear
+
+    FlowChat::Instrumentation.report_api_error("No exception here", platform: :whatsapp)
+
+    event = @test_events.find { |e| e[:name] == "api.error.flow_chat" }
+    refute event[:payload].key?(:error_class)
+  end
+
   def test_report_api_error_with_exception
     @test_events.clear
 
