@@ -345,7 +345,16 @@ module FlowChat
           response = @app.call(context)
           if response
             _type, prompt, choices, media = response
-            result = @client.send_message(context["request.id"], prompt, choices: choices, media: media)
+            result = report_delivery_failure(
+              context,
+              to: context["request.user_id"],
+              conversation_id: context["request.id"],
+              message: prompt,
+              gateway: :intercom_api,
+              platform: :intercom
+            ) do
+              @client.send_message(context["request.id"], prompt, choices: choices, media: media)
+            end
             context["intercom.message_result"] = result
 
             # Instrument message sent

@@ -280,7 +280,15 @@ module FlowChat
           return unless response
 
           _type, prompt, choices, media = response
-          @client.send_message(context["request.id"], prompt, choices: choices, media: media)
+          report_delivery_failure(
+            context,
+            to: context["request.id"],
+            message: prompt,
+            gateway: :telegram_bot_api,
+            platform: :telegram
+          ) do
+            @client.send_message(context["request.id"], prompt, choices: choices, media: media)
+          end
 
           instrument(Events::MESSAGE_SENT, {
             to: context["request.id"],

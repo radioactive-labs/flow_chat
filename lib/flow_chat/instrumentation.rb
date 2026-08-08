@@ -18,6 +18,60 @@ module FlowChat
       self.class.instrument(event_name, enriched_payload, &block)
     end
 
+    # Wraps a delivery so a reply the platform would not take is reported.
+    #
+    # A gateway sends after the middleware stack has returned. An app that
+    # records what the flow said has therefore already recorded it, and
+    # recorded it as having gone out, before anything knows whether it did.
+    # The send is the only place that learns otherwise, and it is downstream of
+    # everything that could act on it.
+    #
+    # Reported two ways, because two different kinds of reader want it.
+    #
+    # The event is a broadcast, and takes the same shape its gateway gives
+    # MESSAGE_SENT: what was being sent and where, and nothing else. Anyone may
+    # subscribe, including tools that write whatever they are handed straight
+    # into a log, so it carries no more than the send itself already announces.
+    #
+    # The callback is the app that owns this turn, acting on records only it
+    # knows about. It gets the whole context because it is the app's own code,
+    # configured by the app, and reading what the app put there. That is not
+    # true of a subscriber, and the context holds the gateway client and the
+    # raw inbound body.
+    #
+    # Re-raises whatever the send raised: this reports a failure, it does not
+    # handle one.
+    def report_delivery_failure(context, **payload)
+      yield
+    rescue => error
+      report_to_subscribers(error, payload)
+      report_to_app(context, error)
+      raise error
+    end
+
+    # Neither reader may replace the delivery error with one of its own, which
+    # would hide the failure they are being told about. Notifications gather
+    # subscriber errors and re-raise them, so both are reachable.
+    def report_to_subscribers(error, payload)
+      instrument(Events::MESSAGE_DELIVERY_FAILED, payload.merge(
+        error_class: error.class.name,
+        message: error.message
+      ))
+    rescue => subscriber_error
+      FlowChat.logger.error do
+        "Instrumentation: a #{Events::MESSAGE_DELIVERY_FAILED} subscriber raised " \
+          "#{subscriber_error.class}: #{subscriber_error.message}"
+      end
+    end
+
+    def report_to_app(context, error)
+      FlowChat::Config.on_delivery_failure&.call(context, error)
+    rescue => callback_error
+      FlowChat.logger.error do
+        "Instrumentation: on_delivery_failure raised #{callback_error.class}: #{callback_error.message}"
+      end
+    end
+
     # True when this turn carries something to process — text OR a structured
     # attachment (media/location/contact). Gateways gate MESSAGE_RECEIVED on this
     # so caption-less media, locations, and contacts are still instrumented: they
@@ -101,6 +155,10 @@ module FlowChat
       # Gateway/platform information is included in the payload
       MESSAGE_RECEIVED = "message.received"
       MESSAGE_SENT = "message.sent"
+      # A reply the flow produced that the platform would not take. Carries
+      # what its gateway gives MESSAGE_SENT, plus the error, so a subscriber
+      # sees the same send it would have seen succeed.
+      MESSAGE_DELIVERY_FAILED = "message.delivery_failed"
       WEBHOOK_VERIFIED = "webhook.verified"
       WEBHOOK_FAILED = "webhook.failed"
       API_REQUEST = "api.request"
