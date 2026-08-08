@@ -10,6 +10,23 @@ module FlowChat
     # When true, inject logger into middleware stack. Defaults to true in Rails development.
     mattr_accessor :inject_middleware_logger, default: defined?(Rails) && Rails.env.development?
 
+    # Called with the turn's context and the error when a gateway cannot
+    # deliver a reply the flow produced, before the error is re-raised.
+    #
+    # For the app that owns the turn, acting on records only it knows about: a
+    # gateway sends after the middleware stack has returned, so an app that
+    # recorded the reply has already recorded it as sent, and nothing
+    # downstream of the send can tell it otherwise.
+    #
+    # The whole context, because this is the app's own code reading what the
+    # app put there. Anything wanting only to watch deliveries fail should
+    # subscribe to message.delivery_failed instead, which carries no more than
+    # a successful send announces.
+    #
+    # Raising here would replace the delivery error with this one, so an
+    # exception is logged and dropped.
+    mattr_accessor :on_delivery_failure, default: nil
+
     # Session configuration object
     def self.session
       @session ||= SessionConfig.new

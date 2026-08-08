@@ -357,7 +357,17 @@ module FlowChat
           response = @app.call(context)
           if response
             type, prompt, choices, media = response
-            result = @client.send_message(context["request.msisdn"], prompt, choices: choices, media: media)
+            result = report_delivery_failure(
+              context,
+              to: context["request.msisdn"],
+              session_id: context["request.id"],
+              message: prompt,
+              message_type: (type == :prompt) ? "prompt" : "terminal",
+              gateway: :whatsapp_cloud_api,
+              platform: :whatsapp
+            ) do
+              @client.send_message(context["request.msisdn"], prompt, choices: choices, media: media)
+            end
             context["whatsapp.message_result"] = result
 
             # Instrument message sent
