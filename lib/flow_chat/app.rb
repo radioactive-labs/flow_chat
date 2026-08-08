@@ -32,6 +32,29 @@ module FlowChat
       value
     end
 
+    # Consume this turn's message, so no screen answers it later.
+    #
+    # A flow that reads the inbound outside the screen system says so with this.
+    # Routing on the opening message is the usual reason: the flow consumes the
+    # message itself, and FlowChat cannot see that read, so #screen would hand
+    # the same message to the first prompt the run reaches. That prompt is then
+    # answered without ever being asked, and its message never goes out.
+    #
+    # Records the first-message marker that #screen would have written, so the
+    # gate it guards does not fire a turn late and swallow the customer's reply
+    # as though it were the opener.
+    #
+    # Returns the turn, so the caller can read its text and any attachment. The
+    # context keeps both: what is given up is only this turn's right to answer a
+    # screen, not the message itself. Contrast #clear_turn!, which discards the
+    # turn outright because a restart has to rebuild the App without it.
+    def consume_turn!
+      taken = input
+      maybe_note_first_message!(taken)
+      @input_consumed = true
+      taken
+    end
+
     def go_back
       return false if navigation_stack.empty?
 
@@ -151,16 +174,29 @@ module FlowChat
       return nil if @input_consumed
 
       user_input = input
-      if platform != :ussd && session.get(FlowChat::Input::START).nil?
-        # First inbound message of the session. Mark it started (store the text, a
-        # serializable string — not the Input object), then swallow a text-only
-        # opener: the classic "wake the flow / show the first screen" behavior.
-        # An opener that carries an attachment is let through so the first screen
-        # can consume it rather than silently dropping the media/location/contact.
-        session.set(FlowChat::Input::START, user_input.to_s)
+      if maybe_note_first_message!(user_input)
+        # Swallow a text-only opener: the classic "wake the flow / show the first
+        # screen" behavior. An opener that carries an attachment is let through so
+        # the first screen can consume it rather than silently dropping the
+        # media/location/contact.
         return nil unless user_input.attachment?
       end
       user_input
+    end
+
+    # Records this session's opening message if it has not been recorded yet, and
+    # returns whether this turn was it. Whoever meets the turn first records it, a
+    # screen or a flow consuming it itself, so the marker does not depend on which
+    # of them got there. Stores the text, a serializable string, not the Input.
+    #
+    # USSD has no use for the marker: its gateway replays the whole session on
+    # every request, so there is no opener to distinguish.
+    def maybe_note_first_message!(turn)
+      return false if platform == :ussd
+      return false unless session.get(FlowChat::Input::START).nil?
+
+      session.set(FlowChat::Input::START, turn.to_s)
+      true
     end
 
     def media_client
