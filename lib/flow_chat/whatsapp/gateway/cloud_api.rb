@@ -131,100 +131,199 @@ module FlowChat
 
           FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }
 
-          # Extract message data from WhatsApp webhook
-          entry = @body.dig("entry", 0)
-          unless entry
+          # A delivery can carry several accounts and several kinds of change at
+          # once, so every entry and every change gets looked at rather than only
+          # the first of each.
+          entries = @body["entry"]
+          unless entries.is_a?(Array) && entries.any?
             FlowChat.logger.debug { "CloudApi: No entry found in webhook body - returning OK" }
             return @controller.head :ok
           end
 
-          changes = entry.dig("changes", 0)
-          unless changes
-            FlowChat.logger.debug { "CloudApi: No changes found in webhook entry - returning OK" }
-            return @controller.head :ok
-          end
+          # Only one change per delivery can drive a flow, because only one can own
+          # the response to this request.
+          flow_ran = false
 
-          value = changes["value"]
-          unless value
-            FlowChat.logger.debug { "CloudApi: No value found in webhook changes - returning OK" }
-            return @controller.head :ok
-          end
+          entries.each do |entry|
+            changes = entry["changes"]
+            next unless changes.is_a?(Array)
 
-          # Handle incoming messages
-          if value["messages"]&.any?
-            message = value["messages"].first
-            contact = value["contacts"]&.first
+            changes.each do |change|
+              value = change["value"]
+              next unless value.is_a?(Hash)
 
-            phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
-            message_id = message["id"]
-            contact_name = contact&.dig("profile", "name")
-            business_phone_number = value.dig("metadata", "display_phone_number")
-            business_phone_number_id = value.dig("metadata", "phone_number_id")
+              case webhook_field(change, value)
+              when "messages"
+                if flow_ran
+                  FlowChat.logger.warn { "CloudApi: A second messages change arrived in the same delivery and was not processed" }
+                  next
+                end
+                flow_ran = true
 
-            # Validate that webhook is for our configured phone number
-            if business_phone_number_id != @config.phone_number_id
-              FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
-              return @controller.head :forbidden
-            end
-
-            context["request.id"] = phone_number
-            context["request.user_id"] = phone_number
-            context["request.user_name"] = contact_name if contact_name
-            context["request.msisdn"] = phone_number
-            context["request.gateway"] = :whatsapp_cloud_api
-            context["request.platform"] = :whatsapp
-            context["request.message_id"] = message_id
-            context["request.timestamp"] = Time.current.iso8601
-            context["request.body"] = @body
-
-            context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
-            context["whatsapp.business.phone_number_id"] = business_phone_number_id
-            context["whatsapp.client"] = @client
-
-            # Extract message content based on type
-            extract_message_content!(message, context)
-
-            if inbound_message?(context)
-              # Use instrumentation for message received
-              instrument(Events::MESSAGE_RECEIVED, {
-                from: phone_number,
-                message: context.input,
-                message_type: message["type"],
-                message_id: message_id
-              })
-            end
-
-            FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
-
-            # Determine routing: async enqueue, background execute, or inline
-            if should_enqueue_async?
-              # Webhook with async enabled → enqueue job and return immediately
-              enqueue_async_job
-              return @controller.head :ok
-            else
-              # Background OR inline → process message
-              # Determine message handling mode (simulator vs inline)
-              handler_mode = determine_message_handler(context)
-
-              # Process the message based on handling mode
-              case handler_mode
-              when :inline
-                handle_message_inline(context, @controller)
-              when :simulator
-                # Return early from simulator mode to preserve the JSON response
-                return handle_message_simulator(context, @controller)
+                case handle_messages(context, value)
+                when :rejected then return @controller.head :forbidden
+                when :enqueued then return @controller.head :ok
+                when :rendered then return nil # simulator already wrote the response
+                end
+              when "statuses"
+                handle_statuses(value)
+              when "smb_message_echoes"
+                handle_message_echoes(value)
+              when "smb_app_state_sync"
+                handle_app_state_sync(value)
+              when "history"
+                handle_history(value)
+              else
+                FlowChat.logger.debug { "CloudApi: No handler for webhook field '#{change["field"]}' - ignoring" }
               end
             end
           end
 
-          # Handle message status updates
-          if value["statuses"]&.any?
-            statuses = value["statuses"]
-            FlowChat.logger.info { "CloudApi: Received #{statuses.size} status update(s)" }
-            FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
+          @controller.head :ok
+        end
+
+        # Meta names the change in `field`. Older payloads, and the ones our own
+        # tests build, leave it out, so fall back to what the value carries.
+        def webhook_field(change, value)
+          return change["field"] if change["field"].present?
+          return "messages" if value["messages"].is_a?(Array) && value["messages"].any?
+          return "statuses" if value["statuses"].is_a?(Array) && value["statuses"].any?
+
+          nil
+        end
+
+        # Returns what happened, so the caller can decide whether it still owns the
+        # response: :rejected, :enqueued, :rendered, :processed or :skipped.
+        def handle_messages(context, value)
+          message = value["messages"]&.first
+          return :skipped unless message
+
+          contact = value["contacts"]&.first
+
+          phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
+          message_id = message["id"]
+          contact_name = contact&.dig("profile", "name")
+          business_phone_number = value.dig("metadata", "display_phone_number")
+          business_phone_number_id = value.dig("metadata", "phone_number_id")
+
+          # Validate that webhook is for our configured phone number
+          if business_phone_number_id != @config.phone_number_id
+            FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
+            return :rejected
           end
 
-          @controller.head :ok
+          context["request.id"] = phone_number
+          context["request.user_id"] = phone_number
+          context["request.user_name"] = contact_name if contact_name
+          context["request.msisdn"] = phone_number
+          context["request.gateway"] = :whatsapp_cloud_api
+          context["request.platform"] = :whatsapp
+          context["request.message_id"] = message_id
+          context["request.timestamp"] = Time.current.iso8601
+          context["request.body"] = @body
+
+          context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
+          context["whatsapp.business.phone_number_id"] = business_phone_number_id
+          context["whatsapp.client"] = @client
+
+          # Extract message content based on type
+          extract_message_content!(message, context)
+
+          if inbound_message?(context)
+            # Use instrumentation for message received
+            instrument(Events::MESSAGE_RECEIVED, {
+              from: phone_number,
+              message: context.input,
+              message_type: message["type"],
+              message_id: message_id
+            })
+          end
+
+          FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
+
+          # Determine routing: async enqueue, background execute, or inline
+          if should_enqueue_async?
+            # Webhook with async enabled → enqueue job and return immediately
+            enqueue_async_job
+            return :enqueued
+          end
+
+          # Background OR inline → process message
+          case determine_message_handler(context)
+          when :inline
+            handle_message_inline(context, @controller)
+            :processed
+          when :simulator
+            handle_message_simulator(context, @controller)
+            :rendered
+          end
+        end
+
+        def handle_statuses(value)
+          statuses = value["statuses"]
+          return if statuses.blank?
+
+          FlowChat.logger.info { "CloudApi: Received #{statuses.size} status update(s)" }
+          FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
+
+          statuses.each do |status|
+            instrument(Events::MESSAGE_STATUS, {
+              platform: :whatsapp,
+              gateway: :whatsapp_cloud_api,
+              business_phone_number_id: value.dig("metadata", "phone_number_id"),
+              message_id: status["id"],
+              recipient: status["recipient_id"],
+              status: status["status"],
+              timestamp: status["timestamp"],
+              errors: status["errors"]
+            })
+          end
+        end
+
+        # Coexistence: the business is also using the WhatsApp Business App on this
+        # number, so Meta tells us what happens there. None of it is a customer turn,
+        # so none of it runs a flow. Applications subscribe and decide for themselves.
+        def handle_message_echoes(value)
+          echoes = value["message_echoes"]
+          return if echoes.blank?
+
+          FlowChat.logger.info { "CloudApi: Received #{echoes.size} message echo(es) from the WhatsApp Business App" }
+
+          instrument(Events::COEXISTENCE_MESSAGE_ECHO, {
+            platform: :whatsapp,
+            gateway: :whatsapp_cloud_api,
+            business_phone_number: value.dig("metadata", "display_phone_number"),
+            business_phone_number_id: value.dig("metadata", "phone_number_id"),
+            echoes: echoes
+          })
+        end
+
+        def handle_app_state_sync(value)
+          state_sync = value["state_sync"]
+          return if state_sync.blank?
+
+          FlowChat.logger.info { "CloudApi: Received #{state_sync.size} contact sync event(s)" }
+
+          instrument(Events::COEXISTENCE_CONTACT_SYNC, {
+            platform: :whatsapp,
+            gateway: :whatsapp_cloud_api,
+            business_phone_number_id: value.dig("metadata", "phone_number_id"),
+            state_sync: state_sync
+          })
+        end
+
+        def handle_history(value)
+          history = value["history"]
+          return if history.blank?
+
+          FlowChat.logger.info { "CloudApi: Received #{history.size} chat history chunk(s)" }
+
+          instrument(Events::COEXISTENCE_HISTORY_SYNC, {
+            platform: :whatsapp,
+            gateway: :whatsapp_cloud_api,
+            business_phone_number_id: value.dig("metadata", "phone_number_id"),
+            history: history
+          })
         end
 
         # Validate webhook signature to ensure request comes from WhatsApp

@@ -159,6 +159,9 @@ module FlowChat
       # what its gateway gives MESSAGE_SENT, plus the error, so a subscriber
       # sees the same send it would have seen succeed.
       MESSAGE_DELIVERY_FAILED = "message.delivery_failed"
+      # A platform's own report of what became of a message we sent. Informational:
+      # the send already succeeded or failed at the API call.
+      MESSAGE_STATUS = "message.status"
       WEBHOOK_VERIFIED = "webhook.verified"
       WEBHOOK_FAILED = "webhook.failed"
       API_REQUEST = "api.request"
@@ -170,6 +173,14 @@ module FlowChat
       # Middleware events
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
+
+      # WhatsApp Coexistence: the business runs the WhatsApp Business App on the
+      # same number, so Meta reports what happens there too. None of these are a
+      # customer turn, so none of them run a flow. Subscribe to decide what they
+      # mean for your application.
+      COEXISTENCE_MESSAGE_ECHO = "coexistence.message_echo"
+      COEXISTENCE_CONTACT_SYNC = "coexistence.contact_sync"
+      COEXISTENCE_HISTORY_SYNC = "coexistence.history_sync"
 
       # Conversation management events (for Intercom and similar platforms)
       CONVERSATION_ASSIGNED = "conversation.assigned"

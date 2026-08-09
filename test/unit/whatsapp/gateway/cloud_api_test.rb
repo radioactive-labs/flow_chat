@@ -24,6 +24,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def teardown
     WebMock.disable!
     WebMock.reset!
+    @subscribers&.each { |s| ActiveSupport::Notifications.unsubscribe(s) }
   end
 
   def test_get_request_webhook_verification
@@ -547,7 +548,206 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     refute gateway.send(:secure_compare, signature1, signature3)
   end
 
+  # --- Webhook field dispatch -------------------------------------------------
+
+  def test_dispatches_on_the_declared_field
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.field").tap { |p|
+        p["entry"][0]["changes"][0]["field"] = "messages"
+      }
+    )
+
+    @gateway.call(context)
+
+    assert_equal "Hello", context.input
+    assert_requested :post, @mock_config.messages_url
+  end
+
+  def test_an_unknown_field_is_accepted_and_ignored
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("something_meta_added_later", {"whatever" => true})
+    )
+
+    @gateway.call(context)
+
+    assert_equal :ok, context.controller.last_head_status
+    assert_not_requested :post, @mock_config.messages_url
+  end
+
+  def test_every_entry_and_change_is_looked_at
+    statuses = change_payload("statuses", {"statuses" => [status_hash]})["entry"][0]["changes"][0]
+    body = create_text_message_payload("Hello", "wamid.batched")
+    # A status update ahead of the message, in its own entry, the way Meta batches.
+    body["entry"].unshift({"changes" => [statuses]})
+
+    seen = []
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen << p }
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    assert_equal 1, seen.size, "the status ahead of the message must not be skipped"
+    assert_equal "Hello", context.input, "the message behind the status must still run"
+  end
+
+  def test_a_second_messages_change_is_not_processed
+    body = create_text_message_payload("First", "wamid.first")
+    second = create_text_message_payload("Second", "wamid.second")["entry"][0]["changes"][0]
+    body["entry"][0]["changes"] << second
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    # Only one change can own the response, so the first wins and the rest are
+    # reported rather than silently dropped.
+    assert_equal "First", context.input
+    assert_requested :post, @mock_config.messages_url, times: 1
+  end
+
+  # --- Statuses --------------------------------------------------------------
+
+  def test_status_updates_are_instrumented
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("statuses", {"statuses" => [status_hash]})
+    )
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen[:message_id]
+    assert_equal "delivered", seen[:status]
+    assert_equal "256700000000", seen[:recipient]
+    assert_equal :whatsapp, seen[:platform]
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  # --- Coexistence -----------------------------------------------------------
+
+  def test_message_echoes_are_reported_without_running_a_flow
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_MESSAGE_ECHO) { |p| seen = p }
+
+    echo = {
+      "from" => "+15551234567",
+      "to" => "256700000000",
+      "id" => "wamid.echo1",
+      "timestamp" => "1702891800",
+      "type" => "text",
+      "text" => {"body" => "Answered from the Business App"}
+    }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {"message_echoes" => [echo]})
+    )
+    @gateway.call(context)
+
+    assert_equal [echo], seen[:echoes]
+    assert_equal "test_phone_id", seen[:business_phone_number_id]
+    # An echo is the business talking, not a customer turn.
+    assert_not_requested :post, @mock_config.messages_url
+    assert_nil context.input
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  def test_contact_sync_is_reported_without_running_a_flow
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_CONTACT_SYNC) { |p| seen = p }
+
+    state_sync = [{
+      "type" => "contact",
+      "contact" => {"full_name" => "Ama Mensah", "first_name" => "Ama", "phone_number" => "256700000000"},
+      "action" => "add",
+      "metadata" => {"timestamp" => "1702891800"}
+    }]
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_app_state_sync", {"state_sync" => state_sync})
+    )
+    @gateway.call(context)
+
+    assert_equal state_sync, seen[:state_sync]
+    assert_not_requested :post, @mock_config.messages_url
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  def test_history_is_reported_without_running_a_flow
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_HISTORY_SYNC) { |p| seen = p }
+
+    history = [{
+      "metadata" => {"phase" => "1", "chunk_order" => "1", "progress" => "50"},
+      "threads" => [{"id" => "256700000000", "messages" => []}]
+    }]
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("history", {"history" => history})
+    )
+    @gateway.call(context)
+
+    assert_equal history, seen[:history]
+    assert_not_requested :post, @mock_config.messages_url
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  def test_declined_history_is_still_reported
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_HISTORY_SYNC) { |p| seen = p }
+
+    history = [{"errors" => [{"code" => 2593109, "title" => "History sync is turned off"}]}]
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("history", {"history" => history})
+    )
+    @gateway.call(context)
+
+    # A refusal is news too: the application has to stop waiting for the import.
+    assert_equal history, seen[:history]
+  end
+
   private
+
+  def subscribe(event)
+    @subscribers ||= []
+    @subscribers << ActiveSupport::Notifications.subscribe("#{event}.flow_chat") do |*args|
+      yield ActiveSupport::Notifications::Event.new(*args).payload
+    end
+  end
+
+  def status_hash
+    {
+      "id" => "wamid.sent1",
+      "status" => "delivered",
+      "recipient_id" => "256700000000",
+      "timestamp" => "1702891800"
+    }
+  end
+
+  # A single-change delivery for a named field.
+  def change_payload(field, value)
+    {
+      "entry" => [{
+        "id" => "waba-1",
+        "changes" => [{
+          "field" => field,
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            }
+          }.merge(value)
+        }]
+      }]
+    }
+  end
 
   def create_context_with_request(method:, params: {}, body: nil, headers: {}, cookies: {})
     context = FlowChat::Context.new

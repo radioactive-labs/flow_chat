@@ -18,12 +18,33 @@ Every FlowChat event is published under its name with a `.flow_chat` suffix. The
 | `session.cache.hit` / `session.cache.miss` | A session cache lookup. |
 | `message.received` | An inbound message arrives (text or an attachment). |
 | `message.sent` | A response is sent to the user. |
+| `message.delivery_failed` | A reply the flow produced that the platform would not take. |
+| `message.status` | A platform's own report of what became of a message we sent. |
 | `webhook.verified` / `webhook.failed` | A gateway verified or rejected a webhook. |
 | `api.request` / `api.error` | An outbound platform API call, or its failure. |
 | `media.upload` | Media is uploaded to a platform. |
 | `pagination.triggered` | A USSD response was split into pages. |
+| `coexistence.message_echo` | The business replied from the WhatsApp Business App. |
+| `coexistence.contact_sync` | Contacts were added, changed or removed in that app. |
+| `coexistence.history_sync` | A chunk of imported chat history arrived, or was refused. |
 
 Payloads are enriched with `request_id`, `session_id`, `flow_name`, `gateway`, and `platform` when the context has them, plus a `timestamp`.
+
+## WhatsApp Coexistence
+
+With [Coexistence](https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers/coexistence) the business keeps using the WhatsApp Business App on the same number the Cloud API answers on, and Meta reports what happens there through three extra webhook fields.
+
+None of them is a customer turn, so **none of them runs a flow**. FlowChat verifies the signature, emits an event, and answers Meta. What an echo or a synced contact means is your application's decision:
+
+```ruby
+ActiveSupport::Notifications.subscribe("coexistence.message_echo.flow_chat") do |*, payload|
+  # A human answered from the Business App. Most applications will want to stop
+  # the bot replying on top of them.
+  payload[:echoes].each { |echo| MyApp::Echoes.record(payload[:business_phone_number_id], echo) }
+end
+```
+
+`coexistence.history_sync` fires for a refusal as well as for data, because an application waiting on an import needs to know it is not coming. Check each chunk for an `errors` key.
 
 ## Reacting to `api.error`
 
