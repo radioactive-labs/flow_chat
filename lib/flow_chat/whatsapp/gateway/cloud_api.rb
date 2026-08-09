@@ -83,9 +83,14 @@ module FlowChat
           provided_token = params["hub.verify_token"]
           challenge = params["hub.challenge"]
 
-          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{provided_token == verify_token}" }
+          # A configuration with no verify token must not verify anything. Without
+          # the presence check a missing token on both sides compares equal, and
+          # anyone could claim the endpoint by asking for the challenge.
+          verified = verify_token.present? && secure_compare(provided_token.to_s, verify_token)
 
-          if provided_token == verify_token
+          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{verified}" }
+
+          if verified
             # Use instrumentation for webhook verification success
             instrument(Events::WEBHOOK_VERIFIED, {
               challenge: challenge,

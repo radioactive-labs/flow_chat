@@ -548,6 +548,22 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     refute gateway.send(:secure_compare, signature1, signature3)
   end
 
+  def test_verification_refuses_a_configuration_with_no_verify_token
+    @mock_config.verify_token = nil
+
+    context = create_context_with_request(
+      method: :get,
+      params: {"hub.mode" => "subscribe", "hub.challenge" => "claimed"}
+    )
+
+    @gateway.call(context)
+
+    # Nothing configured means nothing to prove, so the challenge is refused rather
+    # than answered by two missing tokens comparing equal.
+    assert_equal :forbidden, context.controller.last_head_status
+    assert_nil context.controller.last_render
+  end
+
   def test_a_delivered_reply_names_its_platform_message_id
     context = create_context_with_request(
       method: :post,
