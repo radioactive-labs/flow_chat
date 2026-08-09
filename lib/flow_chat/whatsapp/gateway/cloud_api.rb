@@ -188,7 +188,7 @@ module FlowChat
                 # echoes, contact syncs, imported history, account bans, template
                 # approvals: all of it is the application's domain, so it is
                 # published rather than interpreted here.
-                handle_unmodelled_field(change["field"], value)
+                handle_unmodelled_field(change["field"], value, entry["id"])
               end
             end
           end
@@ -289,17 +289,24 @@ module FlowChat
               recipient: status["recipient_id"],
               status: status["status"],
               timestamp: status["timestamp"],
-              errors: status["errors"]
+              errors: status["errors"],
+              # Meta reports more about a delivery than a status and a time: what
+              # it billed the conversation as, and its own view of the window.
+              # None of it is this gem's business to interpret, and all of it is
+              # gone if the named keys are the only way through.
+              value: status
             })
           end
         end
 
-        # Coexistence: the business is also using the WhatsApp Business App on this
-        # number, so Meta tells us what happens there. None of it is a customer turn,
-        # so none of it runs a flow. Applications subscribe and decide for themselves.
         # Everything that is not a message or its delivery. Verified, named, and
         # handed on whole for the application to make sense of.
-        def handle_unmodelled_field(field, value)
+        #
+        # The account id comes from the entry rather than the value because a change
+        # about the account itself names no phone number: a ban, a review outcome, a
+        # template approval. Without it those arrive identifying nothing, and an
+        # application holding several businesses cannot tell whose they are.
+        def handle_unmodelled_field(field, value, business_account_id)
           FlowChat.logger.info {
             "CloudApi: Publishing webhook field '#{field}' (value keys: #{value.keys.join(", ")})"
           }
@@ -308,6 +315,7 @@ module FlowChat
             platform: :whatsapp,
             gateway: :whatsapp_cloud_api,
             field: field,
+            business_account_id: business_account_id,
             business_phone_number: value.dig("metadata", "display_phone_number"),
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
             value: value

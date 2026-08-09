@@ -677,6 +677,29 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
+  # A status says more than whether it arrived: what Meta billed the conversation
+  # as, and its own view of the window. The named keys are what this gateway
+  # promises, and the status itself is there for an application that wants the
+  # rest without waiting on a release.
+  def test_a_status_carries_what_the_named_keys_leave_out
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    status = status_hash.merge(
+      "conversation" => {"id" => "conv-1", "origin" => {"type" => "service"}},
+      "pricing" => {"billable" => true, "category" => "service"}
+    )
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("statuses", {"statuses" => [status]})
+    )
+    @gateway.call(context)
+
+    assert_equal status, seen[:value]
+    assert_equal "service", seen[:value].dig("pricing", "category")
+  end
+
   # --- Everything that is not messaging --------------------------------------
 
   # Messaging is the gateway's job. Coexistence echoes, contact syncs, imported
@@ -704,6 +727,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "smb_message_echoes", seen[:field]
     assert_equal [echo], seen[:value]["message_echoes"]
     assert_equal "test_phone_id", seen[:business_phone_number_id]
+    assert_equal "waba-1", seen[:business_account_id]
     # An echo is the business talking, not a customer turn.
     assert_not_requested :post, @mock_config.messages_url
     assert_nil context.input
@@ -733,6 +757,30 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     # Meta's field list.
     assert_equal fields.keys, seen.map { |p| p[:field] }
     assert_not_requested :post, @mock_config.messages_url
+  end
+
+  # A change about the account rather than one of its numbers carries no metadata,
+  # so both phone number keys are empty. The account is the only thing naming who
+  # it belongs to, and an application holding several businesses needs it.
+  def test_an_account_level_field_is_published_with_the_account_that_owns_it
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
+
+    body = {
+      "entry" => [{
+        "id" => "waba-1",
+        "changes" => [{
+          "field" => "account_update",
+          "value" => {"event" => "DISABLED_UPDATE", "ban_info" => {"waba_ban_state" => "SCHEDULE_FOR_DISABLE"}}
+        }]
+      }]
+    }
+
+    @gateway.call(create_context_with_request(method: :post, body: body))
+
+    assert_equal "waba-1", seen[:business_account_id]
+    assert_nil seen[:business_phone_number_id]
+    assert_nil seen[:business_phone_number]
   end
 
   def test_a_declined_history_import_is_published_too
