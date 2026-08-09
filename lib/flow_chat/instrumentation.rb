@@ -42,11 +42,23 @@ module FlowChat
     # Re-raises whatever the send raised: this reports a failure, it does not
     # handle one.
     def report_delivery_failure(context, **payload)
-      yield
+      result = yield
+      report_delivery_to_app(context, result)
+      result
     rescue => error
       report_to_subscribers(error, payload)
       report_to_app(context, error)
       raise error
+    end
+
+    # The success half. Runs where the send happened, which is the only place that
+    # knows what the platform called the message.
+    def report_delivery_to_app(context, result)
+      FlowChat::Config.on_delivery&.call(context, result)
+    rescue => callback_error
+      FlowChat.logger.error do
+        "Instrumentation: on_delivery raised #{callback_error.class}: #{callback_error.message}"
+      end
     end
 
     # Neither reader may replace the delivery error with one of its own, which

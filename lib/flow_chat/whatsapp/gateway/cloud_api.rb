@@ -478,6 +478,8 @@ module FlowChat
               gateway: :whatsapp_cloud_api,
               platform: :whatsapp,
               content_length: prompt.to_s.length,
+              # What Meta called it, so this and message.status can be joined.
+              platform_message_id: result.is_a?(Hash) ? result.dig("messages", 0, "id") : nil,
               timestamp: context["request.timestamp"]
             })
           end
