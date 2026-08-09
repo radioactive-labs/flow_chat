@@ -47,6 +47,36 @@ class SecurityTest < Minitest::Test
     refute FlowChat::Security.secure_compare(signature1, signature3)
   end
 
+  def test_secure_compare_without_active_support_security_utils
+    without_security_utils do
+      assert FlowChat::Security.secure_compare("hello", "hello")
+      refute FlowChat::Security.secure_compare("hello", "world")
+      refute FlowChat::Security.secure_compare("hello", "hi")
+      refute FlowChat::Security.secure_compare("hi", "hello")
+      assert FlowChat::Security.secure_compare("", "")
+      refute FlowChat::Security.secure_compare("", "hello")
+      assert FlowChat::Security.secure_compare(nil, "")
+    end
+  end
+
+  def test_fallback_agrees_with_active_support
+    pairs = [
+      ["hello", "hello"],
+      ["hello", "world"],
+      ["hello", "hi"],
+      ["", ""],
+      ["", "hello"],
+      ["a" * 1000, "a" * 1000],
+      ["a" * 1000, "a" * 999 + "b"]
+    ]
+
+    pairs.each do |a, b|
+      expected = ActiveSupport::SecurityUtils.secure_compare(a, b)
+      actual = FlowChat::Security.send(:fallback_secure_compare, a, b)
+      assert_equal expected, actual, "disagreed on #{a.inspect} vs #{b.inspect}"
+    end
+  end
+
   # ============================================================================
   # SIMULATOR COOKIE
   # ============================================================================
@@ -90,5 +120,19 @@ class SecurityTest < Minitest::Test
 
     FlowChat::Config.simulator_secret = ""
     refute FlowChat::Security.valid_simulator_cookie?(cookie)
+  end
+
+  private
+
+  # Hides the constant so secure_compare takes the branch an install without
+  # Active Support's SecurityUtils would take.
+  def without_security_utils
+    security_utils = ActiveSupport::SecurityUtils
+    ActiveSupport.send(:remove_const, :SecurityUtils)
+    refute defined?(ActiveSupport::SecurityUtils), "expected the constant to be hidden"
+
+    yield
+  ensure
+    ActiveSupport.const_set(:SecurityUtils, security_utils)
   end
 end

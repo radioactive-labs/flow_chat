@@ -190,7 +190,17 @@ module FlowChat
               when "history"
                 handle_history(value)
               else
-                FlowChat.logger.debug { "CloudApi: No handler for webhook field '#{change["field"]}' - ignoring" }
+                # Somebody subscribed to a field this gateway does not handle, which
+                # is worth saying out loud: at debug it would be invisible on a
+                # normal production log level, and silence looks like Meta not
+                # sending anything.
+                #
+                # Keys, not values. An unrecognised field may carry message content,
+                # and this is a log. The keys are enough to know what arrived.
+                FlowChat.logger.info {
+                  "CloudApi: No handler for webhook field '#{change["field"]}' " \
+                  "(value keys: #{value.keys.join(", ")}) - ignoring"
+                }
               end
             end
           end

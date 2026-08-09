@@ -576,6 +576,23 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_not_requested :post, @mock_config.messages_url
   end
 
+  # Subscribing to a field nothing handles is a normal way to find out what Meta
+  # sends. At debug it would be invisible on a production log level.
+  def test_an_unhandled_field_is_named_in_the_log_at_info
+    log = capture_logs do
+      context = create_context_with_request(
+        method: :post,
+        body: change_payload("account_update", {"event" => "PARTNER_ADDED", "ban_info" => {}})
+      )
+      @gateway.call(context)
+    end
+
+    assert_includes log, "account_update"
+    # Keys, so the shape is learnable without writing message content to a log.
+    assert_includes log, "value keys:"
+    assert_includes log, "ban_info"
+  end
+
   def test_every_entry_and_change_is_looked_at
     statuses = change_payload("statuses", {"statuses" => [status_hash]})["entry"][0]["changes"][0]
     body = create_text_message_payload("Hello", "wamid.batched")
@@ -748,6 +765,18 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   end
 
   private
+
+  # Captures at info level on purpose: a message logged at debug would not appear,
+  # which is the regression this guards.
+  def capture_logs
+    original = FlowChat::Config.logger
+    io = StringIO.new
+    FlowChat::Config.logger = Logger.new(io, level: :info)
+    yield
+    io.string
+  ensure
+    FlowChat::Config.logger = original
+  end
 
   def subscribe(event)
     @subscribers ||= []
