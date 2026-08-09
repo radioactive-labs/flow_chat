@@ -576,9 +576,9 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_not_requested :post, @mock_config.messages_url
   end
 
-  # Subscribing to a field nothing handles is a normal way to find out what Meta
-  # sends. At debug it would be invisible on a production log level.
-  def test_an_unhandled_field_is_named_in_the_log_at_info
+  # Publishing is not much use if nothing says it happened. At debug this would be
+  # invisible on a production log level.
+  def test_a_published_field_is_named_in_the_log_at_info
     log = capture_logs do
       context = create_context_with_request(
         method: :post,
@@ -677,11 +677,14 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
-  # --- Coexistence -----------------------------------------------------------
+  # --- Everything that is not messaging --------------------------------------
 
-  def test_message_echoes_are_reported_without_running_a_flow
+  # Messaging is the gateway's job. Coexistence echoes, contact syncs, imported
+  # history, account bans and template approvals are the application's, so they are
+  # published whole rather than interpreted here.
+  def test_a_field_that_is_not_messaging_is_published_whole
     seen = nil
-    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_MESSAGE_ECHO) { |p| seen = p }
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
 
     echo = {
       "from" => "+15551234567",
@@ -698,7 +701,8 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     )
     @gateway.call(context)
 
-    assert_equal [echo], seen[:echoes]
+    assert_equal "smb_message_echoes", seen[:field]
+    assert_equal [echo], seen[:value]["message_echoes"]
     assert_equal "test_phone_id", seen[:business_phone_number_id]
     # An echo is the business talking, not a customer turn.
     assert_not_requested :post, @mock_config.messages_url
@@ -706,51 +710,34 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
-  def test_contact_sync_is_reported_without_running_a_flow
-    seen = nil
-    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_CONTACT_SYNC) { |p| seen = p }
+  def test_every_unmodelled_field_uses_the_same_event
+    fields = {
+      "smb_app_state_sync" => {"state_sync" => [{"type" => "contact"}]},
+      "history" => {"history" => [{"threads" => []}]},
+      "account_update" => {"event" => "DISABLED_UPDATE"},
+      "message_template_status_update" => {"event" => "APPROVED"},
+      "something_meta_adds_next_year" => {"whatever" => true}
+    }
 
-    state_sync = [{
-      "type" => "contact",
-      "contact" => {"full_name" => "Ama Mensah", "first_name" => "Ama", "phone_number" => "256700000000"},
-      "action" => "add",
-      "metadata" => {"timestamp" => "1702891800"}
-    }]
+    seen = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen << p }
 
-    context = create_context_with_request(
-      method: :post,
-      body: change_payload("smb_app_state_sync", {"state_sync" => state_sync})
-    )
-    @gateway.call(context)
+    fields.each do |field, value|
+      # A gateway parses its body once and keeps it, so each delivery needs its
+      # own, the way a request gets its own in production.
+      gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |_| }, @mock_config)
+      gateway.call(create_context_with_request(method: :post, body: change_payload(field, value)))
+    end
 
-    assert_equal state_sync, seen[:state_sync]
+    # No handler to add per field, which is the point: the gateway does not chase
+    # Meta's field list.
+    assert_equal fields.keys, seen.map { |p| p[:field] }
     assert_not_requested :post, @mock_config.messages_url
-    assert_equal :ok, context.controller.last_head_status
   end
 
-  def test_history_is_reported_without_running_a_flow
+  def test_a_declined_history_import_is_published_too
     seen = nil
-    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_HISTORY_SYNC) { |p| seen = p }
-
-    history = [{
-      "metadata" => {"phase" => "1", "chunk_order" => "1", "progress" => "50"},
-      "threads" => [{"id" => "256700000000", "messages" => []}]
-    }]
-
-    context = create_context_with_request(
-      method: :post,
-      body: change_payload("history", {"history" => history})
-    )
-    @gateway.call(context)
-
-    assert_equal history, seen[:history]
-    assert_not_requested :post, @mock_config.messages_url
-    assert_equal :ok, context.controller.last_head_status
-  end
-
-  def test_declined_history_is_still_reported
-    seen = nil
-    subscribe(FlowChat::Instrumentation::Events::COEXISTENCE_HISTORY_SYNC) { |p| seen = p }
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
 
     history = [{"errors" => [{"code" => 2593109, "title" => "History sync is turned off"}]}]
 
@@ -761,7 +748,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @gateway.call(context)
 
     # A refusal is news too: the application has to stop waiting for the import.
-    assert_equal history, seen[:history]
+    assert_equal history, seen[:value]["history"]
   end
 
   private

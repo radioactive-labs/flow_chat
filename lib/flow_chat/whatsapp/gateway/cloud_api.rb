@@ -183,24 +183,12 @@ module FlowChat
                 # Only reachable for a payload built without a field name, which
                 # our own fixtures do and Meta does not.
                 handle_statuses(value)
-              when "smb_message_echoes"
-                handle_message_echoes(value)
-              when "smb_app_state_sync"
-                handle_app_state_sync(value)
-              when "history"
-                handle_history(value)
               else
-                # Somebody subscribed to a field this gateway does not handle, which
-                # is worth saying out loud: at debug it would be invisible on a
-                # normal production log level, and silence looks like Meta not
-                # sending anything.
-                #
-                # Keys, not values. An unrecognised field may carry message content,
-                # and this is a log. The keys are enough to know what arrived.
-                FlowChat.logger.info {
-                  "CloudApi: No handler for webhook field '#{change["field"]}' " \
-                  "(value keys: #{value.keys.join(", ")}) - ignoring"
-                }
+                # Anything that is not a message or its delivery. Coexistence
+                # echoes, contact syncs, imported history, account bans, template
+                # approvals: all of it is the application's domain, so it is
+                # published rather than interpreted here.
+                handle_unmodelled_field(change["field"], value)
               end
             end
           end
@@ -309,46 +297,20 @@ module FlowChat
         # Coexistence: the business is also using the WhatsApp Business App on this
         # number, so Meta tells us what happens there. None of it is a customer turn,
         # so none of it runs a flow. Applications subscribe and decide for themselves.
-        def handle_message_echoes(value)
-          echoes = value["message_echoes"]
-          return if echoes.blank?
+        # Everything that is not a message or its delivery. Verified, named, and
+        # handed on whole for the application to make sense of.
+        def handle_unmodelled_field(field, value)
+          FlowChat.logger.info {
+            "CloudApi: Publishing webhook field '#{field}' (value keys: #{value.keys.join(", ")})"
+          }
 
-          FlowChat.logger.info { "CloudApi: Received #{echoes.size} message echo(es) from the WhatsApp Business App" }
-
-          instrument(Events::COEXISTENCE_MESSAGE_ECHO, {
+          instrument(Events::WEBHOOK_RECEIVED, {
             platform: :whatsapp,
             gateway: :whatsapp_cloud_api,
+            field: field,
             business_phone_number: value.dig("metadata", "display_phone_number"),
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
-            echoes: echoes
-          })
-        end
-
-        def handle_app_state_sync(value)
-          state_sync = value["state_sync"]
-          return if state_sync.blank?
-
-          FlowChat.logger.info { "CloudApi: Received #{state_sync.size} contact sync event(s)" }
-
-          instrument(Events::COEXISTENCE_CONTACT_SYNC, {
-            platform: :whatsapp,
-            gateway: :whatsapp_cloud_api,
-            business_phone_number_id: value.dig("metadata", "phone_number_id"),
-            state_sync: state_sync
-          })
-        end
-
-        def handle_history(value)
-          history = value["history"]
-          return if history.blank?
-
-          FlowChat.logger.info { "CloudApi: Received #{history.size} chat history chunk(s)" }
-
-          instrument(Events::COEXISTENCE_HISTORY_SYNC, {
-            platform: :whatsapp,
-            gateway: :whatsapp_cloud_api,
-            business_phone_number_id: value.dig("metadata", "phone_number_id"),
-            history: history
+            value: value
           })
         end
 

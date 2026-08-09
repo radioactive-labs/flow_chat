@@ -201,13 +201,14 @@ module FlowChat
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
 
-      # WhatsApp Coexistence: the business runs the WhatsApp Business App on the
-      # same number, so Meta reports what happens there too. None of these are a
-      # customer turn, so none of them run a flow. Subscribe to decide what they
-      # mean for your application.
-      COEXISTENCE_MESSAGE_ECHO = "coexistence.message_echo"
-      COEXISTENCE_CONTACT_SYNC = "coexistence.contact_sync"
-      COEXISTENCE_HISTORY_SYNC = "coexistence.history_sync"
+      # A webhook this gateway verified but does not model, handed on whole.
+      #
+      # FlowChat's job is messaging: inbound turns, the replies they produce, and
+      # what became of them. A platform sends far more than that, and what an
+      # account ban, a contact sync or an imported history means belongs to the
+      # application, not here. Rather than grow a handler per field, the payload is
+      # published with the field that named it, for an application to dispatch on.
+      WEBHOOK_RECEIVED = "webhook.received"
 
       # Conversation management events (for Intercom and similar platforms)
       CONVERSATION_ASSIGNED = "conversation.assigned"

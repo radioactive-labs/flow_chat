@@ -24,27 +24,34 @@ Every FlowChat event is published under its name with a `.flow_chat` suffix. The
 | `api.request` / `api.error` | An outbound platform API call, or its failure. |
 | `media.upload` | Media is uploaded to a platform. |
 | `pagination.triggered` | A USSD response was split into pages. |
-| `coexistence.message_echo` | The business replied from the WhatsApp Business App. |
-| `coexistence.contact_sync` | Contacts were added, changed or removed in that app. |
-| `coexistence.history_sync` | A chunk of imported chat history arrived, or was refused. |
+| `webhook.received` | A verified webhook this gateway does not model, handed on whole. |
 
 Payloads are enriched with `request_id`, `session_id`, `flow_name`, `gateway`, and `platform` when the context has them, plus a `timestamp`.
 
-## WhatsApp Coexistence
+## Webhooks that are not messaging
 
-With [Coexistence](https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers/coexistence) the business keeps using the WhatsApp Business App on the same number the Cloud API answers on, and Meta reports what happens there through three extra webhook fields.
+FlowChat's job is messaging: the inbound turn, the reply it produces, and what became of that reply. A platform sends a great deal more. WhatsApp alone will report account bans, template approvals, phone number quality, imported chat history, contact address books, and replies a human typed in the WhatsApp Business App, and it adds new fields regularly.
 
-None of them is a customer turn, so **none of them runs a flow**. FlowChat verifies the signature, emits an event, and answers Meta. What an echo or a synced contact means is your application's decision:
+None of that is a customer turn, so **none of it runs a flow**, and none of it is interpreted here. FlowChat verifies the signature, answers the platform, and publishes the change under `webhook.received` with the field that named it. What it means is your application's decision:
 
 ```ruby
-ActiveSupport::Notifications.subscribe("coexistence.message_echo.flow_chat") do |*, payload|
-  # A human answered from the Business App. Most applications will want to stop
-  # the bot replying on top of them.
-  payload[:echoes].each { |echo| MyApp::Echoes.record(payload[:business_phone_number_id], echo) }
+ActiveSupport::Notifications.subscribe("webhook.received.flow_chat") do |*, payload|
+  case payload[:field]
+  when "smb_message_echoes"
+    # A human answered from the WhatsApp Business App. Most applications will want
+    # to stop the bot replying on top of them.
+    MyApp::Echoes.record(payload[:business_phone_number_id], payload[:value]["message_echoes"])
+  when "history"
+    MyApp::HistoryImport.enqueue(payload[:business_phone_number_id], payload[:value]["history"])
+  when "account_update"
+    MyApp::Connections.review(payload[:business_phone_number_id], payload[:value])
+  end
 end
 ```
 
-`coexistence.history_sync` fires for a refusal as well as for data, because an application waiting on an import needs to know it is not coming. Check each chunk for an `errors` key.
+The payload carries `field`, the whole `value`, and the business phone number when the change names one. Account-level changes do not name one, so expect it to be nil there.
+
+Subscribing to a field costs nothing here: an unmodelled field is published whether or not anything listens, and logged at info so a subscription you have not written yet is still visible. Adding support for a new field is a change in your application, not a new release of this gem.
 
 ## Reacting to `api.error`
 
