@@ -479,10 +479,17 @@ module FlowChat
               platform: :whatsapp,
               content_length: prompt.to_s.length,
               # What Meta called it, so this and message.status can be joined.
-              platform_message_id: result.is_a?(Hash) ? result.dig("messages", 0, "id") : nil,
+              platform_message_id: platform_message_id_from(result),
               timestamp: context["request.timestamp"]
             })
           end
+        end
+
+        # Meta answers a send with the ids it assigned.
+        def platform_message_id_from(result)
+          return nil unless result.is_a?(Hash)
+
+          result.dig("messages", 0, "id")
         end
 
         def handle_message_simulator(context, controller)

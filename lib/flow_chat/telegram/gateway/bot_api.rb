@@ -280,7 +280,7 @@ module FlowChat
           return unless response
 
           _type, prompt, choices, media = response
-          report_delivery_failure(
+          result = report_delivery_failure(
             context,
             to: context["request.id"],
             message: prompt,
@@ -294,8 +294,16 @@ module FlowChat
             to: context["request.id"],
             message: prompt,
             gateway: :telegram_bot_api,
-            platform: :telegram
+            platform: :telegram,
+            platform_message_id: platform_message_id_from(result)
           })
+        end
+
+        # The Bot API wraps every answer in an ok/result envelope.
+        def platform_message_id_from(result)
+          return nil unless result.is_a?(Hash)
+
+          result.dig("result", "message_id")
         end
 
         def parse_request_body(request)

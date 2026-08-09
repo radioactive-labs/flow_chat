@@ -548,6 +548,18 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     refute gateway.send(:secure_compare, signature1, signature3)
   end
 
+  def test_a_delivered_reply_names_its_platform_message_id
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.inbound")
+    )
+
+    @gateway.call(context)
+
+    # The stubbed messages API answers with sent_123.
+    assert_equal "sent_123", context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
   # --- Webhook field dispatch -------------------------------------------------
 
   def test_dispatches_on_the_declared_field

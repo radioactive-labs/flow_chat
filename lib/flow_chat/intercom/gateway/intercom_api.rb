@@ -365,9 +365,17 @@ module FlowChat
               gateway: :intercom_api,
               platform: :intercom,
               content_length: prompt.to_s.length,
+              platform_message_id: platform_message_id_from(result),
               timestamp: context["request.timestamp"]
             })
           end
+        end
+
+        # A reply comes back as the conversation part it created.
+        def platform_message_id_from(result)
+          return nil unless result.is_a?(Hash)
+
+          result["id"]
         end
 
         def handle_message_simulator(context, controller)

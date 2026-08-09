@@ -75,6 +75,29 @@ ActiveSupport::Notifications.subscribe("api.error.flow_chat") do |*, payload|
 end
 ```
 
+## Delivery callbacks
+
+Events are broadcasts and carry no context, because anyone may subscribe and the context holds the gateway client and the raw inbound body. When the application that owns the turn needs to reach its own records, it uses a callback instead.
+
+A gateway that delivers out of band (Telegram, WhatsApp, Intercom) sends after the middleware stack has unwound. So a row the application wrote during the turn was written before anything knew whether the send worked, or what the platform would call it. These two callbacks are the only places that know:
+
+```ruby
+FlowChat::Config.on_delivery_success = lambda do |context, result|
+  id = context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  MyApp::Message.find(context["myapp.bot_message_id"]).update!(platform_message_id: id) if id
+end
+
+FlowChat::Config.on_delivery_failure = lambda do |context, error|
+  MyApp::Message.find(context["myapp.bot_message_id"]).update!(status: :failed, error: error.message)
+end
+```
+
+`DELIVERED_MESSAGE_ID_KEY` is `"delivery.platform_message_id"`, and every out-of-band gateway sets it to whatever its own platform called the message: WhatsApp's `wamid`, Telegram's numeric `message_id`, Intercom's conversation part id. It is nil when a platform names none. Reading one key is the point, so an application does not carry a case statement over platforms.
+
+HTTP and USSD set nothing, since their reply travels in the response they are already returning and has no separate delivery to succeed or fail.
+
+Neither callback may change what happened. `on_delivery_success` cannot alter the send's return value, `on_delivery_failure` cannot replace the delivery error, and an exception raised in either is logged and dropped.
+
 ## Subscribing
 
 Subscribe with `ActiveSupport::Notifications`, remembering the `.flow_chat` suffix:

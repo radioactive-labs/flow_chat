@@ -72,6 +72,20 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
     assert_equal "private", context["telegram.chat_type"]
   end
 
+  # Every gateway that delivers out of band names the id the same way, so an app
+  # stamping it onto its own record reads one key rather than five shapes.
+  def test_a_delivered_reply_names_its_platform_message_id
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello bot!", 12345)
+    )
+
+    @gateway.call(context)
+
+    # The stubbed sendMessage answers with message_id 123.
+    assert_equal 123, context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
   def test_post_request_text_message_with_bot_command
     context = create_context_with_request(
       method: :post,
