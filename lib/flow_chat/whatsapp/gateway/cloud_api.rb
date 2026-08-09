@@ -159,6 +159,15 @@ module FlowChat
 
               case webhook_field(change, value)
               when "messages"
+                # There is no separate `statuses` field to subscribe to: Meta
+                # reports delivery status under `messages` as well, in a change
+                # carrying `statuses` and no `messages`. Handled before the flow
+                # slot is claimed, or a status arriving ahead of a message in the
+                # same delivery would spend the slot and drop the message.
+                handle_statuses(value) if value["statuses"].present?
+
+                next if value["messages"].blank?
+
                 if flow_ran
                   FlowChat.logger.warn { "CloudApi: A second messages change arrived in the same delivery and was not processed" }
                   next
@@ -171,6 +180,8 @@ module FlowChat
                 when :rendered then return nil # simulator already wrote the response
                 end
               when "statuses"
+                # Only reachable for a payload built without a field name, which
+                # our own fixtures do and Meta does not.
                 handle_statuses(value)
               when "smb_message_echoes"
                 handle_message_echoes(value)

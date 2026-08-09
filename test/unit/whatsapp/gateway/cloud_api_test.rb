@@ -608,6 +608,41 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   # --- Statuses --------------------------------------------------------------
 
+  # Meta has no `statuses` webhook field. A delivery report arrives as a change
+  # whose field is `messages`, carrying statuses and no messages.
+  def test_a_status_reported_under_the_messages_field_is_instrumented
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("messages", {"statuses" => [status_hash]})
+    )
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen&.dig(:message_id)
+    assert_not_requested :post, @mock_config.messages_url
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  # The status must not spend the one flow slot a delivery has.
+  def test_a_status_ahead_of_a_message_does_not_drop_the_message
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    body = create_text_message_payload("Hello", "wamid.behind_status")
+    body["entry"][0]["changes"][0]["field"] = "messages"
+    status_change = change_payload("messages", {"statuses" => [status_hash]})["entry"][0]["changes"][0]
+    body["entry"][0]["changes"].unshift(status_change)
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen&.dig(:message_id)
+    assert_equal "Hello", context.input, "the message behind the status must still run"
+    assert_requested :post, @mock_config.messages_url
+  end
+
   def test_status_updates_are_instrumented
     seen = nil
     subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
