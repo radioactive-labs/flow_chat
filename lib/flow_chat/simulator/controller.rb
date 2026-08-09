@@ -88,24 +88,14 @@ module FlowChat
       end
 
       def set_simulator_cookie
-        # Get global simulator secret
-        simulator_secret = FlowChat::Config.simulator_secret
-
-        unless simulator_secret && !simulator_secret.empty?
+        if FlowChat::Config.simulator_secret.blank?
           raise StandardError, "Simulator secret not configured. Please set FlowChat::Config.simulator_secret to enable simulator mode."
         end
 
-        # Generate timestamp-based signed cookie
-        timestamp = Time.now.to_i
-        message = "simulator:#{timestamp}"
-        signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
-
-        cookie_value = "#{timestamp}:#{signature}"
-
-        # Set secure cookie (valid for 24 hours)
-        cookies[:flowchat_simulator] = {
-          value: cookie_value,
-          expires: 24.hours.from_now,
+        # Set secure cookie (valid for as long as the gateways will accept it)
+        cookies[FlowChat::Security::SIMULATOR_COOKIE_NAME] = {
+          value: FlowChat::Security.simulator_cookie,
+          expires: FlowChat::Security::SIMULATOR_COOKIE_TTL.seconds.from_now,
           secure: request.ssl?, # Only send over HTTPS in production
           httponly: true,       # Prevent XSS access
           same_site: :lax      # CSRF protection while allowing normal navigation

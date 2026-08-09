@@ -86,7 +86,7 @@ module FlowChat
           # A configuration with no verify token must not verify anything. Without
           # the presence check a missing token on both sides compares equal, and
           # anyone could claim the endpoint by asking for the challenge.
-          verified = verify_token.present? && secure_compare(provided_token.to_s, verify_token)
+          verified = verify_token.present? && FlowChat::Security.secure_compare(provided_token.to_s, verify_token)
 
           FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{verified}" }
 
@@ -369,7 +369,7 @@ module FlowChat
           )
 
           # Compare signatures using secure comparison to prevent timing attacks
-          signature_valid = secure_compare(expected_signature, calculated_signature)
+          signature_valid = FlowChat::Security.secure_compare(expected_signature, calculated_signature)
 
           if signature_valid
             FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
@@ -383,16 +383,6 @@ module FlowChat
         rescue => e
           FlowChat.logger.error { "CloudApi: Error validating webhook signature: #{e.class.name}: #{e.message}" }
           false
-        end
-
-        # Secure string comparison to prevent timing attacks
-        def secure_compare(a, b)
-          return false unless a.bytesize == b.bytesize
-
-          l = a.unpack("C*")
-          res = 0
-          b.each_byte { |byte| res |= byte ^ l.shift }
-          res == 0
         end
 
         def extract_message_content!(message, context)
@@ -528,39 +518,9 @@ module FlowChat
           # Check if simulator mode is enabled for this processor
           return false unless context["enable_simulator"]
 
-          # Then check if simulator mode is requested and valid
-          @body.dig("simulator_mode") && valid_simulator_cookie?(context)
-        end
-
-        def valid_simulator_cookie?(context)
-          simulator_secret = FlowChat::Config.simulator_secret
-          return false unless simulator_secret && !simulator_secret.empty?
-
-          # Check for simulator cookie
-          simulator_cookie = @controller.request.cookies["flowchat_simulator"]
-          return false unless simulator_cookie
-
-          # Verify the cookie is a valid HMAC signature
-          # Cookie format: "timestamp:signature" where signature = HMAC(simulator_secret, "simulator:timestamp")
-          begin
-            timestamp_str, signature = simulator_cookie.split(":", 2)
-            return false unless timestamp_str && signature
-
-            # Check timestamp is recent (within 24 hours for reasonable session duration)
-            timestamp = timestamp_str.to_i
-            return false if timestamp <= 0
-            return false if (Time.now.to_i - timestamp).abs > 86400 # 24 hours
-
-            # Calculate expected signature
-            message = "simulator:#{timestamp_str}"
-            expected_signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
-
-            # Use secure comparison
-            secure_compare(signature, expected_signature)
-          rescue => e
-            Rails.logger.warn "Invalid simulator cookie format: #{e.message}"
-            false
-          end
+          # Then check if simulator mode is requested and authorized
+          @body.dig("simulator_mode") &&
+            FlowChat::Security.valid_simulator_cookie?(@controller.request.cookies[FlowChat::Security::SIMULATOR_COOKIE_NAME])
         end
 
         def parse_request_body(request)

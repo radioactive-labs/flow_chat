@@ -693,21 +693,6 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     refute result.key?(:media)
   end
 
-  def test_secure_compare_equal_strings
-    result = @gateway.send(:secure_compare, "abc123", "abc123")
-    assert_equal true, result
-  end
-
-  def test_secure_compare_different_strings
-    result = @gateway.send(:secure_compare, "abc123", "def456")
-    assert_equal false, result
-  end
-
-  def test_secure_compare_different_lengths
-    result = @gateway.send(:secure_compare, "abc", "abcdef")
-    assert_equal false, result
-  end
-
   def test_html_message_converted_to_markdown
     webhook_body = build_conversation_created_webhook_with_html
     setup_post_request_with_webhook_and_app_call(webhook_body)

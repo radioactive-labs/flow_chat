@@ -520,34 +520,6 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_nil context.input
   end
 
-  def test_secure_compare_method
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
-
-    # Test identical strings
-    assert gateway.send(:secure_compare, "hello", "hello")
-
-    # Test different strings of same length
-    refute gateway.send(:secure_compare, "hello", "world")
-
-    # Test different lengths
-    refute gateway.send(:secure_compare, "hello", "hi")
-    refute gateway.send(:secure_compare, "hi", "hello")
-
-    # Test empty strings
-    assert gateway.send(:secure_compare, "", "")
-    refute gateway.send(:secure_compare, "", "hello")
-
-    # Test with actual HMAC signatures
-    secret = "test_secret"
-    message = "test_message"
-    signature1 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
-    signature2 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
-    signature3 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, "different_message")
-
-    assert gateway.send(:secure_compare, signature1, signature2)
-    refute gateway.send(:secure_compare, signature1, signature3)
-  end
-
   def test_verification_refuses_a_configuration_with_no_verify_token
     @mock_config.verify_token = nil
 

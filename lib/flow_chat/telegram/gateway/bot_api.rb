@@ -264,15 +264,7 @@ module FlowChat
           provided_token = request.headers["X-Telegram-Bot-Api-Secret-Token"]
           return false unless provided_token
 
-          secure_compare(@config.secret_token, provided_token.to_s)
-        end
-
-        def secure_compare(a, b)
-          return false unless a.bytesize == b.bytesize
-          l = a.unpack("C*")
-          res = 0
-          b.each_byte { |byte| res |= byte ^ l.shift }
-          res == 0
+          FlowChat::Security.secure_compare(@config.secret_token, provided_token.to_s)
         end
 
         def handle_message_inline(context, controller)

@@ -370,30 +370,6 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
   end
 
   # ============================================================================
-  # SECURE COMPARE TESTS
-  # ============================================================================
-
-  def test_secure_compare_equal_strings
-    result = @gateway.send(:secure_compare, "hello", "hello")
-    assert_equal true, result
-  end
-
-  def test_secure_compare_different_strings
-    result = @gateway.send(:secure_compare, "hello", "world")
-    assert_equal false, result
-  end
-
-  def test_secure_compare_different_lengths
-    result = @gateway.send(:secure_compare, "hello", "hi")
-    assert_equal false, result
-  end
-
-  def test_secure_compare_empty_strings
-    assert @gateway.send(:secure_compare, "", "")
-    refute @gateway.send(:secure_compare, "", "hello")
-  end
-
-  # ============================================================================
   # GROUP CHAT TESTS
   # ============================================================================
 
