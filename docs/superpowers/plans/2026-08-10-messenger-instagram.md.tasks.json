@@ -90,7 +90,7 @@
     {
       "id": 8,
       "subject": "Task 8: Messenger configuration",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         3
       ],
@@ -99,7 +99,7 @@
     {
       "id": 9,
       "subject": "Task 9: The choice ladder helper",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         8
       ],
@@ -108,7 +108,7 @@
     {
       "id": 10,
       "subject": "Task 10: Messenger renderer",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         5,
         9
@@ -118,7 +118,7 @@
     {
       "id": 11,
       "subject": "Task 11: Messenger client",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         10
       ],
@@ -127,7 +127,7 @@
     {
       "id": 12,
       "subject": "Task 12: The shared messaging gateway",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         1,
         2,
@@ -138,7 +138,7 @@
     {
       "id": 13,
       "subject": "Task 13: Messenger gateway and choice mapper",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         12,
         4
@@ -148,7 +148,7 @@
     {
       "id": 14,
       "subject": "Task 14: Messenger integration test",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         13
       ],
@@ -157,7 +157,7 @@
     {
       "id": 15,
       "subject": "Task 15: Instagram configuration",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         3
       ],
@@ -166,7 +166,7 @@
     {
       "id": 16,
       "subject": "Task 16: Instagram renderer, client, gateway, choice mapper",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         13,
         15
@@ -176,7 +176,7 @@
     {
       "id": 17,
       "subject": "Task 17: Instagram integration test",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         16,
         14
@@ -186,7 +186,7 @@
     {
       "id": 18,
       "subject": "Task 18: Simulator support",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         13,
         16
@@ -196,7 +196,7 @@
     {
       "id": 19,
       "subject": "Task 19: Documentation",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         16
       ],
@@ -209,17 +209,18 @@
       "blockedBy": [
         17
       ],
-      "description": "**Goal:** Close the two gaps that cannot be settled from this machine: which webhook object Instagram messaging arrives under, and whether the Instagram carousel is legible for a plain option menu.\n\n**User Verification Required:**\nBefore marking this task complete, you MUST call AskUserQuestion:\n```yaml\nAskUserQuestion:\n  question: \"Two things I cannot check from here. In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"\n  header: \"Verification\"\n  options:\n    - label: \"object is instagram, carousel is fine\"\n      description: \"Keep expected_webhook_object as instagram and keep the carousel rung\"\n    - label: \"object is page, carousel is fine\"\n      description: \"Change expected_webhook_object to page and keep the carousel rung\"\n    - label: \"object is instagram, carousel reads badly\"\n      description: \"Keep the object and drop the carousel rung\"\n    - label: \"object is page, carousel reads badly\"\n      description: \"Change the object to page and drop the carousel rung\"\n```\n\n**If the user selects an option indicating rework:** apply the change, re-run the suite, and re-verify with AskUserQuestion again. Do NOT guess either answer.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/instagram/gateway/send_api.rb\", \"lib/flow_chat/instagram/renderer.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"webhook object confirmed against the dashboard\", \"carousel decision confirmed on a device\", \"spec open items 2 and 3 resolved\", \"suite green after any change\"], \"requiresUserVerification\": true, \"userVerificationPrompt\": \"In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"}\n```"
+      "description": "**Goal:** Close the two gaps that cannot be settled from this machine: which webhook object Instagram messaging arrives under, and whether the Instagram carousel is legible for a plain option menu.\n\n**User Verification Required:**\nBefore marking this task complete, you MUST call AskUserQuestion:\n```yaml\nAskUserQuestion:\n  question: \"Two things I cannot check from here. In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"\n  header: \"Verification\"\n  options:\n    - label: \"object is instagram, carousel is fine\"\n      description: \"Keep expected_webhook_object as instagram and keep the carousel rung\"\n    - label: \"object is page, carousel is fine\"\n      description: \"Change expected_webhook_object to page and keep the carousel rung\"\n    - label: \"object is instagram, carousel reads badly\"\n      description: \"Keep the object and drop the carousel rung\"\n    - label: \"object is page, carousel reads badly\"\n      description: \"Change the object to page and drop the carousel rung\"\n```\n\n**If the user selects an option indicating rework:** apply the change, re-run the suite, and re-verify with AskUserQuestion again. Do NOT guess either answer.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/instagram/gateway/send_api.rb\", \"lib/flow_chat/instagram/renderer.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"webhook object confirmed against the dashboard\", \"carousel decision confirmed on a device\", \"spec open items 2 and 3 resolved\", \"suite green after any change\"], \"requiresUserVerification\": true, \"userVerificationPrompt\": \"In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"}\n```",
+      "note": "Asked. User has not set up the Instagram webhook yet and has not checked the carousel on a device. Both recorded as open in the spec. Webhook object must be confirmed before Instagram goes live; carousel is cosmetic only."
     },
     {
       "id": 21,
       "subject": "Task 21: Confirm the Messenger text cap and close out",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         11
       ],
       "description": "**Goal:** Replace the one assumed constant with a verified one, and confirm the whole branch is green. 2000 was assumed because Meta's Send API reference page would not render during design.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/config.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"text cap verified against Meta docs\", \"client test fixture still crosses the boundary\", \"spec open item 1 resolved with its source\", \"suite and linter green\", \"branch diff reviewed\"], \"requiresUserVerification\": false}\n```"
     }
   ],
-  "lastUpdated": "2026-08-10T16:30:00Z"
+  "lastUpdated": "2026-08-10T17:00:00Z"
 }
