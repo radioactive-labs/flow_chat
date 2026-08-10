@@ -213,6 +213,34 @@ module FlowChat
           assert_equal "k1", @context.input, "the id for the label \"5\" must win over position 5"
         end
 
+        # create_id_mapping only runs when the next screen has choices. A screen
+        # with none (a plain prompt.ask) never touches the position map, so a
+        # position map left over from an earlier numbered rung must be cleared
+        # the moment it is consumed, not left to hijack a later free-text digit.
+        def test_stale_position_map_does_not_hijack_a_later_free_text_digit
+          choices = (1..25).to_h { |i| ["key#{i}", "Option #{i}"] }
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "3"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "key3", @context.input
+
+          @context.input = "3"
+          @app.expect :call, [:prompt, "How many bags?", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "3", @context.input,
+            "a typed digit on a screen with no choices must stay the digit, " \
+            "but a stale position map rewrote it to #{@context.input.inspect}"
+          @app.verify
+        end
+
         # Mock classes for testing
         class MockSession
           def initialize

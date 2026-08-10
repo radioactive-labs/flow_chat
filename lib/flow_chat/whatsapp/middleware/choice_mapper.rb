@@ -150,9 +150,13 @@ module FlowChat
         end
 
         def clear_choice_state_if_needed
-          # Clear choice mapping if this is a new flow (no input or fresh start)
+          # Clear choice state if this is a new flow (no input or fresh start).
+          # Both maps are cleared together: a screen with no choices never calls
+          # create_id_mapping, so a stale position (or id) map left behind here
+          # would go on hijacking plain numeric answers on later free-text screens.
           if @context.input.blank? || should_clear_for_new_flow?
             clear_choice_mapping
+            clear_position_mapping
           end
         end
 
@@ -160,10 +164,13 @@ module FlowChat
           # Clear mapping if this input doesn't match any stored mapping
           # This indicates we're in a new flow step
           choice_mapping = get_choice_mapping
-          return false if choice_mapping.empty?
+          position_mapping = get_position_mapping
+          return false if choice_mapping.empty? && position_mapping.empty?
 
-          # If input is present but doesn't match any mapping, we're in a new flow
-          @context.input.present? && !choice_mapping.key?(@context.input.to_s)
+          # If input is present but doesn't match either mapping, we're in a new flow
+          @context.input.present? &&
+            !choice_mapping.key?(@context.input.to_s) &&
+            !position_mapping.key?(@context.input.to_s)
         end
       end
     end
