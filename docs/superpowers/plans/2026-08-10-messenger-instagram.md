@@ -20,6 +20,7 @@
 - Never stage or commit anything beyond the files a task names.
 - Logging uses block syntax: `FlowChat.logger.debug { "..." }`.
 - No `respond_to?` guards. If a collaborator is required, call it.
+- **Inside a standalone `module`, always fully qualify `FlowChat::Instrumentation::Events::X`.** Bare `Events::X` raises `NameError` there: Ruby resolves an unqualified constant through `Module.nesting` and then the ancestors of the cref, not the ancestors of whichever class later includes the module. The bare form works only in a class body that itself includes `FlowChat::Instrumentation`, which is why the old `CloudApi` code got away with it. Task 2 hit this. Code blocks later in this plan sometimes show the bare form inside modules; qualify it anyway. Classes that `include FlowChat::Instrumentation` directly (such as `Meta::MessagingGateway`) are fine either way.
 - Docs prose: dense and plain, no marketing adjectives, **no em-dashes**.
 
 ## File Structure

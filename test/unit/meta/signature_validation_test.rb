@@ -8,6 +8,36 @@ class MetaSignatureValidationTest < Minitest::Test
     @gateway = FlowChat::TestSupport::FakeMetaGateway.new(@config)
   end
 
+  # The mirror of test_verification_works_without_signature_validation. The shared
+  # fake includes both behavior modules, so neither test file proves isolation on
+  # its own any more. Each module must stand alone: they are included separately
+  # by gateways that need only one.
+  def test_signature_validation_works_without_webhook_verification
+    gateway_class = Class.new do
+      include FlowChat::Meta::SignatureValidation
+
+      def platform = :sig_only
+      def platform_label = "SigOnly"
+      def configuration_error_class = FlowChat::Meta::ConfigurationError
+      def log_tag = "SigOnlyGateway"
+    end
+
+    refute gateway_class.include?(FlowChat::Meta::WebhookVerification)
+
+    body = '{"entry":[]}'
+    secret = "test_secret"
+    signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, body)
+    request = OpenStruct.new(
+      headers: {"X-Hub-Signature-256" => "sha256=#{signature}"},
+      body: StringIO.new(body)
+    )
+
+    gateway = gateway_class.new
+    gateway.instance_variable_set(:@config, OpenStruct.new(skip_signature_validation: false, app_secret: secret))
+
+    assert gateway.send(:valid_webhook_signature?, request)
+  end
+
   def test_whitespace_only_app_secret_raises_configuration_error
     @config.app_secret = "   "
 

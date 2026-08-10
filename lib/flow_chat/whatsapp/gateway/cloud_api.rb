@@ -64,6 +64,23 @@ module FlowChat
           FlowChat.logger.debug { "CloudApi: Added Whatsapp::Middleware::ChoiceMapper" }
         end
 
+        # What this gateway is, for the shared Meta:: modules. Public because
+        # FlowChat::Meta::GatewayIdentity declares them public: a gateway saying
+        # which platform it speaks for is not a secret, unlike how it validates a
+        # signature. Keeping them here rather than below `private` means every
+        # Meta gateway answers these the same way.
+        def platform
+          :whatsapp
+        end
+
+        def platform_label
+          "WhatsApp"
+        end
+
+        def configuration_error_class
+          FlowChat::Whatsapp::ConfigurationError
+        end
+
         private
 
         def determine_message_handler(context)
@@ -288,18 +305,6 @@ module FlowChat
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
             value: value
           })
-        end
-
-        def platform
-          :whatsapp
-        end
-
-        def configuration_error_class
-          FlowChat::Whatsapp::ConfigurationError
-        end
-
-        def platform_label
-          "WhatsApp"
         end
 
         def extract_message_content!(message, context)
