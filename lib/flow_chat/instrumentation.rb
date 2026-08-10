@@ -45,8 +45,26 @@ module FlowChat
     #
     # Re-raises whatever the send raised: this reports a failure, it does not
     # handle one.
+    # A send fails two ways and only one of them raises. Every client here answers
+    # with the platform's parsed response when the message was accepted and nil
+    # once it has already logged an API error, so a nil result is a failure that
+    # arrived quietly. Treating it as success fired on_delivery_success for a
+    # message that was never delivered, and stamped a nil id onto the context as
+    # though the platform had named one.
+    #
+    # It reports rather than raises, because the client already decided not to:
+    # turning a swallowed API error into an exception here would fail the webhook
+    # for a reply the platform merely declined.
     def report_delivery_failure(context, **payload)
       result = yield
+
+      if result.nil?
+        error = FlowChat::DeliveryError.new("#{payload[:platform] || "the platform"} did not accept the message")
+        report_to_subscribers(error, payload)
+        report_to_app(context, error)
+        return nil
+      end
+
       report_delivery_success(context, result)
       result
     rescue => error

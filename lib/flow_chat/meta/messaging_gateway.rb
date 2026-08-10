@@ -225,10 +225,23 @@ module FlowChat
         attachments = message["attachments"]
         if attachments.is_a?(Array) && attachments.any?
           attachment = attachments.first
-          context["request.media"] = {
-            type: normalize_attachment_type(attachment["type"]),
-            url: attachment.dig("payload", "url")
-          }
+
+          # Meta delivers a shared location as an attachment like any image, but
+          # every other gateway here puts one on request.location, and a flow
+          # reading app.location should not have to know which platform it is on.
+          if attachment["type"].to_s == "location"
+            coordinates = attachment.dig("payload", "coordinates") || {}
+            context["request.location"] = {
+              latitude: coordinates["lat"],
+              longitude: coordinates["long"],
+              name: attachment["title"]
+            }.compact
+          else
+            context["request.media"] = {
+              type: normalize_attachment_type(attachment["type"]),
+              url: attachment.dig("payload", "url")
+            }
+          end
         end
 
         context.input = message["text"].presence || ""

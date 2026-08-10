@@ -147,6 +147,40 @@ class MessagingGatewayTest < Minitest::Test
     assert_equal :user_id, middleware.send(:platform_default_identifier, context)
   end
 
+  # Meta delivers a shared location as an attachment like any image, but every
+  # other gateway here puts one on request.location, and a flow reading
+  # app.location should not have to know which platform it is on.
+  def test_a_shared_location_lands_on_request_location
+    context = post(messaging_payload({
+      "message" => {
+        "mid" => "mid.loc",
+        "attachments" => [{
+          "type" => "location",
+          "title" => "Accra Mall",
+          "payload" => {"coordinates" => {"lat" => 5.6205, "long" => -0.1731}}
+        }]
+      }
+    }))
+
+    assert_equal 5.6205, context["request.location"][:latitude]
+    assert_equal(-0.1731, context["request.location"][:longitude])
+    assert_equal "Accra Mall", context["request.location"][:name]
+    assert_nil context["request.media"], "a location is not media"
+  end
+
+  def test_a_non_location_attachment_still_lands_on_request_media
+    context = post(messaging_payload({
+      "message" => {
+        "mid" => "mid.img",
+        "attachments" => [{"type" => "image", "payload" => {"url" => "https://cdn.example/a.png"}}]
+      }
+    }))
+
+    assert_equal :image, context["request.media"][:type]
+    assert_equal "https://cdn.example/a.png", context["request.media"][:url]
+    assert_nil context["request.location"]
+  end
+
   private
 
   def messaging_payload(event)
