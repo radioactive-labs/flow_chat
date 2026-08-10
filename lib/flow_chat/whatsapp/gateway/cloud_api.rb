@@ -11,6 +11,7 @@ module FlowChat
         include FlowChat::Instrumentation
         include FlowChat::GatewayAsyncSupport
         include FlowChat::Meta::SignatureValidation
+        include FlowChat::Meta::WebhookVerification
 
         attr_reader :context
 
@@ -73,39 +74,6 @@ module FlowChat
           else
             FlowChat.logger.debug { "CloudApi: Using inline message handler" }
             :inline
-          end
-        end
-
-        def handle_verification(context)
-          params = @controller.request.params
-
-          verify_token = @config.verify_token
-          provided_token = params["hub.verify_token"]
-          challenge = params["hub.challenge"]
-
-          # A configuration with no verify token must not verify anything. Without
-          # the presence check a missing token on both sides compares equal, and
-          # anyone could claim the endpoint by asking for the challenge.
-          verified = verify_token.present? && FlowChat::Security.secure_compare(provided_token.to_s, verify_token)
-
-          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{verified}" }
-
-          if verified
-            # Use instrumentation for webhook verification success
-            instrument(Events::WEBHOOK_VERIFIED, {
-              challenge: challenge,
-              platform: :whatsapp
-            })
-
-            @controller.render plain: challenge
-          else
-            # Use instrumentation for webhook verification failure
-            instrument(Events::WEBHOOK_FAILED, {
-              reason: "Invalid verify token",
-              platform: :whatsapp
-            })
-
-            @controller.head :forbidden
           end
         end
 
@@ -320,6 +288,10 @@ module FlowChat
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
             value: value
           })
+        end
+
+        def platform
+          :whatsapp
         end
 
         def configuration_error_class

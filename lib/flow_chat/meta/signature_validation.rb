@@ -5,9 +5,12 @@ module FlowChat
     # X-Hub-Signature-256 validation, shared by every Meta webhook gateway.
     #
     # The including gateway must have @config responding to #app_secret and
-    # #skip_signature_validation, and must override platform_label and
-    # configuration_error_class. It may override log_tag.
+    # #skip_signature_validation, and must include FlowChat::Meta::GatewayIdentity
+    # (directly or via another Meta:: behavior module) to supply platform_label
+    # and configuration_error_class.
     module SignatureValidation
+      include FlowChat::Meta::GatewayIdentity
+
       private
 
       def valid_webhook_signature?(request)
@@ -60,18 +63,6 @@ module FlowChat
 
         FlowChat.logger.error { "#{log_tag}: Error validating webhook signature: #{e.class.name}: #{e.message}" }
         false
-      end
-
-      def configuration_error_class
-        raise NotImplementedError, "configuration_error_class must be defined by the including gateway"
-      end
-
-      def platform_label
-        raise NotImplementedError, "platform_label must be defined by the including gateway"
-      end
-
-      def log_tag
-        self.class.name.split("::").last
       end
     end
   end
