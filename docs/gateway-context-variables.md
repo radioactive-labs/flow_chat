@@ -4,47 +4,58 @@ Every gateway parses its platform's webhook into a common set of context values.
 
 ## All context variables
 
-| Variable | USSD Nalo | HTTP Simple | WhatsApp Cloud API | Telegram Bot API | Intercom API | Description |
-|----------|-----------|-------------|-------------------|------------------|--------------|-------------|
+| Variable | USSD Nalo | HTTP Simple | WhatsApp Cloud API | Messenger Send API | Instagram Send API | Telegram Bot API | Intercom API | Description |
+|----------|-----------|-------------|-------------------|--------------------|--------------------|------------------|--------------|-------------|
 | **Common** |
-| `request.id` | Session id | From user_params | Phone number | Chat id | Conversation id | Session or conversation identifier |
-| `request.user_id` | = msisdn | From user_params | Phone number | Telegram user id | Contact id | Stable per-user identifier |
-| `request.user_name` | none | optional | optional | First and last name | optional | Sender display name |
-| `request.username` | none | none | none | Telegram @username | none | Telegram username |
-| `request.msisdn` | set | optional | set | none | optional | E.164 phone number |
-| `request.email` | none | optional | none | none | optional | User email |
-| `request.message_id` | UUID | UUID | WhatsApp id | Telegram msg id | optional | Message identifier |
-| `request.timestamp` | Current | Current | Current | From message | Current | ISO8601 timestamp |
-| `request.gateway` | `:nalo` | `:http_simple` | `:whatsapp_cloud_api` | `:telegram_bot_api` | `:intercom_api` | Gateway symbol |
-| `request.platform` | `:ussd` | `:http` | `:whatsapp` | `:telegram` | `:intercom` | Platform symbol |
-| `request.body` | set | set | set | set | set | Raw request body, string keys |
-| `request.input` | Text | Text | Text (note 1) | Text (note 2) | Text or nil (note 3) | The turn's text |
+| `request.id` | Session id | From user_params | Phone number | PSID | IGSID | Chat id | Conversation id | Session or conversation identifier |
+| `request.user_id` | = msisdn | From user_params | Phone number | PSID | IGSID | Telegram user id | Contact id | Stable per-user identifier |
+| `request.user_name` | none | optional | optional | none | none | First and last name | optional | Sender display name |
+| `request.username` | none | none | none | none | none | Telegram @username | none | Telegram username |
+| `request.msisdn` | set | optional | set | nil | nil | none | optional | E.164 phone number |
+| `request.email` | none | optional | none | none | none | none | optional | User email |
+| `request.message_id` | UUID | UUID | WhatsApp id | `mid` | `mid` | Telegram msg id | optional | Message identifier |
+| `request.timestamp` | Current | Current | Current | Current | Current | From message | Current | ISO8601 timestamp |
+| `request.gateway` | `:nalo` | `:http_simple` | `:whatsapp_cloud_api` | `:messenger_send_api` | `:instagram_send_api` | `:telegram_bot_api` | `:intercom_api` | Gateway symbol |
+| `request.platform` | `:ussd` | `:http` | `:whatsapp` | `:messenger` | `:instagram` | `:telegram` | `:intercom` | Platform symbol |
+| `request.body` | set | set | set | set | set | set | set | Raw request body, string keys |
+| `request.input` | Text | Text | Text (note 1) | Text (note 4) | Text (note 4) | Text (note 2) | Text or nil (note 3) | The turn's text |
 | **Structured attachments** |
-| `request.location` | none | none | set | set | none | Location payload |
-| `request.media` | none | via `media_url` | set | set | set (may be several) | Media metadata |
-| `request.contact` | none | none | none | set | none | Contact payload |
+| `request.location` | none | none | set | none | none | set | none | Location payload |
+| `request.media` | none | via `media_url` | set | set (note 5) | set (note 5) | set | set (may be several) | Media metadata |
+| `request.contact` | none | none | none | none | none | set | none | Contact payload |
 | **WhatsApp** |
-| `whatsapp.business.phone_number` | | | E.164 business number | | | |
-| `whatsapp.business.phone_number_id` | | | WhatsApp phone number id | | | |
-| `whatsapp.client` | | | client instance | | | |
+| `whatsapp.business.phone_number` | | | E.164 business number | | | | | |
+| `whatsapp.business.phone_number_id` | | | WhatsApp phone number id | | | | | |
+| `whatsapp.client` | | | client instance | | | | | |
+| **Messenger** |
+| `messenger.account.id` | | | | Page id | | | | |
+| `messenger.client` | | | | client instance | | | | |
+| **Instagram** |
+| `instagram.account.id` | | | | | Linked Page id | | | |
+| `instagram.client` | | | | | client instance | | | |
 | **Telegram** |
-| `telegram.client` | | | | client instance | | |
-| `telegram.chat_type` | | | | private, group, supergroup, channel | | |
-| `telegram.callback_query_id` | | | | on callbacks | | |
-| `telegram.original_message_id` | | | | on callbacks | | |
+| `telegram.client` | | | | | | client instance | | |
+| `telegram.chat_type` | | | | | | private, group, supergroup, channel | | |
+| `telegram.callback_query_id` | | | | | | on callbacks | | |
+| `telegram.original_message_id` | | | | | | on callbacks | | |
 | **HTTP** |
-| `http.method` | | GET or POST | | | | |
-| `http.path` | | Request path | | | | |
-| `http.user_agent` | | User agent header | | | | |
+| `http.method` | | GET or POST | | | | | | |
+| `http.path` | | Request path | | | | | | |
+| `http.user_agent` | | User agent header | | | | | | |
 | **Intercom** |
-| `intercom.client` | | | | | client instance | |
-| `intercom.topic` | | | | | Webhook event type | |
+| `intercom.client` | | | | | | | client instance | |
+| `intercom.topic` | | | | | | | Webhook event type | |
 
 Notes on `request.input`:
 
 1. WhatsApp: the message text, a media caption, or a button/list reply id. `""` for a structured turn (location, media, contact) that carries no text.
 2. Telegram: the message text, callback data, or a media caption. `""` for a structured turn with no text.
 3. Intercom: the message text or body, or `""`/`nil` for turns without text.
+4. Messenger and Instagram: the message text, a media caption, a quick-reply payload, or a postback payload. `""` for a turn with no text.
+
+`request.msisdn` is `nil` on both Messenger and Instagram: neither platform exposes a phone number, only a PSID or IGSID scoped to the app and the connected account. Use `request.user_id` (or `app.user_id`) as the durable per-user identifier; sessions key on it by default for both platforms.
+
+5. Messenger and Instagram set `request.media` for any attachment type Meta sends, including non-media attachments such as a shared location: the gateway does not inspect the attachment's `type` before setting it, so a location share on these two platforms surfaces as `request.media` with `type: :location` rather than as `request.location`.
 
 `context.input` is always plain text. There are no `"$media$"`/`"$location$"`/`"$contact$"` sentinel values: a structured turn with no text sets `input` to `""` and carries its payload on `request.media`, `request.location`, or `request.contact`. In flows, read `app.input` (a `FlowChat::Input`) or its accessors, described below.
 
@@ -96,20 +107,22 @@ Accessors, all shortcuts to the `app.input` value object:
 
 ## Media
 
-WhatsApp, Telegram, Intercom, and HTTP set `request.media` for inbound media (USSD is text-only and never sets it). WhatsApp and Telegram carry a single item; Intercom may carry several, one per attachment. HTTP callers submit inbound media through the `media_url` request param, with optional `media_type` and `mime_type`.
+WhatsApp, Messenger, Instagram, Telegram, Intercom, and HTTP set `request.media` for inbound media (USSD is text-only and never sets it). WhatsApp, Messenger, Instagram, and Telegram carry a single item; Intercom may carry several, one per attachment. HTTP callers submit inbound media through the `media_url` request param, with optional `media_type` and `mime_type`.
 
 A `FlowChat::Media` item's `type` is a normalized value; `raw_type` is the platform-native value. The normalization maps `:photo` to `:image` and `:voice` to `:audio`, so `type` is one of `:image`, `:video`, `:audio`, `:document`, `:sticker`.
 
-| Media type | WhatsApp | Telegram | Fields |
-|------------|----------|----------|--------|
-| `:image` (Telegram `:photo`) | yes | yes | id or file_id, mime_type, width, height |
-| `:video` | yes | yes | id or file_id, mime_type, duration, width, height |
-| `:audio` | yes | yes | id or file_id, mime_type, duration, title, performer |
-| `:voice` | no | yes | file_id, mime_type, duration |
-| `:document` | yes | yes | id or file_id, mime_type, filename |
-| `:sticker` | yes | yes | id or file_id, emoji, set_name, is_animated |
+| Media type | WhatsApp | Messenger / Instagram | Telegram | Fields |
+|------------|----------|------------------------|----------|--------|
+| `:image` (Telegram `:photo`) | yes | yes | yes | id or file_id, mime_type, width, height |
+| `:video` | yes | yes | yes | id or file_id, mime_type, duration, width, height |
+| `:audio` | yes | yes | yes | id or file_id, mime_type, duration, title, performer |
+| `:voice` | no | no | yes | file_id, mime_type, duration |
+| `:document` (Messenger/Instagram `file`) | yes | yes | yes | id or file_id, mime_type, filename |
+| `:sticker` | yes | not confirmed | yes | id or file_id, emoji, set_name, is_animated |
 
-`item.url` resolves a fetchable URL per platform (WhatsApp `get_media_url`, Telegram `getFile`, Intercom and HTTP use the direct URL). `item.download` returns the raw bytes.
+Messenger and Instagram attachments carry only `type` and `url`; there is no separate mime_type, filename, width, height, or duration, because the gateway does not call a lookup API the way WhatsApp does for a media id. `item.url` resolves a fetchable URL per platform (WhatsApp `get_media_url`, Telegram `getFile`, Messenger/Instagram/Intercom/HTTP use the direct URL already on the attachment). `item.download` returns the raw bytes.
+
+Meta sets `request.media` for whatever attachment type it sends, including a shared location: `FlowChat::Media#type` would read `:location` in that case, and the item is not also exposed through `request.location` the way it is on WhatsApp and Telegram.
 
 ### Inspecting attachments in validate and transform
 
