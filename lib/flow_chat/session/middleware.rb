@@ -96,6 +96,10 @@ module FlowChat
         case platform
         when :whatsapp
           :msisdn
+        when :messenger, :instagram
+          # Neither platform exposes a phone number. The sender id is scoped to
+          # the app and the account, and is stable per user.
+          :user_id
         else
           :request_id
         end
