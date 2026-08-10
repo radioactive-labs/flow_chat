@@ -57,25 +57,25 @@
     {
       "id": 3,
       "subject": "Task 3: Extract the named-configuration registry",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** One registry with per-class storage, replacing three verbatim copies. A shared @@configurations would merge every platform's registry, which is why storage is a class-level ivar.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/named_configuration.rb\", \"test/unit/named_configuration_test.rb\", \"lib/flow_chat/whatsapp/configuration.rb\", \"lib/flow_chat/telegram/configuration.rb\", \"lib/flow_chat/intercom/configuration.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"per-class storage\", \"exact not-found messages preserved for all three platforms\", \"Whatsapp overrides configuration_label to WhatsApp\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 4,
       "subject": "Task 4: Move IdGenerator up, make its cap configurable",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** FlowChat::IdGenerator usable by any platform, max length passed in rather than fixed at WhatsApp's 256.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/id_generator.rb\", \"test/unit/id_generator_test.rb\", \"lib/flow_chat/whatsapp/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"max_length configurable\", \"default 256 unchanged\", \"hash suffix still fits the cap\", \"FlowChat::Whatsapp::IdGenerator gone\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 5,
       "subject": "Task 5: Add plain-text markdown conversion",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** to_plain_text on Renderers::MarkdownSupport, for the two platforms that support no rich text at all.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/renderers/markdown_support.rb\", \"test/unit/renderers/plain_text_support_test.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/renderers/plain_text_support_test.rb\", \"acceptanceCriteria\": [\"emphasis stripped\", \"ul bulleted and ol numbered\", \"link as text (url)\", \"entities decoded\", \"nil returns empty string\"], \"requiresUserVerification\": false}\n```"
     },
     {
       "id": 6,
       "subject": "Task 6: Fix WhatsApp lists above 10 choices",
-      "status": "pending",
+      "status": "completed",
       "blockedBy": [
         4
       ],
@@ -84,7 +84,7 @@
     {
       "id": 7,
       "subject": "Task 7: Say who sent a WhatsApp echo",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** Coexistence echoes report whether our app, another app, or a human in the business inbox sent the message.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/whatsapp/gateway/cloud_api.rb\", \"test/unit/whatsapp/gateway/cloud_api_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"echo_origin on WEBHOOK_RECEIVED for echo fields\", \"self when app_id matches\", \"other_app when different\", \"human_agent when absent\", \"non-echo fields unchanged\"], \"requiresUserVerification\": false}\n```"
     },
     {
@@ -221,5 +221,5 @@
       "description": "**Goal:** Replace the one assumed constant with a verified one, and confirm the whole branch is green. 2000 was assumed because Meta's Send API reference page would not render during design.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/config.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"text cap verified against Meta docs\", \"client test fixture still crosses the boundary\", \"spec open item 1 resolved with its source\", \"suite and linter green\", \"branch diff reviewed\"], \"requiresUserVerification\": false}\n```"
     }
   ],
-  "lastUpdated": "2026-08-10T00:00:00Z"
+  "lastUpdated": "2026-08-10T16:30:00Z"
 }
