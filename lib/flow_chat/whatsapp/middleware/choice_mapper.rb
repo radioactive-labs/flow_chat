@@ -1,5 +1,3 @@
-require_relative "../id_generator"
-
 module FlowChat
   module Whatsapp
     module Middleware
@@ -95,7 +93,7 @@ module FlowChat
 
         def create_id_mapping(choices)
           # Choices are always a hash after normalize_choices
-          id_generator = IdGenerator.new
+          id_generator = FlowChat::IdGenerator.new
           id_choices = {}
           choice_mapping = {}
 
