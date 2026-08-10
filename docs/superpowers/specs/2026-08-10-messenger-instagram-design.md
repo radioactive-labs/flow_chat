@@ -1,7 +1,7 @@
 # Facebook Messenger and Instagram DM Support: Design
 
 **Date:** 2026-08-10
-**Status:** Approved, not yet implemented
+**Status:** Implemented on `feat/messenger-instagram`. Two open items below are unverified and flagged in place.
 **Branch context:** builds on `feat/coexistence-webhooks`
 
 ## Problem
@@ -373,8 +373,19 @@ no marketing adjectives, no em-dashes.
    long-cited figure, with a comment recording that it is unverified. The client
    splits at this value rather than truncating, so being wrong low costs an extra
    message and being wrong high gets a send rejected.
-2. Confirm whether Instagram via Facebook Login delivers webhooks under
-   `object: "page"` or `object: "instagram"`, and set the subclass hook accordingly.
-3. Confirm the Instagram carousel renders acceptably for plain option menus, since
-   generic-template elements require a title per card and a menu has no natural card
-   titles. If it reads badly, Instagram drops to the numbered list above 13 instead.
+2. **STILL OPEN, must be checked before Instagram goes live.** Whether Instagram via
+   Facebook Login delivers webhooks under `object: "page"` or `object: "instagram"`.
+   The gateway currently expects `"instagram"`. A wrong value drops every delivery and
+   answers 200, so the symptom is a bot that receives nothing while the dashboard
+   reports success. `Meta::MessagingGateway` logs a warning naming the mismatch, so a
+   single production delivery reveals the answer. One-line fix in
+   `Instagram::Gateway::SendApi#expected_webhook_object` plus the integration test
+   payloads.
+3. **STILL OPEN, cosmetic only.** Whether the Instagram carousel reads acceptably for
+   a plain option menu, whose cards are titled `"Options 1 to 3"` because a
+   generic-template card requires a title and a menu has no natural one. Mobile-only
+   question: both of Instagram's interactive surfaces render on mobile alone, which is
+   why the renderer always numbers the options in the body as well. Nothing is broken
+   on desktop either way, so this cannot cause a failure, only an ugly card. If it
+   reads badly, override the ladder in `Instagram::Renderer` so above 13 choices goes
+   straight to numbered text.

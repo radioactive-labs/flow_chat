@@ -87,8 +87,17 @@ module FlowChat
           return @controller.head :ok
         end
 
+        # Warn rather than debug. A gateway whose expected_webhook_object does not
+        # match what the app is actually subscribed to drops every delivery here
+        # and answers 200, so the symptom is a bot that receives nothing while the
+        # dashboard reports successful deliveries. That is worth a line in
+        # production logs, not one only visible at debug level.
         if @body["object"].present? && @body["object"] != expected_webhook_object
-          FlowChat.logger.debug { "#{log_tag}: Ignoring webhook for object '#{@body["object"]}'" }
+          FlowChat.logger.warn {
+            "#{log_tag}: Ignoring webhook for object '#{@body["object"]}', expected " \
+            "'#{expected_webhook_object}'. If every delivery lands here, this gateway's " \
+            "expected_webhook_object does not match the app's webhook subscription."
+          }
           return @controller.head :ok
         end
 
