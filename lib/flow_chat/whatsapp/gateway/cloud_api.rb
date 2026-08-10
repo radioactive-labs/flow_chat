@@ -1,6 +1,5 @@
 require "net/http"
 require "json"
-require "openssl"
 
 module FlowChat
   module Whatsapp

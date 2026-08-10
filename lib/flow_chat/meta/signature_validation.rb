@@ -2,10 +2,6 @@ require "openssl"
 
 module FlowChat
   module Meta
-    # Raised when a Meta gateway cannot validate a signature because it was not
-    # configured to. Platforms override configuration_error_class to raise their own.
-    class ConfigurationError < StandardError; end
-
     # X-Hub-Signature-256 validation, shared by every Meta webhook gateway.
     #
     # The including gateway must have @config responding to #app_secret and
@@ -18,6 +14,9 @@ module FlowChat
           return true
         end
 
+        # Deliberately wider than a nil-or-empty check: a whitespace-only secret is
+        # never intentional, and computing an HMAC with it would silently accept
+        # traffic under a "secret" that offers no protection.
         if @config.app_secret.blank?
           error_msg = "#{platform_label} app_secret is required for webhook signature validation. " \
             "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
