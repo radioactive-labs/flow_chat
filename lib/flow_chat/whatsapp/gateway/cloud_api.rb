@@ -296,7 +296,7 @@ module FlowChat
             "CloudApi: Publishing webhook field '#{field}' (value keys: #{value.keys.join(", ")})"
           }
 
-          instrument(Events::WEBHOOK_RECEIVED, {
+          payload = {
             platform: :whatsapp,
             gateway: :whatsapp_cloud_api,
             field: field,
@@ -304,7 +304,35 @@ module FlowChat
             business_phone_number: value.dig("metadata", "display_phone_number"),
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
             value: value
-          })
+          }
+
+          origin = echo_origin(field, value)
+          payload[:echo_origin] = origin if origin
+
+          instrument(Events::WEBHOOK_RECEIVED, payload)
+        end
+
+        # An echo reports a message sent on the thread by someone other than the
+        # user we are talking to. Which someone matters: a human replying from the
+        # business inbox usually means the application should stand the flow
+        # down, while our own send coming back means nothing at all. Only the
+        # app_id separates them, and only this gateway knows our own, so it is
+        # derived here rather than left for every subscriber to work out.
+        #
+        # Meta names the coexistence echo field "smb_message_echoes" and nests the
+        # echoes themselves under "message_echoes"; both are matched precisely
+        # rather than by a loose "echo" substring or "first array in the value",
+        # since a field this gateway does not otherwise interpret could carry
+        # other arrays under other names.
+        def echo_origin(field, value)
+          return nil unless field == "smb_message_echoes"
+
+          app_id = value["message_echoes"]&.first&.dig("app_id")
+
+          return :human_agent if app_id.blank?
+          return :self if app_id.to_s == @config.app_id.to_s
+
+          :other_app
         end
 
         def extract_message_content!(message, context)

@@ -734,6 +734,89 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
+  # --- Echo origin -------------------------------------------------------
+  #
+  # An echo reports a message sent on the thread by someone other than the
+  # user. Which someone decides what the application does with it, and only
+  # this gateway knows our own app_id, so it derives the origin here rather
+  # than leaving every subscriber to compare ids itself.
+
+  def test_echo_from_a_human_in_the_business_inbox_has_no_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: nil))
+    @gateway.call(context)
+
+    assert_equal 1, events.size
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
+  def test_echo_from_our_own_app_carries_our_configured_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: "our_app"))
+    @gateway.call(context)
+
+    assert_equal :self, events.first[:echo_origin]
+  end
+
+  def test_echo_from_another_app_carries_a_different_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: "someone_else"))
+    @gateway.call(context)
+
+    assert_equal :other_app, events.first[:echo_origin]
+  end
+
+  def test_a_non_echo_field_carries_no_echo_origin_key_at_all
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("account_update", {"event" => "PARTNER_ADDED"})
+    )
+    @gateway.call(context)
+
+    refute events.first.key?(:echo_origin)
+  end
+
+  # handle_unmodelled_field is the catch-all for every field Meta might send,
+  # so a payload naming the echo field but shaped unexpectedly (no echoes
+  # array, or an empty one) must not raise.
+  def test_an_echo_field_with_no_echoes_array_is_treated_as_a_human_agent
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {})
+    )
+    @gateway.call(context)
+
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
+  def test_an_echo_field_with_an_empty_echoes_array_is_treated_as_a_human_agent
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {"message_echoes" => []})
+    )
+    @gateway.call(context)
+
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
   def test_every_unmodelled_field_uses_the_same_event
     fields = {
       "smb_app_state_sync" => {"state_sync" => [{"type" => "contact"}]},
@@ -846,6 +929,15 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         }]
       }]
     }
+  end
+
+  # A coexistence echo for the same message, with a caller-chosen sender app_id
+  # (or none, for a human replying from the business inbox).
+  def echo_payload(app_id:)
+    echo = {"id" => "wamid.echo1", "from" => "15551234567", "type" => "text", "text" => {"body" => "Hi"}}
+    echo["app_id"] = app_id if app_id
+
+    change_payload("smb_message_echoes", {"message_echoes" => [echo]})
   end
 
   def create_context_with_request(method:, params: {}, body: nil, headers: {}, cookies: {})
