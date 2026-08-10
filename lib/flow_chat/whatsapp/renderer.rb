@@ -5,6 +5,10 @@ module FlowChat
     class Renderer
       include FlowChat::Renderers::MarkdownSupport
 
+      # Meta: "up to 10 sections, with up to 10 rows for all sections combined".
+      MAX_LIST_ROWS = 10
+      MAX_BUTTONS = 3
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -108,12 +112,12 @@ module FlowChat
       end
 
       def build_interactive_message(choice_hash)
-        if choice_hash.length <= 3
-          # Use buttons for 3 or fewer choices
+        if choice_hash.length <= MAX_BUTTONS
           build_buttons_message(choice_hash)
-        else
-          # Use list for more than 3 choices
+        elsif choice_hash.length <= MAX_LIST_ROWS
           build_list_message(choice_hash)
+        else
+          build_numbered_message(choice_hash)
         end
       end
 
@@ -192,28 +196,16 @@ module FlowChat
           }.compact
         end
 
-        # If 10 or fewer items, use single section
-        sections = if items.length <= 10
-          [
-            {
-              title: "Options",
-              rows: items
-            }
-          ]
-        else
-          # Paginate into multiple sections (max 10 items per section)
-          items.each_slice(10).with_index.map do |section_items, index|
-            start_num = (index * 10) + 1
-            end_num = start_num + section_items.length - 1
+        [:interactive_list, formatted_message, {sections: [{title: "Options", rows: items}]}]
+      end
 
-            {
-              title: "#{start_num}-#{end_num}",
-              rows: section_items
-            }
-          end
-        end
+      # Above the row cap there is no interactive surface left, so the options go
+      # in the body and the user types a number. The choice mapper stores the
+      # positions for this rung so the digit resolves to the original key.
+      def build_numbered_message(choices)
+        numbered = choices.values.map.with_index(1) { |label, i| "#{i}. #{label}" }.join("\n")
 
-        [:interactive_list, formatted_message, {sections: sections}]
+        [:text, "#{formatted_message}\n\n#{numbered}", {}]
       end
 
       def truncate_text(text, length)

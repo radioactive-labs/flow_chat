@@ -200,16 +200,36 @@ class WhatsappRendererTest < Minitest::Test
     refute result[2].key?(:caption) # Stickers don't support captions
   end
 
-  def test_large_list_pagination
-    choices = (1..25).map { |i| [i, "Option #{i}"] }.to_h
-    renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
-    result = renderer.render
+  # Meta allows "up to 10 sections, with up to 10 rows for all sections combined",
+  # so the old three-sections-of-ten payload was rejected on send.
+  def test_list_is_capped_at_ten_rows
+    choices = (1..10).to_h { |i| ["key#{i}", "Option #{i}"] }
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
 
     assert_equal :interactive_list, result[0]
-    assert_equal 3, result[2][:sections].length # Should be split into 3 sections (10+10+5)
-    assert_equal "1-10", result[2][:sections][0][:title]
-    assert_equal "11-20", result[2][:sections][1][:title]
-    assert_equal "21-25", result[2][:sections][2][:title]
+    assert_equal 1, result[2][:sections].length
+    assert_equal 10, result[2][:sections][0][:rows].length
+  end
+
+  def test_more_than_ten_choices_fall_back_to_a_numbered_body
+    choices = (1..25).to_h { |i| ["key#{i}", "Option #{i}"] }
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
+
+    assert_equal :text, result[0]
+    assert_nil result[2][:sections]
+    assert_includes result[1], "1. Option 1"
+    assert_includes result[1], "25. Option 25"
+    assert_includes result[1], "Pick one"
+  end
+
+  def test_three_or_fewer_choices_still_use_buttons
+    choices = {"a" => "Alpha", "b" => "Beta"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
+
+    assert_equal :interactive_buttons, result[0]
   end
 
   def test_list_item_description_for_long_titles

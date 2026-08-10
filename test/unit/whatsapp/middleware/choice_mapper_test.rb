@@ -179,6 +179,40 @@ module FlowChat
           @app.verify
         end
 
+        def test_typed_number_resolves_on_the_numbered_rung
+          choices = (1..25).to_h { |i| ["key#{i}", "Option #{i}"] }
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "3"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "key3", @context.input
+          @app.verify
+        end
+
+        # A generated id and a stored position occupy the same key space:
+        # IdGenerator#normalize_label keeps \w, which includes digits, so a
+        # choice labelled "5" generates the id "5", the same string as the
+        # position of the 5th choice. Ids must win: get_choice_mapping is
+        # consulted before get_position_mapping.
+        def test_generated_ids_win_over_positions
+          choices = {"k1" => "5"}.merge((2..11).to_h { |i| ["k#{i}", "Option #{i}"] })
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "5"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "k1", @context.input, "the id for the label \"5\" must win over position 5"
+        end
+
         # Mock classes for testing
         class MockSession
           def initialize

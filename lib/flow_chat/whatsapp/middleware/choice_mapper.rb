@@ -67,27 +67,31 @@ module FlowChat
 
         private
 
+        # Ids are resolved before positions because the two key spaces can
+        # overlap: IdGenerator#normalize_label keeps \w, which includes digits,
+        # so a choice labelled "1" generates the id "1".
+        def resolved_choice
+          input = @context.input.to_s
+          get_choice_mapping[input] || get_position_mapping[input]
+        end
+
         def intercept?
-          # Intercept if we have choice mapping state and user input matches a generated ID
-          choice_mapping = get_choice_mapping
-          should_intercept = choice_mapping.present? &&
-            @context.input.present? &&
-            choice_mapping.key?(@context.input.to_s)
+          # Intercept if user input matches a generated id or a stored position
+          should_intercept = @context.input.present? && resolved_choice.present?
 
           if should_intercept
-            FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Intercepting - input: #{@context.input}, mapped to: #{choice_mapping[@context.input.to_s]}" }
+            FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Intercepting - input: #{@context.input}, mapped to: #{resolved_choice}" }
           end
 
           should_intercept
         end
 
         def handle_choice_input
-          choice_mapping = get_choice_mapping
-          original_choice = choice_mapping[@context.input.to_s]
+          original_choice = resolved_choice
 
           FlowChat.logger.info { "Whatsapp::ChoiceMapper: Resolving choice input #{@context.input} to #{original_choice}" }
 
-          # Replace the generated ID with the original choice key
+          # Replace the generated ID (or typed position) with the original choice key
           @context.input = original_choice
         end
 
@@ -106,6 +110,15 @@ module FlowChat
 
           store_choice_mapping(choice_mapping)
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Created mapping: #{choice_mapping}" }
+
+          # Above the row cap the renderer numbers the options in the body, so
+          # the reply is a digit rather than a row id.
+          if choices.length > FlowChat::Whatsapp::Renderer::MAX_LIST_ROWS
+            store_position_mapping(choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
+          else
+            clear_position_mapping
+          end
+
           id_choices
         end
 
@@ -121,6 +134,19 @@ module FlowChat
         def clear_choice_mapping
           @session.delete("whatsapp.choice_mapping")
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Cleared choice mapping" }
+        end
+
+        def store_position_mapping(mapping)
+          @session.set("whatsapp.position_mapping", mapping)
+          FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Stored position mapping: #{mapping}" }
+        end
+
+        def get_position_mapping
+          @session.get("whatsapp.position_mapping") || {}
+        end
+
+        def clear_position_mapping
+          @session.delete("whatsapp.position_mapping")
         end
 
         def clear_choice_state_if_needed
