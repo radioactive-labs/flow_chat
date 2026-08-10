@@ -330,10 +330,6 @@ module FlowChat
           "WhatsApp"
         end
 
-        def log_tag
-          "CloudApi"
-        end
-
         def extract_message_content!(message, context)
           message_type = message["type"]
           FlowChat.logger.debug { "CloudApi: Extracting content from #{message_type} message" }
