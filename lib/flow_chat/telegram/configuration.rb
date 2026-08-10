@@ -1,9 +1,9 @@
 module FlowChat
   module Telegram
     class Configuration
-      attr_accessor :bot_token, :secret_token, :name, :skip_signature_validation
+      include FlowChat::NamedConfiguration
 
-      @@configurations = {}
+      attr_accessor :bot_token, :secret_token, :name, :skip_signature_validation
 
       def initialize(name)
         @name = name
@@ -41,46 +41,6 @@ module FlowChat
         end
 
         config
-      end
-
-      def self.register(name, config)
-        FlowChat.logger.debug { "Telegram::Configuration: Registering configuration '#{name}'" }
-        @@configurations[name.to_sym] = config
-      end
-
-      def self.get(name)
-        config = @@configurations[name.to_sym]
-        if config
-          FlowChat.logger.debug { "Telegram::Configuration: Retrieved configuration '#{name}'" }
-          config
-        else
-          FlowChat.logger.error { "Telegram::Configuration: Configuration '#{name}' not found" }
-          raise ArgumentError, "Telegram configuration '#{name}' not found"
-        end
-      end
-
-      def self.exists?(name)
-        exists = @@configurations.key?(name.to_sym)
-        FlowChat.logger.debug { "Telegram::Configuration: Configuration '#{name}' exists: #{exists}" }
-        exists
-      end
-
-      def self.configuration_names
-        names = @@configurations.keys
-        FlowChat.logger.debug { "Telegram::Configuration: Available configurations: #{names}" }
-        names
-      end
-
-      def self.clear_all!
-        FlowChat.logger.debug { "Telegram::Configuration: Clearing all registered configurations" }
-        @@configurations.clear
-      end
-
-      def register_as(name)
-        FlowChat.logger.debug { "Telegram::Configuration: Registering configuration as '#{name}'" }
-        @name = name.to_sym
-        self.class.register(@name, self)
-        self
       end
 
       def valid?
