@@ -199,12 +199,13 @@ module FlowChat
       true
     end
 
+    # Every gateway parks its client on the context under its own platform name,
+    # so the lookup is the platform rather than a case per platform. Media on
+    # Messenger and Instagram arrives as a direct CDN url and needs no client to
+    # fetch, but a nil client would still deny a Media object anything the client
+    # is the only route to.
     def media_client
-      case platform
-      when :whatsapp then context["whatsapp.client"]
-      when :telegram then context["telegram.client"]
-      when :intercom then context["intercom.client"]
-      end
+      context["#{platform}.client"]
     end
   end
 end

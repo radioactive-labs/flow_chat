@@ -89,11 +89,17 @@ module FlowChat
       end
 
       def post_message(recipient_id, message)
-        post_json(@config.messages_url, {
-          recipient: {id: recipient_id},
-          messaging_type: "RESPONSE",
-          message: message
-        })
+        payload = {recipient: {id: recipient_id}, message: message}
+        payload[:messaging_type] = "RESPONSE" if messaging_type?
+
+        post_json(@config.messages_url, payload)
+      end
+
+      # Messenger documents messaging_type as required on a send. Instagram's
+      # reference does not mention it at all, so Instagram omits it rather than
+      # sending a parameter Meta never documented for that surface.
+      def messaging_type?
+        true
       end
 
       # Splits on whitespace so a word is never cut in half. Measured with the

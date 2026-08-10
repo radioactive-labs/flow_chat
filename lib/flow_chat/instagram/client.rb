@@ -20,6 +20,13 @@ module FlowChat
       def measure(string)
         string.bytesize
       end
+
+      # Meta's Instagram send reference documents recipient and message only,
+      # with no messaging_type. Inheriting Messenger's would put an undocumented
+      # parameter on every Instagram send.
+      def messaging_type?
+        false
+      end
     end
   end
 end

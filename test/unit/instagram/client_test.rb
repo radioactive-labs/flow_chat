@@ -27,8 +27,18 @@ class InstagramClientTest < Minitest::Test
     assert_requested(:post, @config.messages_url) do |req|
       body = JSON.parse(req.body)
       body["recipient"] == {"id" => "igsid_1"} &&
-        body["messaging_type"] == "RESPONSE" &&
         body["message"] == {"text" => "Hello"}
+    end
+  end
+
+  # Messenger documents messaging_type as required on a send. Meta's Instagram
+  # reference documents recipient and message only, so inheriting Messenger's
+  # would put an undocumented parameter on every Instagram send.
+  def test_omits_messaging_type_which_instagram_does_not_document
+    @client.send_message("igsid_1", "Hello")
+
+    assert_requested(:post, @config.messages_url) do |req|
+      !JSON.parse(req.body).key?("messaging_type")
     end
   end
 
