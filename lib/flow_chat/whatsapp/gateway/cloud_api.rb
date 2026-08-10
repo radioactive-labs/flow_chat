@@ -11,6 +11,7 @@ module FlowChat
       class CloudApi
         include FlowChat::Instrumentation
         include FlowChat::GatewayAsyncSupport
+        include FlowChat::Meta::SignatureValidation
 
         attr_reader :context
 
@@ -322,58 +323,16 @@ module FlowChat
           })
         end
 
-        # Validate webhook signature to ensure request comes from WhatsApp
-        def valid_webhook_signature?(request)
-          # Check if signature validation is explicitly disabled
-          if @config.skip_signature_validation
-            FlowChat.logger.debug { "CloudApi: Webhook signature validation is disabled" }
-            return true
-          end
+        def configuration_error_class
+          FlowChat::Whatsapp::ConfigurationError
+        end
 
-          # Require app_secret for signature validation
-          unless @config.app_secret && !@config.app_secret.empty?
-            error_msg = "WhatsApp app_secret is required for webhook signature validation. " \
-                       "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
-            FlowChat.logger.error { "CloudApi: #{error_msg}" }
-            raise FlowChat::Whatsapp::ConfigurationError, error_msg
-          end
+        def platform_label
+          "WhatsApp"
+        end
 
-          signature_header = request.headers["X-Hub-Signature-256"]
-          unless signature_header
-            FlowChat.logger.warn { "CloudApi: No X-Hub-Signature-256 header found in request" }
-            return false
-          end
-
-          # Extract signature from header (format: "sha256=<signature>")
-          expected_signature = signature_header.sub("sha256=", "")
-
-          # Get raw request body
-          request.body.rewind
-          body = request.body.read
-          request.body.rewind
-
-          # Calculate HMAC signature
-          calculated_signature = OpenSSL::HMAC.hexdigest(
-            OpenSSL::Digest.new("sha256"),
-            @config.app_secret,
-            body
-          )
-
-          # Compare signatures using secure comparison to prevent timing attacks
-          signature_valid = FlowChat::Security.secure_compare(expected_signature, calculated_signature)
-
-          if signature_valid
-            FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
-          else
-            FlowChat.logger.warn { "CloudApi: Webhook signature validation failed - signatures do not match" }
-          end
-
-          signature_valid
-        rescue FlowChat::Whatsapp::ConfigurationError
-          raise
-        rescue => e
-          FlowChat.logger.error { "CloudApi: Error validating webhook signature: #{e.class.name}: #{e.message}" }
-          false
+        def log_tag
+          "CloudApi"
         end
 
         def extract_message_content!(message, context)
