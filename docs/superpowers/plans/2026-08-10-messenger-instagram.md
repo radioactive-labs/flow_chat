@@ -231,25 +231,87 @@ git commit -m "refactor(meta): share the webhook signature check between platfor
 
 ## Task 2: Extract Meta webhook verification
 
-**Goal:** One implementation of the `hub.challenge` exchange, including the guard that a gateway with no verify token verifies nothing.
+**Goal:** One implementation of the `hub.challenge` exchange, including the guard that a gateway with no verify token verifies nothing. Plus the identity seam both `Meta::` behavior modules depend on.
+
+**Why the identity module:** the obvious version of `WebhookVerification` calls `log_tag` and `platform` but defines neither, so it would only work because `SignatureValidation` happens to be included in the same class. That is a hidden coupling between sibling modules that breaks the moment a gateway includes one without the other. After Task 1, `platform_label` and `configuration_error_class` already raise `NotImplementedError` when a gateway forgets them. Collect all four identity hooks in one module that both behavior modules name as a prerequisite, so the contract is stated once for the three platforms about to arrive.
 
 **Files:**
+- Create: `lib/flow_chat/meta/gateway_identity.rb`
 - Create: `lib/flow_chat/meta/webhook_verification.rb`
+- Create: `test/unit/meta/webhook_verification_test.rb`
+- Modify: `lib/flow_chat/meta/signature_validation.rb` (take its identity hooks from the new module)
 - Modify: `lib/flow_chat/whatsapp/gateway/cloud_api.rb` (remove `handle_verification`, lines 79-110)
-- Test: `test/unit/whatsapp/gateway/cloud_api_test.rb` (existing)
+- Test: `test/unit/whatsapp/gateway/cloud_api_test.rb` (existing, must stay green)
 
 **Acceptance Criteria:**
+- [ ] `FlowChat::Meta::GatewayIdentity` declares `platform`, `platform_label`, `configuration_error_class` (all `NotImplementedError` by default) and `log_tag` (derived from the class name)
+- [ ] Both `SignatureValidation` and `WebhookVerification` work when included alone, with `GatewayIdentity` present, and neither depends on the other
 - [ ] `FlowChat::Meta::WebhookVerification#handle_verification` renders the challenge on a token match
 - [ ] A blank configured verify token returns `:forbidden` even when the request also sends a blank token
 - [ ] `WEBHOOK_VERIFIED` and `WEBHOOK_FAILED` carry the including gateway's `platform`
+- [ ] `handle_verification` is private, matching the visibility fix applied to `valid_webhook_signature?` in Task 1
 
 **Verify:** `ruby -Itest test/unit/whatsapp/gateway/cloud_api_test.rb -n test_get_request_webhook_verification` → PASS
 
 **Steps:**
 
-- [ ] **Step 1: Create the module**
+- [ ] **Step 1: Create the identity module**
 
-Create `lib/flow_chat/meta/webhook_verification.rb`:
+Create `lib/flow_chat/meta/gateway_identity.rb`:
+
+```ruby
+module FlowChat
+  module Meta
+    # What a Meta gateway must say about itself.
+    #
+    # The behavior modules in this namespace need a handful of the same values:
+    # which platform this is, how to name it to a developer, which error class to
+    # raise, what to tag logs with. Declaring them here rather than in whichever
+    # behavior module happens to be included first means a gateway can include
+    # one behavior without the other, and a gateway that forgets a value fails
+    # loudly rather than borrowing another platform's.
+    #
+    # NotImplementedError rather than a default: it descends from ScriptError,
+    # not StandardError, so it travels through the bare rescue in
+    # SignatureValidation instead of being swallowed into a false return that
+    # would read as "invalid signature" and drop every webhook.
+    module GatewayIdentity
+      def platform
+        raise NotImplementedError, "#{self.class.name} must define #platform"
+      end
+
+      # The product's name as a developer reading an error message expects it,
+      # which is not always the constant: Whatsapp the module, WhatsApp the product.
+      def platform_label
+        raise NotImplementedError, "#{self.class.name} must define #platform_label"
+      end
+
+      def configuration_error_class
+        raise NotImplementedError, "#{self.class.name} must define #configuration_error_class"
+      end
+
+      # Derived, because every gateway's class name already ends in the tag its
+      # logs use. Override only to pin the tag against a class rename.
+      def log_tag
+        self.class.name.split("::").last
+      end
+    end
+  end
+end
+```
+
+Then in `lib/flow_chat/meta/signature_validation.rb`, delete the `platform_label`, `configuration_error_class` and `log_tag` hooks and include the identity module instead:
+
+```ruby
+    module SignatureValidation
+      include FlowChat::Meta::GatewayIdentity
+```
+
+Confirm `test/unit/meta/signature_validation_test.rb` still passes: its fake defines the required hooks, so it should be unaffected.
+
+- [ ] **Step 2: Create the verification module**
+
+Create `lib/flow_chat/meta/webhook_verification.rb`, including the identity module so it does not depend on `SignatureValidation` being present:
 
 ```ruby
 module FlowChat
@@ -294,7 +356,44 @@ module FlowChat
 end
 ```
 
-- [ ] **Step 2: Point the WhatsApp gateway at it**
+- [ ] **Step 3: Test the module directly**
+
+Create `test/unit/meta/webhook_verification_test.rb`, reusing the shared fake gateway that Task 1 moved into `test/support/`. Cover, at minimum:
+
+```ruby
+  def test_matching_token_renders_the_challenge
+  def test_wrong_token_is_forbidden
+  def test_blank_configured_token_is_forbidden_even_when_the_request_token_is_blank
+  def test_verified_event_carries_the_platform
+```
+
+The blank-token case is the security-relevant one: without the `verify_token.present?` guard, a missing token on both sides compares equal and anyone can claim the endpoint by asking for the challenge.
+
+Also prove the modules are independent, which is the whole point of `GatewayIdentity`:
+
+```ruby
+  # Each behavior module must stand alone. Before GatewayIdentity existed,
+  # WebhookVerification only worked because SignatureValidation happened to be
+  # included alongside it and supplied log_tag.
+  def test_verification_works_without_signature_validation
+    gateway_class = Class.new do
+      include FlowChat::Instrumentation
+      include FlowChat::Meta::WebhookVerification
+
+      def platform = :test_platform
+      def platform_label = "Test"
+      def configuration_error_class = FlowChat::Meta::ConfigurationError
+      def log_tag = "TestGateway"
+    end
+
+    refute gateway_class.include?(FlowChat::Meta::SignatureValidation)
+    # then drive handle_verification and assert the challenge renders
+  end
+```
+
+Note the explicit `log_tag` in that anonymous class: the derived default calls `self.class.name.split("::")`, and an anonymous class has a nil name, so it would raise. Named gateways are unaffected.
+
+- [ ] **Step 4: Point the WhatsApp gateway at it**
 
 Add the include:
 
@@ -310,21 +409,33 @@ Delete the private `handle_verification` method (lines 79-110) and add `platform
         end
 ```
 
-- [ ] **Step 3: Run the verification tests**
+`platform_label` and `configuration_error_class` are already there from Task 1. `log_tag` was deleted in Task 1 as a proven no-op, so do not add it back.
 
-Run: `ruby -Itest test/unit/whatsapp/gateway/cloud_api_test.rb -n /verification|verify_token/`
+- [ ] **Step 5: Run the verification tests**
+
+Run: `bundle exec ruby -Itest test/unit/meta/webhook_verification_test.rb`
 Expected: PASS.
 
-- [ ] **Step 4: Run the full suite**
+Run: `bundle exec ruby -Itest test/unit/whatsapp/gateway/cloud_api_test.rb -n /verification|verify_token/`
+Expected: PASS.
+
+- [ ] **Step 6: Run the full suite**
 
 Run: `bundle exec rake test`
 Expected: PASS, 0 failures.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add lib/flow_chat/meta/webhook_verification.rb lib/flow_chat/whatsapp/gateway/cloud_api.rb
-git commit -m "refactor(meta): share the webhook verification handshake"
+git add lib/flow_chat/meta/gateway_identity.rb lib/flow_chat/meta/webhook_verification.rb \
+        lib/flow_chat/meta/signature_validation.rb lib/flow_chat/whatsapp/gateway/cloud_api.rb \
+        test/unit/meta/webhook_verification_test.rb
+git commit -m "refactor(meta): share the verification handshake and name the identity seam
+
+The verification module needs the same few facts about a gateway that the
+signature module does. Taking them from whichever module happened to be
+included first was a coupling waiting to break, so both now include one
+identity module that states the contract."
 ```
 
 ---
@@ -2598,17 +2709,14 @@ module FlowChat
         end
       end
 
-      def configuration_error_class
-        FlowChat::Meta::ConfigurationError
-      end
-
-      def log_tag
-        self.class.name.split("::").last
-      end
     end
   end
 end
 ```
+
+`platform`, `platform_label`, `configuration_error_class` and `log_tag` are not defined here: `GatewayIdentity` (Task 2) declares them, and the three raising ones are each subclass's job. Do not add local defaults, or a platform that forgets one will silently borrow another's identity.
+
+Also delete the `def platform; raise NotImplementedError; end` shown in the hooks section above for the same reason. It duplicates `GatewayIdentity`. Keep the other three hooks (`configuration_class`, `client_class`, `renderer_class`) raising here, since those are this class's contract rather than the identity seam's.
 
 The `should_enqueue_async?` line above is awkward. Write it plainly instead:
 
