@@ -16,7 +16,7 @@
 
 ## Conventions for every task
 
-- Run one test file with `ruby -Itest test/unit/path_test.rb`, one test with `ruby -Itest test/unit/path_test.rb -n test_name`, everything with `bundle exec rake test`.
+- Run one test file with `bundle exec ruby -Itest test/unit/path_test.rb`, one test with `bundle exec ruby -Itest test/unit/path_test.rb -n test_name`, everything with `bundle exec rake test`. The `bundle exec` prefix is required: plain `ruby -Itest` bypasses Bundler and dies on `cannot load such file -- minitest/mock`. Later tasks in this plan write the bare form in places; prefix it anyway.
 - Never stage or commit anything beyond the files a task names.
 - Logging uses block syntax: `FlowChat.logger.debug { "..." }`.
 - No `respond_to?` guards. If a collaborator is required, call it.
