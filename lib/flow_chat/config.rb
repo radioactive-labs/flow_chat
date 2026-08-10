@@ -61,6 +61,11 @@ module FlowChat
       @http ||= HttpConfig.new
     end
 
+    # Messenger-specific configuration object
+    def self.messenger
+      @messenger ||= MessengerConfig.new
+    end
+
     class SessionConfig
       attr_accessor :boundaries, :hash_identifiers, :identifier, :session_id_proc
 
@@ -102,6 +107,23 @@ module FlowChat
 
       def initialize
         @api_base_url = "https://graph.facebook.com/v23.0"
+      end
+    end
+
+    class MessengerConfig
+      attr_reader :api_base_url, :max_text_length, :max_quick_replies,
+        :max_quick_reply_title, :max_carousel_elements, :max_buttons_per_element,
+        :max_button_title, :max_element_title
+
+      def initialize
+        @api_base_url = "https://graph.facebook.com/v23.0"
+        @max_text_length = 2000
+        @max_quick_replies = 13
+        @max_quick_reply_title = 20
+        @max_carousel_elements = 10
+        @max_buttons_per_element = 3
+        @max_button_title = 20
+        @max_element_title = 80
       end
     end
 
