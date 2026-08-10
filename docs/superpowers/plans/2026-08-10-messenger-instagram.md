@@ -2783,6 +2783,7 @@ git commit -m "feat(meta): implement the Messenger Platform envelope once"
 - [ ] On the numbered rung, typing `"3"` resolves to the third choice's key
 - [ ] Ids resolve before positions, so a choice labelled `"1"` is not shadowed by position `"1"`
 - [ ] The position map is absent on the quick-reply and carousel rungs
+- [ ] **Both maps are cleared together.** A test proves that a typed digit on a screen with no choices, reached after a numbered menu, stays a digit rather than resolving to that menu's third choice key. This was a real bug in the WhatsApp mapper, found and fixed in Task 6, and the mechanism here is identical: `create_mappings` runs only when a screen has choices, so a screen without them clears nothing unless clearing is explicit.
 
 **Verify:** `ruby -Itest test/unit/messenger/middleware/choice_mapper_test.rb && ruby -Itest test/unit/meta/messaging_gateway_test.rb` → PASS
 
@@ -2987,6 +2988,19 @@ module FlowChat
           original = resolved_choice
           FlowChat.logger.info { "#{self.class.name}: Resolving input #{@context.input} to #{original}" }
           @context.input = original
+        end
+
+        # Both maps are cleared together. Clearing only one leaves the other to
+        # hijack a later turn: a position map surviving from a numbered menu
+        # rewrites a typed "3" on the next free-text screen into that menu's third
+        # choice key. This was a real bug in the WhatsApp mapper, found in Task 6
+        # and fixed there. `create_mappings` only runs when a screen HAS choices,
+        # so a screen without them clears nothing unless clearing is explicit.
+        #
+        # It bites hardest on Instagram, which stores positions at every rung.
+        def clear_mappings
+          @session.delete(id_key)
+          @session.delete(position_key)
         end
 
         def create_mappings(choices)
