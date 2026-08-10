@@ -122,6 +122,12 @@ module FlowChat
 
       def initialize
         @api_base_url = "https://graph.facebook.com/v23.0"
+        # Meta does not state a text limit for Messenger on any current reference
+        # page, unlike Instagram's documented 1,000 bytes. 2000 is the long-cited
+        # figure and is safe to be wrong about in this direction: the client
+        # splits text at this value rather than truncating it, so a limit set too
+        # low sends an extra message and one set too high gets rejected. Raise it
+        # only against a documented figure.
         @max_text_length = 2000
         @max_quick_replies = 13
         @max_quick_reply_title = 20

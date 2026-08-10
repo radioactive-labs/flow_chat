@@ -368,8 +368,11 @@ no marketing adjectives, no em-dashes.
 
 ## Open items for implementation
 
-1. Confirm the Messenger text length cap. The reference page did not render during
-   design; 2000 is assumed.
+1. **Resolved, negatively.** Meta states no text limit for Messenger on any current
+   reference page, unlike Instagram's documented 1,000 bytes. 2000 stays as the
+   long-cited figure, with a comment recording that it is unverified. The client
+   splits at this value rather than truncating, so being wrong low costs an extra
+   message and being wrong high gets a send rejected.
 2. Confirm whether Instagram via Facebook Login delivers webhooks under
    `object: "page"` or `object: "instagram"`, and set the subclass hook accordingly.
 3. Confirm the Instagram carousel renders acceptably for plain option menus, since
