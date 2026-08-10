@@ -1,0 +1,155 @@
+{
+  "planPath": "docs/superpowers/plans/2026-08-10-messenger-instagram.md",
+  "specPath": "docs/superpowers/specs/2026-08-10-messenger-instagram-design.md",
+  "branch": "feat/messenger-instagram",
+  "baseBranch": "feat/coexistence-webhooks",
+  "phases": [
+    {"name": "Shared extractions and WhatsApp fixes", "tasks": [1, 2, 3, 4, 5, 6, 7]},
+    {"name": "Messenger", "tasks": [8, 9, 10, 11, 12, 13, 14]},
+    {"name": "Instagram and close out", "tasks": [15, 16, 17, 18, 19, 20, 21]}
+  ],
+  "tasks": [
+    {
+      "id": 1,
+      "subject": "Task 1: Extract Meta signature validation",
+      "status": "pending",
+      "description": "**Goal:** One implementation of X-Hub-Signature-256 validation, used by the WhatsApp gateway, with each platform keeping its own error class via a configuration_error_class hook.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/meta/signature_validation.rb\", \"lib/flow_chat/whatsapp/gateway/cloud_api.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"shared module provides valid_webhook_signature?\", \"skip_signature_validation short-circuits true\", \"blank app_secret raises the platform's own error class\", \"missing header returns false\", \"whatsapp gateway suite green\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 2: Extract Meta webhook verification",
+      "status": "pending",
+      "description": "**Goal:** One implementation of the hub.challenge exchange, including the guard that a gateway with no verify token verifies nothing.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/meta/webhook_verification.rb\", \"lib/flow_chat/whatsapp/gateway/cloud_api.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"challenge rendered on token match\", \"blank configured token still forbidden\", \"platform in WEBHOOK_VERIFIED and WEBHOOK_FAILED\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 3: Extract the named-configuration registry",
+      "status": "pending",
+      "description": "**Goal:** One registry with per-class storage, replacing three verbatim copies. A shared @@configurations would merge every platform's registry, which is why storage is a class-level ivar.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/named_configuration.rb\", \"test/unit/named_configuration_test.rb\", \"lib/flow_chat/whatsapp/configuration.rb\", \"lib/flow_chat/telegram/configuration.rb\", \"lib/flow_chat/intercom/configuration.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"per-class storage\", \"exact not-found messages preserved for all three platforms\", \"Whatsapp overrides configuration_label to WhatsApp\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 4: Move IdGenerator up, make its cap configurable",
+      "status": "pending",
+      "description": "**Goal:** FlowChat::IdGenerator usable by any platform, max length passed in rather than fixed at WhatsApp's 256.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/id_generator.rb\", \"test/unit/id_generator_test.rb\", \"lib/flow_chat/whatsapp/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"max_length configurable\", \"default 256 unchanged\", \"hash suffix still fits the cap\", \"FlowChat::Whatsapp::IdGenerator gone\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 5: Add plain-text markdown conversion",
+      "status": "pending",
+      "description": "**Goal:** to_plain_text on Renderers::MarkdownSupport, for the two platforms that support no rich text at all.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/renderers/markdown_support.rb\", \"test/unit/renderers/plain_text_support_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/renderers/plain_text_support_test.rb\", \"acceptanceCriteria\": [\"emphasis stripped\", \"ul bulleted and ol numbered\", \"link as text (url)\", \"entities decoded\", \"nil returns empty string\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 6: Fix WhatsApp lists above 10 choices",
+      "status": "pending",
+      "blockedBy": [4],
+      "description": "**Goal:** Stop building list payloads Meta rejects. Meta allows 10 rows for ALL sections combined, so above 10 choices fall back to a numbered body.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/whatsapp/renderer.rb\", \"lib/flow_chat/whatsapp/middleware/choice_mapper.rb\", \"test/unit/whatsapp/renderer_test.rb\", \"test/unit/whatsapp/middleware/choice_mapper_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"3 or fewer use buttons\", \"4 to 10 use one section\", \"11 or more use a numbered body\", \"no list exceeds 10 rows\", \"typed number resolves\", \"ids resolve before positions\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 7: Say who sent a WhatsApp echo",
+      "status": "pending",
+      "description": "**Goal:** Coexistence echoes report whether our app, another app, or a human in the business inbox sent the message.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/whatsapp/gateway/cloud_api.rb\", \"test/unit/whatsapp/gateway/cloud_api_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"echo_origin on WEBHOOK_RECEIVED for echo fields\", \"self when app_id matches\", \"other_app when different\", \"human_agent when absent\", \"non-echo fields unchanged\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 8: Messenger configuration",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Credentials for Messenger, loadable from Rails credentials or env, with the platform's limits as named constants on FlowChat::Config.messenger.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/messenger/configuration.rb\", \"lib/flow_chat/config.rb\", \"test/unit/messenger/configuration_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/messenger/configuration_test.rb\", \"acceptanceCriteria\": [\"credentials and MESSENGER_* env loading\", \"valid? requires token, page_id, verify_token\", \"messages_url uses page_id\", \"account_id returns page_id\", \"limits exposed as constants\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 9,
+      "subject": "Task 9: The choice ladder helper",
+      "status": "pending",
+      "blockedBy": [8],
+      "description": "**Goal:** One place that decides which rung renders a given choice count, so the renderer and the choice mapper cannot disagree.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/meta/choice_ladder.rb\", \"test/unit/meta/choice_ladder_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/meta/choice_ladder_test.rb\", \"acceptanceCriteria\": [\"none, quick_replies, carousel, numbered\", \"13 quick_replies, 14 carousel, 30 carousel, 31 numbered\", \"carousel_capacity is elements times buttons\", \"always_number covers every non-zero rung\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 10,
+      "subject": "Task 10: Messenger renderer",
+      "status": "pending",
+      "blockedBy": [5, 9],
+      "description": "**Goal:** Turn [prompt, choices, media] into a Send API payload shape, down the ladder, in plain text.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/messenger/renderer.rb\", \"test/unit/messenger/renderer_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/messenger/renderer_test.rb\", \"acceptanceCriteria\": [\"no choices renders text\", \"1 to 13 quick replies with 20-char titles\", \"14 to 30 carousel packing options across at most 10 elements\", \"above 30 numbered body\", \"markdown flattened\", \"media without choices renders an attachment\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 11,
+      "subject": "Task 11: Messenger client",
+      "status": "pending",
+      "blockedBy": [10],
+      "description": "**Goal:** Send to the Send API, splitting text over the platform cap, reporting failures through the existing delivery hooks. Check report_api_error's real signature before wiring it.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/messenger/client.rb\", \"test/unit/messenger/client_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/messenger/client_test.rb\", \"acceptanceCriteria\": [\"recipient/messaging_type/message payload shape\", \"quick replies on the text message\", \"carousel as generic template attachment\", \"long text split on whitespace, last result returned\", \"non-2xx returns nil and reports API_ERROR\", \"upload_media returns attachment_id\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 12,
+      "subject": "Task 12: The shared messaging gateway",
+      "status": "pending",
+      "blockedBy": [1, 2, 11],
+      "description": "**Goal:** The entry[].messaging[] envelope, dispatch, echo classification, receipts, and context population, implemented once. The test defines its own TestGateway subclass so it does not depend on Task 13.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/meta/messaging_gateway.rb\", \"lib/flow_chat/session/middleware.rb\", \"test/unit/meta/messaging_gateway_test.rb\", \"test/support/test_helpers.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"context values set, msisdn nil\", \"quick_reply and postback payloads become input\", \"echo never drives a flow and carries echo_origin\", \"receipts handled before the flow slot is claimed\", \"one flow per delivery\", \"wrong account rejected forbidden\", \"messenger and instagram default to user_id\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 13,
+      "subject": "Task 13: Messenger gateway and choice mapper",
+      "status": "pending",
+      "blockedBy": [12, 4],
+      "description": "**Goal:** The Messenger subclass, and the middleware that maps a reply back to the choice key the flow used. Two separate session maps, ids resolved before positions.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/messenger/gateway/send_api.rb\", \"lib/flow_chat/messenger/middleware/choice_mapper.rb\", \"test/unit/messenger/middleware/choice_mapper_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"six hooks overridden\", \"tapped quick reply resolves\", \"typed number resolves on the numbered rung\", \"ids beat positions\", \"no position map on tappable rungs\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 14,
+      "subject": "Task 14: Messenger integration test",
+      "status": "pending",
+      "blockedBy": [13],
+      "description": "**Goal:** A full webhook-to-send cycle through a real flow, session store and middleware stack, plus the async path. Read test/integration/whatsapp_integration_test.rb first and copy its harness.\n\n```json:metadata\n{\"files\": [\"test/integration/messenger_integration_test.rb\", \"test/support/test_helpers.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"three-turn conversation\", \"session state carried across turns\", \"terminal screen sends\", \"async enqueues and returns 200\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 15,
+      "subject": "Task 15: Instagram configuration",
+      "status": "pending",
+      "blockedBy": [3],
+      "description": "**Goal:** Instagram credentials on the Facebook Login path, with Instagram's own limits. account_id returns page_id, since that path keys webhooks on the linked page.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/instagram/configuration.rb\", \"lib/flow_chat/config.rb\", \"test/unit/instagram/configuration_test.rb\"], \"verifyCommand\": \"ruby -Itest test/unit/instagram/configuration_test.rb\", \"acceptanceCriteria\": [\"instagram_account_id alongside page_id\", \"INSTAGRAM_* env fallback\", \"max_text_length 1000\", \"account_id is the linked page\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 16,
+      "subject": "Task 16: Instagram renderer, client, gateway, choice mapper",
+      "status": "pending",
+      "blockedBy": [13, 15],
+      "description": "**Goal:** The Instagram platform. Differs from Messenger in three ways: the body is always numbered (both interactive surfaces are mobile-only), text is measured in bytes, and limits come from Config.instagram. The gateway is a SIBLING of Messenger's, not a subclass; the renderer IS a subclass, deliberately.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/instagram/renderer.rb\", \"lib/flow_chat/instagram/client.rb\", \"lib/flow_chat/instagram/gateway/send_api.rb\", \"lib/flow_chat/instagram/middleware/choice_mapper.rb\", \"test/unit/instagram/renderer_test.rb\", \"test/unit/instagram/client_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"quick replies and carousels both number the body\", \"no choices means no numbers\", \"text split by bytes\", \"position map always stored\", \"gateway subclasses Meta::MessagingGateway directly\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 17,
+      "subject": "Task 17: Instagram integration test",
+      "status": "pending",
+      "blockedBy": [16, 14],
+      "description": "**Goal:** A full webhook-to-send cycle on Instagram, including a typed-number reply proving the desktop path works.\n\n```json:metadata\n{\"files\": [\"test/integration/instagram_integration_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"tapped quick reply advances the flow\", \"typed number advances the flow\", \"numbered options present in the body\", \"wrong webhook object ignored with 200\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 18,
+      "subject": "Task 18: Simulator support",
+      "status": "pending",
+      "blockedBy": [13, 16],
+      "description": "**Goal:** Both platforms selectable in the simulator. The view branches on processor_type in embedded JS at six points and has per-platform screen chrome, so this replaces those comparisons with one isChatPlatform predicate rather than adding two more copies.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/simulator/controller.rb\", \"lib/flow_chat/simulator/views/simulator.html.erb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"five platforms in the selector\", \"correct messaging envelope per platform\", \"both use the chat bubble screen\", \"one predicate replaces six comparisons\", \"cookie gate intact\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 19,
+      "subject": "Task 19: Documentation",
+      "status": "pending",
+      "blockedBy": [16],
+      "description": "**Goal:** Both platforms documented to the standard of the existing platform guides. Dense plain register, real limits, no marketing adjectives, no em-dashes.\n\n```json:metadata\n{\"files\": [\"docs/platforms/messenger.md\", \"docs/platforms/instagram.md\", \"README.md\", \"docs/gateway-context-variables.md\"], \"verifyCommand\": \"grep -c '\\u2014' docs/platforms/messenger.md docs/platforms/instagram.md\", \"acceptanceCriteria\": [\"two platform guides covering setup through limits\", \"Instagram desktop caveat stated plainly\", \"README platform and differences tables updated\", \"context variables documented including nil msisdn\", \"no em-dashes\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 20,
+      "subject": "Task 20: Verify the two unresolvable facts with the user",
+      "status": "pending",
+      "blockedBy": [17],
+      "description": "**Goal:** Close the two gaps that cannot be settled from this machine: which webhook object Instagram messaging arrives under, and whether the Instagram carousel is legible for a plain option menu.\n\n**User Verification Required:**\nBefore marking this task complete, you MUST call AskUserQuestion:\n```yaml\nAskUserQuestion:\n  question: \"Two things I cannot check from here. In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"\n  header: \"Verification\"\n  options:\n    - label: \"object is instagram, carousel is fine\"\n      description: \"Keep expected_webhook_object as instagram and keep the carousel rung\"\n    - label: \"object is page, carousel is fine\"\n      description: \"Change expected_webhook_object to page and keep the carousel rung\"\n    - label: \"object is instagram, carousel reads badly\"\n      description: \"Keep the object and drop the carousel rung\"\n    - label: \"object is page, carousel reads badly\"\n      description: \"Change the object to page and drop the carousel rung\"\n```\n\n**If the user selects an option indicating rework:** apply the change, re-run the suite, and re-verify with AskUserQuestion again. Do NOT guess either answer.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/instagram/gateway/send_api.rb\", \"lib/flow_chat/instagram/renderer.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"webhook object confirmed against the dashboard\", \"carousel decision confirmed on a device\", \"spec open items 2 and 3 resolved\", \"suite green after any change\"], \"requiresUserVerification\": true, \"userVerificationPrompt\": \"In your Meta app dashboard, which webhook object are Instagram messaging events subscribed under, and does the Instagram carousel look acceptable for a plain list of options on a real device?\"}\n```"
+    },
+    {
+      "id": 21,
+      "subject": "Task 21: Confirm the Messenger text cap and close out",
+      "status": "pending",
+      "blockedBy": [11],
+      "description": "**Goal:** Replace the one assumed constant with a verified one, and confirm the whole branch is green. 2000 was assumed because Meta's Send API reference page would not render during design.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/config.rb\", \"docs/superpowers/specs/2026-08-10-messenger-instagram-design.md\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"text cap verified against Meta docs\", \"client test fixture still crosses the boundary\", \"spec open item 1 resolved with its source\", \"suite and linter green\", \"branch diff reviewed\"], \"requiresUserVerification\": false}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-10"
+}
