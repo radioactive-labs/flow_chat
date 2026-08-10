@@ -51,7 +51,7 @@
     {
       "id": 2,
       "subject": "Task 2: Extract Meta webhook verification",
-      "status": "pending",
+      "status": "completed",
       "description": "**Goal:** One implementation of the hub.challenge exchange, plus FlowChat::Meta::GatewayIdentity, the identity seam both Meta behavior modules depend on. The drafted verification module called log_tag and platform without defining either, so it would only have worked because SignatureValidation happened to be included alongside it.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/meta/gateway_identity.rb\", \"lib/flow_chat/meta/webhook_verification.rb\", \"lib/flow_chat/meta/signature_validation.rb\", \"lib/flow_chat/whatsapp/gateway/cloud_api.rb\", \"test/unit/meta/webhook_verification_test.rb\"], \"verifyCommand\": \"bundle exec rake test\", \"acceptanceCriteria\": [\"GatewayIdentity declares platform, platform_label, configuration_error_class as NotImplementedError and log_tag derived\", \"each behavior module works included alone\", \"challenge rendered on token match\", \"blank configured token still forbidden\", \"platform in WEBHOOK_VERIFIED and WEBHOOK_FAILED\", \"handle_verification is private\"], \"requiresUserVerification\": false}\n```"
     },
     {

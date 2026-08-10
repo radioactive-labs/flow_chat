@@ -22,6 +22,7 @@
 - No `respond_to?` guards. If a collaborator is required, call it.
 - **Inside a standalone `module`, always fully qualify `FlowChat::Instrumentation::Events::X`.** Bare `Events::X` raises `NameError` there: Ruby resolves an unqualified constant through `Module.nesting` and then the ancestors of the cref, not the ancestors of whichever class later includes the module. The bare form works only in a class body that itself includes `FlowChat::Instrumentation`, which is why the old `CloudApi` code got away with it. Task 2 hit this. Code blocks later in this plan sometimes show the bare form inside modules; qualify it anyway. Classes that `include FlowChat::Instrumentation` directly (such as `Meta::MessagingGateway`) are fine either way.
 - Docs prose: dense and plain, no marketing adjectives, **no em-dashes**.
+- **`test/unit/instrumentation/metrics_collector_test.rb` is flaky and always was.** It asserts wall-clock timings within a 10ms tolerance; three identical runs gave 3, 1 and 0 failures. Failures there are noise, not your change. Do not "fix" them as part of a task, and do not report a suite as red on their account: re-run and check whether the failures are confined to that file. Everything else in the suite is deterministic.
 
 ## File Structure
 

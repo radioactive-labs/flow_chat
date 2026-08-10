@@ -10,10 +10,6 @@ module FlowChat
     end
 
     module ClassMethods
-      def configurations
-        @configurations ||= {}
-      end
-
       def register(name, config)
         FlowChat.logger.debug { "#{self.name}: Registering configuration '#{name}'" }
         configurations[name.to_sym] = config
@@ -47,6 +43,15 @@ module FlowChat
       # where the constant name and the product name differ, as with WhatsApp.
       def configuration_label
         name.split("::")[-2]
+      end
+
+      private
+
+      # The registry itself is not API. It replaced a @@configurations class
+      # variable, which was equally internal, and configuration_names is the
+      # public way to ask what is registered.
+      def configurations
+        @configurations ||= {}
       end
     end
 
