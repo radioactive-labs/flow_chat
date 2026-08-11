@@ -38,8 +38,8 @@ module FlowChat
       # would otherwise fail to match the generated id, which was built from
       # the full label. This middleware additionally registers that
       # on-screen form as an alias for the same choice key, via
-      # FlowChat::ChoiceAliasBuilder. When truncation (or a duplicate label)
-      # would make titles ambiguous, FlowChat::ChoiceTitles prefixes every
+      # FlowChat::ChoiceTitles.aliases_for. When truncation (or a duplicate
+      # label) would make titles ambiguous, FlowChat::ChoiceTitles prefixes every
       # title in the set with its position instead, which is what actually
       # keeps them distinct in that case; see its docs for why that decision
       # is made once for the whole set rather than per title.
@@ -99,7 +99,7 @@ module FlowChat
         # Ids are resolved first, then aliases, then positions. Ids can
         # overlap with positions because IdGenerator#normalize_label keeps
         # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them: FlowChat::ChoiceAliasBuilder
+        # id "1". Aliases sit between them: FlowChat::ChoiceTitles.aliases_for
         # never registers an alias equal to its own choice's generated id
         # (see its docs), so an alias never outranks an id, but it must
         # still beat a position: a typed alias is a match on the title the
@@ -148,7 +148,7 @@ module FlowChat
           store_choice_mapping(choice_mapping)
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Created mapping: #{choice_mapping}" }
 
-          store_alias_mapping(FlowChat::ChoiceAliasBuilder.build(choices, generated_ids, display_title_cap(choices.length)))
+          store_alias_mapping(FlowChat::ChoiceTitles.aliases_for(choices, generated_ids, display_title_cap(choices.length)))
 
           if number_choices?(choices)
             store_position_mapping(choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
@@ -163,18 +163,17 @@ module FlowChat
         # the list cap, where the renderer falls back to a numbered body and
         # shows the full label (no truncation, so no alias is needed).
         #
-        # This repeats the count comparison build_interactive_message makes,
-        # because the mapper runs before the renderer and has no way to ask it
-        # which rung it chose. WhatsApp's ladder already lives here rather
-        # than in FlowChat::Meta::ChoiceLadder (see create_id_mapping's
-        # existing MAX_LIST_ROWS comparison above), so this is one more count
-        # comparison alongside one already present, not a new kind of
-        # duplication.
+        # Goes through FlowChat::Meta::ChoiceLadder, the same helper
+        # FlowChat::Whatsapp::Renderer#build_interactive_message consults
+        # (via FlowChat::Config.whatsapp#ladder_limits), rather than
+        # re-deriving the rung from its own count comparisons: the mapper
+        # runs before the renderer and has no way to ask it which rung it
+        # chose, so both asking the same shared helper is what keeps them
+        # from disagreeing, the same reason Messenger's mapper does this too.
         def display_title_cap(count)
-          if count <= FlowChat::Whatsapp::Renderer::MAX_BUTTONS
-            FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH
-          elsif count <= FlowChat::Whatsapp::Renderer::MAX_LIST_ROWS
-            FlowChat::Whatsapp::Renderer::LIST_ROW_TITLE_LENGTH
+          case FlowChat::Meta::ChoiceLadder.rung_for(count, FlowChat::Config.whatsapp.ladder_limits)
+          when :quick_replies then FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH
+          when :carousel then FlowChat::Whatsapp::Renderer::LIST_ROW_TITLE_LENGTH
           end
         end
 

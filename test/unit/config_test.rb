@@ -122,6 +122,21 @@ class ConfigTest < Minitest::Test
     whatsapp_config = FlowChat::Config.whatsapp
 
     assert_equal "https://graph.facebook.com/v23.0", whatsapp_config.api_base_url
+    assert_equal 3, whatsapp_config.max_buttons
+    assert_equal 10, whatsapp_config.max_list_rows
+  end
+
+  # ladder_limits bridges WhatsApp's two flat thresholds to the shape
+  # FlowChat::Meta::ChoiceLadder expects (see WhatsappConfig#ladder_limits),
+  # so the renderer and the choice mapper can both go through that one
+  # helper instead of each re-deriving the rung independently.
+  def test_whatsapp_ladder_limits_matches_the_renderer_thresholds
+    limits = FlowChat::Config.whatsapp.ladder_limits
+
+    assert_equal :quick_replies, FlowChat::Meta::ChoiceLadder.rung_for(3, limits)
+    assert_equal :carousel, FlowChat::Meta::ChoiceLadder.rung_for(4, limits)
+    assert_equal :carousel, FlowChat::Meta::ChoiceLadder.rung_for(10, limits)
+    assert_equal :numbered, FlowChat::Meta::ChoiceLadder.rung_for(11, limits)
   end
 
   def test_whatsapp_config_singleton_instance

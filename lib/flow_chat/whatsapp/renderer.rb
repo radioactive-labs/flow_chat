@@ -5,10 +5,6 @@ module FlowChat
     class Renderer
       include FlowChat::Renderers::MarkdownSupport
 
-      # Meta: "up to 10 sections, with up to 10 rows for all sections combined".
-      MAX_LIST_ROWS = 10
-      MAX_BUTTONS = 3
-
       # WhatsApp button and list row title limits. The choice mapper reads
       # these too, to alias the truncated title it knows this renderer will
       # display for a given choice count.
@@ -135,7 +131,7 @@ module FlowChat
       def build_selection_message_with_media
         choice_hash = normalized_choices
 
-        return build_buttons_message_with_media(choice_hash) if choice_hash.length <= MAX_BUTTONS
+        return build_buttons_message_with_media(choice_hash) if buttons_rung?(choice_hash.length)
 
         type, content, options = build_interactive_message(choice_hash)
 
@@ -168,19 +164,37 @@ module FlowChat
         end
       end
 
+      # Goes through FlowChat::Meta::ChoiceLadder, shared with Messenger and
+      # Instagram, rather than its own count comparisons - see
+      # FlowChat::Config::WhatsappConfig#ladder_limits for how WhatsApp's two
+      # flat thresholds are bridged to the shape that helper expects. The
+      # choice mapper asks the same question the same way, so the two cannot
+      # drift on which rung a given count lands on.
       def build_interactive_message(choice_hash)
-        if choice_hash.length <= MAX_BUTTONS
-          build_buttons_message(choice_hash)
-        elsif choice_hash.length <= MAX_LIST_ROWS
-          build_list_message(choice_hash)
-        else
-          build_numbered_message(choice_hash)
+        case FlowChat::Meta::ChoiceLadder.rung_for(choice_hash.length, limits.ladder_limits)
+        when :none, :quick_replies then build_buttons_message(choice_hash)
+        when :carousel then build_list_message(choice_hash)
+        when :numbered then build_numbered_message(choice_hash)
         end
+      end
+
+      # :none (zero choices) counts as a buttons-rung count here, matching
+      # what the plain `count <= max_buttons` comparison this replaced did
+      # for zero: there is no real-world case with zero choices, but this
+      # keeps the two call sites in build_selection_message_with_media and
+      # build_interactive_message agreeing with each other regardless.
+      def buttons_rung?(count)
+        rung = FlowChat::Meta::ChoiceLadder.rung_for(count, limits.ladder_limits)
+        rung == :none || rung == :quick_replies
+      end
+
+      def limits
+        FlowChat::Config.whatsapp
       end
 
       # Whether titles are numbered, and the enumeration order positions come
       # from, are both decided by FlowChat::ChoiceTitles over this same
-      # `choices` hash - the choice mapper's ChoiceAliasBuilder.build call
+      # `choices` hash - the choice mapper's ChoiceTitles.aliases_for call
       # goes through the same module over the same hash, so the two can
       # never disagree on which titles are shown or which ones are aliased.
       def build_buttons_message(choices)

@@ -108,11 +108,34 @@ module FlowChat
     end
 
     class WhatsappConfig
-      attr_reader :api_base_url
+      attr_reader :api_base_url, :max_buttons, :max_list_rows
 
       def initialize
         @api_base_url = "https://graph.facebook.com/v23.0"
+        # Meta: "You cannot have more than 3 buttons in an interactive message."
+        @max_buttons = 3
+        # Meta: "up to 10 sections, with up to 10 rows for all sections combined".
+        @max_list_rows = 10
       end
+
+      # Bridges max_buttons/max_list_rows to the shape
+      # FlowChat::Meta::ChoiceLadder expects, so the renderer and the choice
+      # mapper can both ask it which rung a count lands on instead of each
+      # re-deriving the same two-threshold comparison independently.
+      #
+      # WhatsApp's list has no further structure the way Messenger's
+      # carousel has elements and buttons per element - it is just a flat
+      # row cap - so it is modelled as a single element holding every row
+      # (max_buttons_per_element: 1) purely to fit ChoiceLadder's
+      # carousel_capacity formula (elements * buttons_per_element). That
+      # shape stays private to this adapter rather than becoming
+      # max_buttons/max_list_rows' own public meaning, since "carousel" and
+      # "buttons per element" describe nothing WhatsApp actually has.
+      def ladder_limits
+        LADDER_LIMITS_SHAPE.new(max_buttons, max_list_rows, 1)
+      end
+
+      LADDER_LIMITS_SHAPE = Struct.new(:max_quick_replies, :max_carousel_elements, :max_buttons_per_element)
     end
 
     class MessengerConfig
