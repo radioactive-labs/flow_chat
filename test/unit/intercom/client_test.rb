@@ -310,4 +310,75 @@ class FlowChat::Intercom::ClientTest < Minitest::Test
       ActiveSupport::Notifications.unsubscribe("api.error.flow_chat")
     end
   end
+
+  # ============================================================================
+  # OUTBOUND MEDIA TESTS
+  # ============================================================================
+
+  def test_send_message_forwards_attachment_urls_for_image_media
+    stub_request(:post, "https://api.intercom.io/conversations/conv_media/reply").to_return(
+      status: 200,
+      body: {"type" => "conversation", "id" => "msg_1"}.to_json,
+      headers: {"Content-Type" => "application/json"}
+    )
+
+    @client.send_message("conv_media", "Check this out", media: {type: "image", url: "https://example.com/photo.jpg"})
+
+    assert_requested :post, "https://api.intercom.io/conversations/conv_media/reply" do |req|
+      body = JSON.parse(req.body)
+      body["attachment_urls"] == ["https://example.com/photo.jpg"]
+    end
+  end
+
+  def test_send_message_omits_attachment_urls_when_no_media
+    stub_request(:post, "https://api.intercom.io/conversations/conv_plain/reply").to_return(
+      status: 200,
+      body: {"type" => "conversation", "id" => "msg_2"}.to_json,
+      headers: {"Content-Type" => "application/json"}
+    )
+
+    @client.send_message("conv_plain", "Hello there")
+
+    assert_requested :post, "https://api.intercom.io/conversations/conv_plain/reply" do |req|
+      body = JSON.parse(req.body)
+      !body.key?("attachment_urls")
+    end
+  end
+
+  def test_plain_text_send_is_byte_for_byte_unchanged
+    stub_request(:post, "https://api.intercom.io/conversations/conv_text/reply").to_return(
+      status: 200,
+      body: {"type" => "conversation", "id" => "msg_3"}.to_json,
+      headers: {"Content-Type" => "application/json"}
+    )
+
+    @client.send_message("conv_text", "Hello there")
+
+    assert_requested :post, "https://api.intercom.io/conversations/conv_text/reply" do |req|
+      body = JSON.parse(req.body)
+      body == {
+        "type" => "admin",
+        "admin_id" => "test_admin_id",
+        "message_type" => "comment",
+        "body" => "<p>Hello there</p>",
+        "conversation_id" => "conv_text"
+      }
+    end
+  end
+
+  def test_build_reply_payload_includes_attachment_urls_for_image_media
+    response = [:text, "<p>Look</p>", {attachment_urls: ["https://example.com/photo.jpg"]}]
+
+    payload = @client.build_reply_payload(response, "conv_sim")
+
+    assert_equal ["https://example.com/photo.jpg"], payload[:attachment_urls]
+  end
+
+  def test_build_reply_payload_omits_attachment_urls_when_absent
+    response = [:text, "<p>Look</p>", {}]
+
+    payload = @client.build_reply_payload(response, "conv_sim")
+
+    refute payload.key?(:attachment_urls)
+  end
 end

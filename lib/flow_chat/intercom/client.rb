@@ -46,7 +46,8 @@ module FlowChat
 
         # Use renderer to convert to structured response
         response = FlowChat::Intercom::Renderer.new(prompt, choices: choices, media: media).render
-        type, content, _ = response
+        type, content, options = response
+        attachment_urls = options[:attachment_urls]
 
         result = instrument(Events::MESSAGE_SENT, {
           to: conversation_id,
@@ -62,14 +63,17 @@ module FlowChat
             "comment"
           end
 
-          # Send using official gem
-          reply = intercom.conversations.reply(
+          reply_data = {
             id: conversation_id,
             type: "admin",
             admin_id: @config.admin_id.to_s,
             message_type: message_type,
             body: content.to_s
-          )
+          }
+          reply_data[:attachment_urls] = attachment_urls if attachment_urls
+
+          # Send using official gem
+          reply = intercom.conversations.reply(reply_data)
 
           reply.to_hash
         end
@@ -110,16 +114,9 @@ module FlowChat
       # Build reply payload for Intercom API
       # This method is exposed so the gateway can use it for simulator mode
       def build_reply_payload(response, conversation_id)
-        type, content, _ = response
+        type, content, options = response
 
-        case type
-        when :text
-          {
-            message_type: "comment",
-            type: "admin",
-            admin_id: @config.admin_id.to_s,
-            body: content.to_s
-          }
+        payload = case type
         when :note
           {
             message_type: "note",
@@ -128,7 +125,7 @@ module FlowChat
             body: content.to_s
           }
         else
-          # Default to comment
+          # :text and anything else default to comment
           {
             message_type: "comment",
             type: "admin",
@@ -136,6 +133,9 @@ module FlowChat
             body: content.to_s
           }
         end
+
+        payload[:attachment_urls] = options[:attachment_urls] if options[:attachment_urls]
+        payload
       end
 
       private
