@@ -7,8 +7,21 @@ module FlowChat
   # from what the renderer actually renders, silently reopening the bug this
   # class exists to prevent.
   module TextTruncator
+    # length is clamped to zero or more before anything else: String#[] with
+    # a negative second argument returns nil rather than raising, so a
+    # negative length (reachable from #number below, whose prefix can eat
+    # more than the whole cap at a small enough cap) would otherwise turn
+    # `nil + "..."` into a NoMethodError deep inside a render.
+    #
+    # Below 3 there is no room left for the ellipsis itself - it alone is 3
+    # characters - so a cap that small hard-truncates with no ellipsis
+    # rather than returning something longer than the cap it was supposed to
+    # respect.
     def self.truncate(text, length)
+      length = 0 if length.negative?
       return text if text.length <= length
+      return text[0, length] if length < 3
+
       text[0, length - 3] + "..."
     end
 

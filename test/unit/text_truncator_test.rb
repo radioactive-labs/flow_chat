@@ -19,6 +19,29 @@ module FlowChat
       assert_equal "A label that is d...", result
     end
 
+    # Below 3 there is no room for the ellipsis (it alone is 3 characters),
+    # so truncate falls back to a hard cut with no ellipsis rather than
+    # returning text longer than the cap - or, before this was clamped,
+    # crashing: text[0, length - 3] is text[0, negative], which is nil, and
+    # nil + "..." raised NoMethodError.
+    def test_truncates_with_no_ellipsis_when_the_cap_is_too_small_for_one
+      text = "Alpha"
+
+      assert_equal "A", TextTruncator.truncate(text, 1)
+      assert_equal "Al", TextTruncator.truncate(text, 2)
+    end
+
+    def test_a_cap_of_zero_returns_an_empty_string
+      assert_equal "", TextTruncator.truncate("Alpha", 0)
+    end
+
+    # Not reachable through any current renderer's own cap, but #number
+    # below can pass a negative width once its prefix alone is longer than
+    # the cap, so this is exercised directly rather than only through it.
+    def test_a_negative_cap_does_not_raise
+      assert_equal "", TextTruncator.truncate("Alpha", -5)
+    end
+
     def test_number_prefixes_a_short_label_unchanged
       assert_equal "1. Alpha", TextTruncator.number("Alpha", 1, 20)
     end
@@ -48,6 +71,16 @@ module FlowChat
 
       assert_equal 20, result.length
       assert_equal "10. A label that ...", result
+    end
+
+    # position 100's prefix ("100. ") is already 5 characters, so at a cap
+    # this small the label's own width passed to #truncate goes negative.
+    # Not reachable through any of today's caps, but a shared public entry
+    # point should not turn a future, smaller limits object into a 500.
+    def test_number_does_not_raise_when_the_prefix_alone_exceeds_the_cap
+      result = TextTruncator.number("Alpha", 100, 3)
+
+      refute_nil result
     end
   end
 end
