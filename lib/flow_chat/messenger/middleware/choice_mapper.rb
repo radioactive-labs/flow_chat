@@ -10,8 +10,9 @@ module FlowChat
       # separately and resolved ids first, then aliases, then positions,
       # because the spaces overlap: IdGenerator keeps digits, so a choice
       # labelled "1" generates the id "1", which is not necessarily the first
-      # choice, and FlowChat::ChoiceAliasBuilder never registers an alias
-      # equal to its own choice's generated id, so ids can never lose to one.
+      # choice, and FlowChat::ChoiceTitles.aliases_for never registers an
+      # alias equal to its own choice's generated id, so ids can never lose
+      # to one.
       class ChoiceMapper
         ID_KEY = "messenger.choice_mapping"
         ALIAS_KEY = "messenger.alias_mapping"
@@ -92,7 +93,7 @@ module FlowChat
         # Ids are resolved first, then aliases, then positions. Ids can
         # overlap with positions because IdGenerator#normalize_label keeps
         # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them: FlowChat::ChoiceAliasBuilder
+        # id "1". Aliases sit between them: FlowChat::ChoiceTitles.aliases_for
         # never registers an alias equal to its own choice's generated id
         # (see its docs), so an alias never outranks an id, but it must
         # still beat a position: a typed alias is a match on the title the
@@ -135,7 +136,7 @@ module FlowChat
           end
 
           @session.set(id_key, id_mapping)
-          @session.set(alias_key, FlowChat::ChoiceAliasBuilder.build(choices, generated_ids, display_title_cap(choices.length)))
+          @session.set(alias_key, FlowChat::ChoiceTitles.aliases_for(choices, generated_ids, display_title_cap(choices.length)))
 
           if number_choices?(choices)
             @session.set(position_key, choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)

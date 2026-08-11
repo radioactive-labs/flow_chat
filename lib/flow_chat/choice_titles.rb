@@ -79,5 +79,37 @@ module FlowChat
       parts << "duplicate titles: #{duplicate_titles.inspect}" unless duplicate_titles.empty?
       parts.join(", ")
     end
+
+    # Builds the reply alias for each choice's on-screen title, so a user who
+    # types exactly what they see resolves to the same choice as a user who
+    # types the generated id or, when one is shown, the bare position number.
+    #
+    # Correctness here rests entirely on .build's own guarantee - that it
+    # never hands back two identical titles for the same set - which is what
+    # lets this skip any cross-choice collision check: there is nothing left
+    # to collide.
+    #
+    # One guard remains, and it is reachable: on an unambiguous set (the
+    # common case - short, distinct labels), the title is just the bare
+    # label, which very often equals the choice's own generated id outright
+    # ("Yes" the label, "Yes" the id). Registering that as an alias would be
+    # redundant, not wrong - the id map already resolves it - so it is
+    # skipped to keep the alias map free of pointless duplicate entries.
+    #
+    # @param choices [Hash] original choice key => label, as the flow wrote
+    #   it, enumerated in the same order .build numbers positions in
+    # @param generated_ids [Hash] choice key (String) => id from IdGenerator
+    # @param display_cap [Integer, nil] the renderer's title length for the
+    #   rung these choices landed on, or nil when the rung has no separate
+    #   title to alias (it numbers the message body directly instead)
+    # @return [Hash] displayed title => choice key
+    def self.aliases_for(choices, generated_ids, display_cap)
+      return {} unless display_cap
+
+      build(choices, display_cap).each_with_object({}) do |(key, _label, title, _truncated), aliases|
+        next if title == generated_ids.fetch(key)
+        aliases[title] = key
+      end
+    end
   end
 end
