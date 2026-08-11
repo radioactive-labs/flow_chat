@@ -27,6 +27,20 @@ module FlowChat
     # exception is logged and dropped.
     mattr_accessor :on_delivery_failure, default: nil
 
+    # Called with (context, result) once a reply has actually been delivered,
+    # where result is whatever the platform's client returned. The mirror of
+    # on_delivery_failure, and the only place an app can learn the id the platform
+    # gave a message: gateways deliver after the middleware stack has unwound, so
+    # a row written during the turn does not yet know it.
+    #
+    # Every gateway that delivers out of band names that id the same way, on the
+    # context as "delivery.platform_message_id", so an app does not have to know
+    # the shape of each platform's answer.
+    #
+    # Raising here would replace a successful send with an error, so an exception
+    # is logged and dropped.
+    mattr_accessor :on_delivery_success, default: nil
+
     # Session configuration object
     def self.session
       @session ||= SessionConfig.new

@@ -83,9 +83,14 @@ module FlowChat
           provided_token = params["hub.verify_token"]
           challenge = params["hub.challenge"]
 
-          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{provided_token == verify_token}" }
+          # A configuration with no verify token must not verify anything. Without
+          # the presence check a missing token on both sides compares equal, and
+          # anyone could claim the endpoint by asking for the challenge.
+          verified = verify_token.present? && FlowChat::Security.secure_compare(provided_token.to_s, verify_token)
 
-          if provided_token == verify_token
+          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{verified}" }
+
+          if verified
             # Use instrumentation for webhook verification success
             instrument(Events::WEBHOOK_VERIFIED, {
               challenge: challenge,
@@ -131,100 +136,190 @@ module FlowChat
 
           FlowChat.logger.debug { "CloudApi: Webhook signature validation passed" }
 
-          # Extract message data from WhatsApp webhook
-          entry = @body.dig("entry", 0)
-          unless entry
+          # A delivery can carry several accounts and several kinds of change at
+          # once, so every entry and every change gets looked at rather than only
+          # the first of each.
+          entries = @body["entry"]
+          unless entries.is_a?(Array) && entries.any?
             FlowChat.logger.debug { "CloudApi: No entry found in webhook body - returning OK" }
             return @controller.head :ok
           end
 
-          changes = entry.dig("changes", 0)
-          unless changes
-            FlowChat.logger.debug { "CloudApi: No changes found in webhook entry - returning OK" }
-            return @controller.head :ok
-          end
+          # Only one change per delivery can drive a flow, because only one can own
+          # the response to this request.
+          flow_ran = false
 
-          value = changes["value"]
-          unless value
-            FlowChat.logger.debug { "CloudApi: No value found in webhook changes - returning OK" }
-            return @controller.head :ok
-          end
+          entries.each do |entry|
+            changes = entry["changes"]
+            next unless changes.is_a?(Array)
 
-          # Handle incoming messages
-          if value["messages"]&.any?
-            message = value["messages"].first
-            contact = value["contacts"]&.first
+            changes.each do |change|
+              value = change["value"]
+              next unless value.is_a?(Hash)
 
-            phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
-            message_id = message["id"]
-            contact_name = contact&.dig("profile", "name")
-            business_phone_number = value.dig("metadata", "display_phone_number")
-            business_phone_number_id = value.dig("metadata", "phone_number_id")
+              case webhook_field(change, value)
+              when "messages"
+                # There is no separate `statuses` field to subscribe to: Meta
+                # reports delivery status under `messages` as well, in a change
+                # carrying `statuses` and no `messages`. Handled before the flow
+                # slot is claimed, or a status arriving ahead of a message in the
+                # same delivery would spend the slot and drop the message.
+                handle_statuses(value) if value["statuses"].present?
 
-            # Validate that webhook is for our configured phone number
-            if business_phone_number_id != @config.phone_number_id
-              FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
-              return @controller.head :forbidden
-            end
+                next if value["messages"].blank?
 
-            context["request.id"] = phone_number
-            context["request.user_id"] = phone_number
-            context["request.user_name"] = contact_name if contact_name
-            context["request.msisdn"] = phone_number
-            context["request.gateway"] = :whatsapp_cloud_api
-            context["request.platform"] = :whatsapp
-            context["request.message_id"] = message_id
-            context["request.timestamp"] = Time.current.iso8601
-            context["request.body"] = @body
+                if flow_ran
+                  FlowChat.logger.warn { "CloudApi: A second messages change arrived in the same delivery and was not processed" }
+                  next
+                end
+                flow_ran = true
 
-            context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
-            context["whatsapp.business.phone_number_id"] = business_phone_number_id
-            context["whatsapp.client"] = @client
-
-            # Extract message content based on type
-            extract_message_content!(message, context)
-
-            if inbound_message?(context)
-              # Use instrumentation for message received
-              instrument(Events::MESSAGE_RECEIVED, {
-                from: phone_number,
-                message: context.input,
-                message_type: message["type"],
-                message_id: message_id
-              })
-            end
-
-            FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
-
-            # Determine routing: async enqueue, background execute, or inline
-            if should_enqueue_async?
-              # Webhook with async enabled → enqueue job and return immediately
-              enqueue_async_job
-              return @controller.head :ok
-            else
-              # Background OR inline → process message
-              # Determine message handling mode (simulator vs inline)
-              handler_mode = determine_message_handler(context)
-
-              # Process the message based on handling mode
-              case handler_mode
-              when :inline
-                handle_message_inline(context, @controller)
-              when :simulator
-                # Return early from simulator mode to preserve the JSON response
-                return handle_message_simulator(context, @controller)
+                case handle_messages(context, value)
+                when :rejected then return @controller.head :forbidden
+                when :enqueued then return @controller.head :ok
+                when :rendered then return nil # simulator already wrote the response
+                end
+              when "statuses"
+                # Only reachable for a payload built without a field name, which
+                # our own fixtures do and Meta does not.
+                handle_statuses(value)
+              else
+                # Anything that is not a message or its delivery. Coexistence
+                # echoes, contact syncs, imported history, account bans, template
+                # approvals: all of it is the application's domain, so it is
+                # published rather than interpreted here.
+                handle_unmodelled_field(change["field"], value, entry["id"])
               end
             end
           end
 
-          # Handle message status updates
-          if value["statuses"]&.any?
-            statuses = value["statuses"]
-            FlowChat.logger.info { "CloudApi: Received #{statuses.size} status update(s)" }
-            FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
+          @controller.head :ok
+        end
+
+        # Meta names the change in `field`. Older payloads, and the ones our own
+        # tests build, leave it out, so fall back to what the value carries.
+        def webhook_field(change, value)
+          return change["field"] if change["field"].present?
+          return "messages" if value["messages"].is_a?(Array) && value["messages"].any?
+          return "statuses" if value["statuses"].is_a?(Array) && value["statuses"].any?
+
+          nil
+        end
+
+        # Returns what happened, so the caller can decide whether it still owns the
+        # response: :rejected, :enqueued, :rendered, :processed or :skipped.
+        def handle_messages(context, value)
+          message = value["messages"]&.first
+          return :skipped unless message
+
+          contact = value["contacts"]&.first
+
+          phone_number = FlowChat::PhoneNumberUtil.to_e164(message["from"])
+          message_id = message["id"]
+          contact_name = contact&.dig("profile", "name")
+          business_phone_number = value.dig("metadata", "display_phone_number")
+          business_phone_number_id = value.dig("metadata", "phone_number_id")
+
+          # Validate that webhook is for our configured phone number
+          if business_phone_number_id != @config.phone_number_id
+            FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
+            return :rejected
           end
 
-          @controller.head :ok
+          context["request.id"] = phone_number
+          context["request.user_id"] = phone_number
+          context["request.user_name"] = contact_name if contact_name
+          context["request.msisdn"] = phone_number
+          context["request.gateway"] = :whatsapp_cloud_api
+          context["request.platform"] = :whatsapp
+          context["request.message_id"] = message_id
+          context["request.timestamp"] = Time.current.iso8601
+          context["request.body"] = @body
+
+          context["whatsapp.business.phone_number"] = FlowChat::PhoneNumberUtil.to_e164(business_phone_number)
+          context["whatsapp.business.phone_number_id"] = business_phone_number_id
+          context["whatsapp.client"] = @client
+
+          # Extract message content based on type
+          extract_message_content!(message, context)
+
+          if inbound_message?(context)
+            # Use instrumentation for message received
+            instrument(Events::MESSAGE_RECEIVED, {
+              from: phone_number,
+              message: context.input,
+              message_type: message["type"],
+              message_id: message_id
+            })
+          end
+
+          FlowChat.logger.debug { "CloudApi: Message content extracted - Type: #{message["type"]}, Input: '#{context.input}'" }
+
+          # Determine routing: async enqueue, background execute, or inline
+          if should_enqueue_async?
+            # Webhook with async enabled → enqueue job and return immediately
+            enqueue_async_job
+            return :enqueued
+          end
+
+          # Background OR inline → process message
+          case determine_message_handler(context)
+          when :inline
+            handle_message_inline(context, @controller)
+            :processed
+          when :simulator
+            handle_message_simulator(context, @controller)
+            :rendered
+          end
+        end
+
+        def handle_statuses(value)
+          statuses = value["statuses"]
+          return if statuses.blank?
+
+          FlowChat.logger.info { "CloudApi: Received #{statuses.size} status update(s)" }
+          FlowChat.logger.debug { "CloudApi: Status updates: #{statuses.inspect}" }
+
+          statuses.each do |status|
+            instrument(Events::MESSAGE_STATUS, {
+              platform: :whatsapp,
+              gateway: :whatsapp_cloud_api,
+              business_phone_number_id: value.dig("metadata", "phone_number_id"),
+              message_id: status["id"],
+              recipient: status["recipient_id"],
+              status: status["status"],
+              timestamp: status["timestamp"],
+              errors: status["errors"],
+              # Meta reports more about a delivery than a status and a time: what
+              # it billed the conversation as, and its own view of the window.
+              # None of it is this gem's business to interpret, and all of it is
+              # gone if the named keys are the only way through.
+              value: status
+            })
+          end
+        end
+
+        # Everything that is not a message or its delivery. Verified, named, and
+        # handed on whole for the application to make sense of.
+        #
+        # The account id comes from the entry rather than the value because a change
+        # about the account itself names no phone number: a ban, a review outcome, a
+        # template approval. Without it those arrive identifying nothing, and an
+        # application holding several businesses cannot tell whose they are.
+        def handle_unmodelled_field(field, value, business_account_id)
+          FlowChat.logger.info {
+            "CloudApi: Publishing webhook field '#{field}' (value keys: #{value.keys.join(", ")})"
+          }
+
+          instrument(Events::WEBHOOK_RECEIVED, {
+            platform: :whatsapp,
+            gateway: :whatsapp_cloud_api,
+            field: field,
+            business_account_id: business_account_id,
+            business_phone_number: value.dig("metadata", "display_phone_number"),
+            business_phone_number_id: value.dig("metadata", "phone_number_id"),
+            value: value
+          })
         end
 
         # Validate webhook signature to ensure request comes from WhatsApp
@@ -265,7 +360,7 @@ module FlowChat
           )
 
           # Compare signatures using secure comparison to prevent timing attacks
-          signature_valid = secure_compare(expected_signature, calculated_signature)
+          signature_valid = FlowChat::Security.secure_compare(expected_signature, calculated_signature)
 
           if signature_valid
             FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
@@ -279,16 +374,6 @@ module FlowChat
         rescue => e
           FlowChat.logger.error { "CloudApi: Error validating webhook signature: #{e.class.name}: #{e.message}" }
           false
-        end
-
-        # Secure string comparison to prevent timing attacks
-        def secure_compare(a, b)
-          return false unless a.bytesize == b.bytesize
-
-          l = a.unpack("C*")
-          res = 0
-          b.each_byte { |byte| res |= byte ^ l.shift }
-          res == 0
         end
 
         def extract_message_content!(message, context)
@@ -379,9 +464,18 @@ module FlowChat
               gateway: :whatsapp_cloud_api,
               platform: :whatsapp,
               content_length: prompt.to_s.length,
+              # What Meta called it, so this and message.status can be joined.
+              platform_message_id: platform_message_id_from(result),
               timestamp: context["request.timestamp"]
             })
           end
+        end
+
+        # Meta answers a send with the ids it assigned.
+        def platform_message_id_from(result)
+          return nil unless result.is_a?(Hash)
+
+          result.dig("messages", 0, "id")
         end
 
         def handle_message_simulator(context, controller)
@@ -415,39 +509,9 @@ module FlowChat
           # Check if simulator mode is enabled for this processor
           return false unless context["enable_simulator"]
 
-          # Then check if simulator mode is requested and valid
-          @body.dig("simulator_mode") && valid_simulator_cookie?(context)
-        end
-
-        def valid_simulator_cookie?(context)
-          simulator_secret = FlowChat::Config.simulator_secret
-          return false unless simulator_secret && !simulator_secret.empty?
-
-          # Check for simulator cookie
-          simulator_cookie = @controller.request.cookies["flowchat_simulator"]
-          return false unless simulator_cookie
-
-          # Verify the cookie is a valid HMAC signature
-          # Cookie format: "timestamp:signature" where signature = HMAC(simulator_secret, "simulator:timestamp")
-          begin
-            timestamp_str, signature = simulator_cookie.split(":", 2)
-            return false unless timestamp_str && signature
-
-            # Check timestamp is recent (within 24 hours for reasonable session duration)
-            timestamp = timestamp_str.to_i
-            return false if timestamp <= 0
-            return false if (Time.now.to_i - timestamp).abs > 86400 # 24 hours
-
-            # Calculate expected signature
-            message = "simulator:#{timestamp_str}"
-            expected_signature = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), simulator_secret, message)
-
-            # Use secure comparison
-            secure_compare(signature, expected_signature)
-          rescue => e
-            Rails.logger.warn "Invalid simulator cookie format: #{e.message}"
-            false
-          end
+          # Then check if simulator mode is requested and authorized
+          @body.dig("simulator_mode") &&
+            FlowChat::Security.valid_simulator_cookie?(@controller.request.cookies[FlowChat::Security::SIMULATOR_COOKIE_NAME])
         end
 
         def parse_request_body(request)

@@ -4,6 +4,10 @@ module FlowChat
   module Instrumentation
     extend ActiveSupport::Concern
 
+    # Where a delivered reply's platform message id is left on the context, the
+    # same way for every gateway. nil when the platform does not name one.
+    DELIVERED_MESSAGE_ID_KEY = "delivery.platform_message_id"
+
     # Instrument a block of code with the given event name and payload
     def instrument(event_name, payload = {}, &block)
       enriched_payload = payload&.dup || {}
@@ -42,11 +46,34 @@ module FlowChat
     # Re-raises whatever the send raised: this reports a failure, it does not
     # handle one.
     def report_delivery_failure(context, **payload)
-      yield
+      result = yield
+      report_delivery_success(context, result)
+      result
     rescue => error
       report_to_subscribers(error, payload)
       report_to_app(context, error)
       raise error
+    end
+
+    # The success half. Runs where the send happened, which is the only place that
+    # knows what the platform called the message.
+    def report_delivery_success(context, result)
+      context[DELIVERED_MESSAGE_ID_KEY] = platform_message_id_from(result)
+      FlowChat::Config.on_delivery_success&.call(context, result)
+    rescue => callback_error
+      FlowChat.logger.error do
+        "Instrumentation: on_delivery_success raised #{callback_error.class}: #{callback_error.message}"
+      end
+    end
+
+    # What the platform called the message it just accepted.
+    #
+    # Overridden by every gateway that delivers out of band, because each one is
+    # the only thing that knows the shape of its own client's answer. Naming it
+    # here rather than in each app is the point: an app stamping the id onto its
+    # own record should not have to carry a case statement over platforms.
+    def platform_message_id_from(result)
+      nil
     end
 
     # Neither reader may replace the delivery error with one of its own, which
@@ -159,6 +186,9 @@ module FlowChat
       # what its gateway gives MESSAGE_SENT, plus the error, so a subscriber
       # sees the same send it would have seen succeed.
       MESSAGE_DELIVERY_FAILED = "message.delivery_failed"
+      # A platform's own report of what became of a message we sent. Informational:
+      # the send already succeeded or failed at the API call.
+      MESSAGE_STATUS = "message.status"
       WEBHOOK_VERIFIED = "webhook.verified"
       WEBHOOK_FAILED = "webhook.failed"
       API_REQUEST = "api.request"
@@ -170,6 +200,15 @@ module FlowChat
       # Middleware events
       MIDDLEWARE_BEFORE = "middleware.before"
       MIDDLEWARE_AFTER = "middleware.after"
+
+      # A webhook this gateway verified but does not model, handed on whole.
+      #
+      # FlowChat's job is messaging: inbound turns, the replies they produce, and
+      # what became of them. A platform sends far more than that, and what an
+      # account ban, a contact sync or an imported history means belongs to the
+      # application, not here. Rather than grow a handler per field, the payload is
+      # published with the field that named it, for an application to dispatch on.
+      WEBHOOK_RECEIVED = "webhook.received"
 
       # Conversation management events (for Intercom and similar platforms)
       CONVERSATION_ASSIGNED = "conversation.assigned"

@@ -42,11 +42,13 @@ class InstrumentationDeliveryFailureTest < Minitest::Test
     @sender = Sender.new
     @subscribers = []
     @original_callback = FlowChat::Config.on_delivery_failure
+    @original_delivery_callback = FlowChat::Config.on_delivery_success
   end
 
   def teardown
     @subscribers.each { |s| ActiveSupport::Notifications.unsubscribe(s) }
     FlowChat::Config.on_delivery_failure = @original_callback
+    FlowChat::Config.on_delivery_success = @original_delivery_callback
   end
 
   def on_failure(&block)
@@ -157,5 +159,68 @@ class InstrumentationDeliveryFailureTest < Minitest::Test
     assert_raises(RuntimeError) { @sender.deliver(@context) { raise "boom" } }
 
     assert called
+  end
+
+  # The success half. Same reasoning as the failure half: the send is the only
+  # place that knows what the platform called the message, and the row the app
+  # wrote during the turn was written before there was an id to write.
+  def test_the_delivery_callback_receives_the_context_and_what_the_platform_returned
+    seen = nil
+    FlowChat::Config.on_delivery_success = ->(context, result) { seen = [context, result] }
+
+    @sender.deliver(@context) { {"messages" => [{"id" => "wamid.1"}]} }
+
+    assert_same @context, seen[0]
+    assert_equal "wamid.1", seen[1].dig("messages", 0, "id")
+  end
+
+  def test_the_delivery_callback_does_not_change_what_the_send_returned
+    FlowChat::Config.on_delivery_success = ->(_c, _r) { :something_else }
+
+    assert_equal :sent, @sender.deliver(@context) { :sent }
+  end
+
+  def test_a_delivery_callback_that_raises_does_not_fail_the_send
+    FlowChat::Config.on_delivery_success = ->(_c, _r) { raise ArgumentError, "callback is broken" }
+
+    assert_equal :sent, @sender.deliver(@context) { :sent }
+  end
+
+  def test_the_delivery_callback_does_not_run_when_the_send_failed
+    called = false
+    FlowChat::Config.on_delivery_success = ->(_c, _r) { called = true }
+
+    assert_raises(RuntimeError) { @sender.deliver(@context) { raise "telegram said 401" } }
+
+    refute called
+  end
+
+  # A sender that names nothing still has to answer the question, so an app can
+  # read one key rather than knowing which platforms bother.
+  def test_the_id_is_nil_when_the_sender_names_none
+    FlowChat::Config.on_delivery_success = ->(_c, _r) {}
+
+    @sender.deliver(@context) { {"messages" => [{"id" => "wamid.1"}]} }
+
+    assert_nil @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
+  def test_a_sender_that_names_the_id_leaves_it_on_the_context
+    naming_sender = Class.new(Sender) {
+      def platform_message_id_from(result)
+        result.dig("messages", 0, "id")
+      end
+    }.new
+
+    seen = nil
+    FlowChat::Config.on_delivery_success = ->(context, _r) {
+      seen = context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+    }
+
+    naming_sender.deliver(@context) { {"messages" => [{"id" => "wamid.1"}]} }
+
+    # Read inside the callback, because that is when an app would read it.
+    assert_equal "wamid.1", seen
+    assert_equal "wamid.1", @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
   end
 end

@@ -132,6 +132,20 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     @gateway.call(@context)
   end
 
+  # Every gateway that delivers out of band names the id the same way, so an app
+  # stamping it onto its own record reads one key rather than five shapes.
+  def test_a_delivered_reply_names_its_platform_message_id
+    webhook_body = build_conversation_created_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Thank you for your message!", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg_123"}, ["conv_123", "Thank you for your message!"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_equal "sent_msg_123", @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
   def test_webhook_notification_conversation_user_created
     webhook_body = build_conversation_created_webhook
     setup_post_request_with_webhook_and_app_call(webhook_body)
@@ -677,21 +691,6 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
     assert_equal "just text", result[:body]
     refute result.key?(:media)
-  end
-
-  def test_secure_compare_equal_strings
-    result = @gateway.send(:secure_compare, "abc123", "abc123")
-    assert_equal true, result
-  end
-
-  def test_secure_compare_different_strings
-    result = @gateway.send(:secure_compare, "abc123", "def456")
-    assert_equal false, result
-  end
-
-  def test_secure_compare_different_lengths
-    result = @gateway.send(:secure_compare, "abc", "abcdef")
-    assert_equal false, result
   end
 
   def test_html_message_converted_to_markdown

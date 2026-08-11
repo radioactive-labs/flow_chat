@@ -24,6 +24,7 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   def teardown
     WebMock.disable!
     WebMock.reset!
+    @subscribers&.each { |s| ActiveSupport::Notifications.unsubscribe(s) }
   end
 
   def test_get_request_webhook_verification
@@ -519,35 +520,333 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_nil context.input
   end
 
-  def test_secure_compare_method
-    gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |context| [:text, "Response", nil, nil] }, @mock_config)
+  def test_verification_refuses_a_configuration_with_no_verify_token
+    @mock_config.verify_token = nil
 
-    # Test identical strings
-    assert gateway.send(:secure_compare, "hello", "hello")
+    context = create_context_with_request(
+      method: :get,
+      params: {"hub.mode" => "subscribe", "hub.challenge" => "claimed"}
+    )
 
-    # Test different strings of same length
-    refute gateway.send(:secure_compare, "hello", "world")
+    @gateway.call(context)
 
-    # Test different lengths
-    refute gateway.send(:secure_compare, "hello", "hi")
-    refute gateway.send(:secure_compare, "hi", "hello")
+    # Nothing configured means nothing to prove, so the challenge is refused rather
+    # than answered by two missing tokens comparing equal.
+    assert_equal :forbidden, context.controller.last_head_status
+    assert_nil context.controller.last_render
+  end
 
-    # Test empty strings
-    assert gateway.send(:secure_compare, "", "")
-    refute gateway.send(:secure_compare, "", "hello")
+  def test_a_delivered_reply_names_its_platform_message_id
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.inbound")
+    )
 
-    # Test with actual HMAC signatures
-    secret = "test_secret"
-    message = "test_message"
-    signature1 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
-    signature2 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, message)
-    signature3 = OpenSSL::HMAC.hexdigest(OpenSSL::Digest.new("sha256"), secret, "different_message")
+    @gateway.call(context)
 
-    assert gateway.send(:secure_compare, signature1, signature2)
-    refute gateway.send(:secure_compare, signature1, signature3)
+    # The stubbed messages API answers with sent_123.
+    assert_equal "sent_123", context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
+  # --- Webhook field dispatch -------------------------------------------------
+
+  def test_dispatches_on_the_declared_field
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.field").tap { |p|
+        p["entry"][0]["changes"][0]["field"] = "messages"
+      }
+    )
+
+    @gateway.call(context)
+
+    assert_equal "Hello", context.input
+    assert_requested :post, @mock_config.messages_url
+  end
+
+  def test_an_unknown_field_is_accepted_and_ignored
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("something_meta_added_later", {"whatever" => true})
+    )
+
+    @gateway.call(context)
+
+    assert_equal :ok, context.controller.last_head_status
+    assert_not_requested :post, @mock_config.messages_url
+  end
+
+  # Publishing is not much use if nothing says it happened. At debug this would be
+  # invisible on a production log level.
+  def test_a_published_field_is_named_in_the_log_at_info
+    log = capture_logs do
+      context = create_context_with_request(
+        method: :post,
+        body: change_payload("account_update", {"event" => "PARTNER_ADDED", "ban_info" => {}})
+      )
+      @gateway.call(context)
+    end
+
+    assert_includes log, "account_update"
+    # Keys, so the shape is learnable without writing message content to a log.
+    assert_includes log, "value keys:"
+    assert_includes log, "ban_info"
+  end
+
+  def test_every_entry_and_change_is_looked_at
+    statuses = change_payload("statuses", {"statuses" => [status_hash]})["entry"][0]["changes"][0]
+    body = create_text_message_payload("Hello", "wamid.batched")
+    # A status update ahead of the message, in its own entry, the way Meta batches.
+    body["entry"].unshift({"changes" => [statuses]})
+
+    seen = []
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen << p }
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    assert_equal 1, seen.size, "the status ahead of the message must not be skipped"
+    assert_equal "Hello", context.input, "the message behind the status must still run"
+  end
+
+  def test_a_second_messages_change_is_not_processed
+    body = create_text_message_payload("First", "wamid.first")
+    second = create_text_message_payload("Second", "wamid.second")["entry"][0]["changes"][0]
+    body["entry"][0]["changes"] << second
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    # Only one change can own the response, so the first wins and the rest are
+    # reported rather than silently dropped.
+    assert_equal "First", context.input
+    assert_requested :post, @mock_config.messages_url, times: 1
+  end
+
+  # --- Statuses --------------------------------------------------------------
+
+  # Meta has no `statuses` webhook field. A delivery report arrives as a change
+  # whose field is `messages`, carrying statuses and no messages.
+  def test_a_status_reported_under_the_messages_field_is_instrumented
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("messages", {"statuses" => [status_hash]})
+    )
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen&.dig(:message_id)
+    assert_not_requested :post, @mock_config.messages_url
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  # The status must not spend the one flow slot a delivery has.
+  def test_a_status_ahead_of_a_message_does_not_drop_the_message
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    body = create_text_message_payload("Hello", "wamid.behind_status")
+    body["entry"][0]["changes"][0]["field"] = "messages"
+    status_change = change_payload("messages", {"statuses" => [status_hash]})["entry"][0]["changes"][0]
+    body["entry"][0]["changes"].unshift(status_change)
+
+    context = create_context_with_request(method: :post, body: body)
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen&.dig(:message_id)
+    assert_equal "Hello", context.input, "the message behind the status must still run"
+    assert_requested :post, @mock_config.messages_url
+  end
+
+  def test_status_updates_are_instrumented
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("statuses", {"statuses" => [status_hash]})
+    )
+    @gateway.call(context)
+
+    assert_equal "wamid.sent1", seen[:message_id]
+    assert_equal "delivered", seen[:status]
+    assert_equal "256700000000", seen[:recipient]
+    assert_equal :whatsapp, seen[:platform]
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  # A status says more than whether it arrived: what Meta billed the conversation
+  # as, and its own view of the window. The named keys are what this gateway
+  # promises, and the status itself is there for an application that wants the
+  # rest without waiting on a release.
+  def test_a_status_carries_what_the_named_keys_leave_out
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen = p }
+
+    status = status_hash.merge(
+      "conversation" => {"id" => "conv-1", "origin" => {"type" => "service"}},
+      "pricing" => {"billable" => true, "category" => "service"}
+    )
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("statuses", {"statuses" => [status]})
+    )
+    @gateway.call(context)
+
+    assert_equal status, seen[:value]
+    assert_equal "service", seen[:value].dig("pricing", "category")
+  end
+
+  # --- Everything that is not messaging --------------------------------------
+
+  # Messaging is the gateway's job. Coexistence echoes, contact syncs, imported
+  # history, account bans and template approvals are the application's, so they are
+  # published whole rather than interpreted here.
+  def test_a_field_that_is_not_messaging_is_published_whole
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
+
+    echo = {
+      "from" => "+15551234567",
+      "to" => "256700000000",
+      "id" => "wamid.echo1",
+      "timestamp" => "1702891800",
+      "type" => "text",
+      "text" => {"body" => "Answered from the Business App"}
+    }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {"message_echoes" => [echo]})
+    )
+    @gateway.call(context)
+
+    assert_equal "smb_message_echoes", seen[:field]
+    assert_equal [echo], seen[:value]["message_echoes"]
+    assert_equal "test_phone_id", seen[:business_phone_number_id]
+    assert_equal "waba-1", seen[:business_account_id]
+    # An echo is the business talking, not a customer turn.
+    assert_not_requested :post, @mock_config.messages_url
+    assert_nil context.input
+    assert_equal :ok, context.controller.last_head_status
+  end
+
+  def test_every_unmodelled_field_uses_the_same_event
+    fields = {
+      "smb_app_state_sync" => {"state_sync" => [{"type" => "contact"}]},
+      "history" => {"history" => [{"threads" => []}]},
+      "account_update" => {"event" => "DISABLED_UPDATE"},
+      "message_template_status_update" => {"event" => "APPROVED"},
+      "something_meta_adds_next_year" => {"whatever" => true}
+    }
+
+    seen = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen << p }
+
+    fields.each do |field, value|
+      # A gateway parses its body once and keeps it, so each delivery needs its
+      # own, the way a request gets its own in production.
+      gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |_| }, @mock_config)
+      gateway.call(create_context_with_request(method: :post, body: change_payload(field, value)))
+    end
+
+    # No handler to add per field, which is the point: the gateway does not chase
+    # Meta's field list.
+    assert_equal fields.keys, seen.map { |p| p[:field] }
+    assert_not_requested :post, @mock_config.messages_url
+  end
+
+  # A change about the account rather than one of its numbers carries no metadata,
+  # so both phone number keys are empty. The account is the only thing naming who
+  # it belongs to, and an application holding several businesses needs it.
+  def test_an_account_level_field_is_published_with_the_account_that_owns_it
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
+
+    body = {
+      "entry" => [{
+        "id" => "waba-1",
+        "changes" => [{
+          "field" => "account_update",
+          "value" => {"event" => "DISABLED_UPDATE", "ban_info" => {"waba_ban_state" => "SCHEDULE_FOR_DISABLE"}}
+        }]
+      }]
+    }
+
+    @gateway.call(create_context_with_request(method: :post, body: body))
+
+    assert_equal "waba-1", seen[:business_account_id]
+    assert_nil seen[:business_phone_number_id]
+    assert_nil seen[:business_phone_number]
+  end
+
+  def test_a_declined_history_import_is_published_too
+    seen = nil
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| seen = p }
+
+    history = [{"errors" => [{"code" => 2593109, "title" => "History sync is turned off"}]}]
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("history", {"history" => history})
+    )
+    @gateway.call(context)
+
+    # A refusal is news too: the application has to stop waiting for the import.
+    assert_equal history, seen[:value]["history"]
   end
 
   private
+
+  # Captures at info level on purpose: a message logged at debug would not appear,
+  # which is the regression this guards.
+  def capture_logs
+    original = FlowChat::Config.logger
+    io = StringIO.new
+    FlowChat::Config.logger = Logger.new(io, level: :info)
+    yield
+    io.string
+  ensure
+    FlowChat::Config.logger = original
+  end
+
+  def subscribe(event)
+    @subscribers ||= []
+    @subscribers << ActiveSupport::Notifications.subscribe("#{event}.flow_chat") do |*args|
+      yield ActiveSupport::Notifications::Event.new(*args).payload
+    end
+  end
+
+  def status_hash
+    {
+      "id" => "wamid.sent1",
+      "status" => "delivered",
+      "recipient_id" => "256700000000",
+      "timestamp" => "1702891800"
+    }
+  end
+
+  # A single-change delivery for a named field.
+  def change_payload(field, value)
+    {
+      "entry" => [{
+        "id" => "waba-1",
+        "changes" => [{
+          "field" => field,
+          "value" => {
+            "messaging_product" => "whatsapp",
+            "metadata" => {
+              "display_phone_number" => "+15551234567",
+              "phone_number_id" => "test_phone_id"
+            }
+          }.merge(value)
+        }]
+      }]
+    }
+  end
 
   def create_context_with_request(method:, params: {}, body: nil, headers: {}, cookies: {})
     context = FlowChat::Context.new
