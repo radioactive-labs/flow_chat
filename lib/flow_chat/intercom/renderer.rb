@@ -37,9 +37,15 @@ module FlowChat
       end
 
       def build_interactive_message(choice_hash)
-        # For Intercom, we'll present choices as a formatted text message
-        # since Intercom doesn't have the same interactive elements as WhatsApp
-
+        # Intercom does support real buttons (message_type: "quick_reply"), sent
+        # separately below by the client since body is forbidden on that message
+        # type. The numbered list stays in this comment regardless, for two
+        # reasons: whether a tap's quick_reply_uuid actually reaches the webhook
+        # where we expect it is unverified, so the numbered text plus the
+        # existing text/number matcher is what makes a reply resolve if it
+        # doesn't; and it mirrors Instagram's always_number? in this gem, which
+        # lists options in the body for the same reason - the interactive
+        # surface doesn't reach every viewer.
         formatted_message = message.to_s
 
         unless formatted_message.empty?
@@ -52,10 +58,9 @@ module FlowChat
           formatted_message += "#{index + 1}. #{value}\n"
         end
 
-        formatted_message += "\nReply with the number of your choice."
-
         link, options = render_media
-        [:text, to_html(formatted_message + link), options.merge(choices: choice_hash)]
+        reply_options = choice_hash.map { |key, value| {uuid: key.to_s, text: value.to_s} }
+        [:text, to_html(formatted_message + link), options.merge(choices: choice_hash, reply_options: reply_options)]
       end
 
       # Intercom's admin reply only takes real attachments as image URLs

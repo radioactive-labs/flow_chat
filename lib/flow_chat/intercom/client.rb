@@ -48,6 +48,7 @@ module FlowChat
         response = FlowChat::Intercom::Renderer.new(prompt, choices: choices, media: media).render
         type, content, options = response
         attachment_urls = options[:attachment_urls]
+        reply_options = options[:reply_options]
 
         result = instrument(Events::MESSAGE_SENT, {
           to: conversation_id,
@@ -74,6 +75,23 @@ module FlowChat
 
           # Send using official gem
           reply = intercom.conversations.reply(reply_data)
+
+          # A choice screen is two replies: this comment carries the prompt,
+          # then a quick_reply carries the buttons. body is forbidden on
+          # quick_reply, so the options can't ride along with the comment above.
+          #
+          # Empty is checked as well as nil: Intercom requires reply_options to
+          # be present for a quick_reply, so an empty array would buy a rejected
+          # request rather than a screen with no buttons.
+          if reply_options.present?
+            reply = intercom.conversations.reply({
+              id: conversation_id,
+              type: "admin",
+              admin_id: @config.admin_id.to_s,
+              message_type: "quick_reply",
+              reply_options: reply_options
+            })
+          end
 
           reply.to_hash
         end

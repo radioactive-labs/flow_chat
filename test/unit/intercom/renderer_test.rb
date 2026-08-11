@@ -156,8 +156,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "<p>Please choose an option:</p>"
     assert_includes result[1], "1. Billing Questions"
     assert_includes result[1], "2. Technical Support"
-    assert_includes result[1], "Reply with the number of your choice."
-    assert_equal({choices: choices}, result[2])
+    refute_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "billing", text: "Billing Questions"},
+      {uuid: "support", text: "Technical Support"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_empty_message
@@ -170,8 +173,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_equal :text, result[0]
     assert_includes result[1], "1. Yes"
     assert_includes result[1], "2. No"
-    assert_includes result[1], "Reply with the number of your choice."
-    assert_equal({choices: choices}, result[2])
+    refute_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "yes", text: "Yes"},
+      {uuid: "no", text: "No"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_nil_message
@@ -184,7 +190,10 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_equal :text, result[0]
     assert_includes result[1], "1. First Option"
     assert_includes result[1], "2. Second Option"
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "option1", text: "First Option"},
+      {uuid: "option2", text: "Second Option"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_single_choice
@@ -197,7 +206,9 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_equal :text, result[0]
     assert_includes result[1], "Do you want to continue?"
     assert_includes result[1], "1. Yes, continue"
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "continue", text: "Yes, continue"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_multiple_choices
@@ -218,7 +229,12 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "2. Customer Support"
     assert_includes result[1], "3. Billing Department"
     assert_includes result[1], "4. General Inquiries"
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "sales", text: "Sales Department"},
+      {uuid: "support", text: "Customer Support"},
+      {uuid: "billing", text: "Billing Department"},
+      {uuid: "general", text: "General Inquiries"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_with_media
@@ -233,7 +249,10 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "Based on the image above"
     assert_includes result[1], "1. Buy Now"
     assert_includes result[1], "2. Get More Info"
-    assert_equal({choices: choices, attachment_urls: ["https://example.com/product.jpg"]}, result[2])
+    assert_equal({choices: choices, attachment_urls: ["https://example.com/product.jpg"], reply_options: [
+      {uuid: "buy", text: "Buy Now"},
+      {uuid: "info", text: "Get More Info"}
+    ]}, result[2])
   end
 
   def test_render_media_composes_with_choices_attachment_and_numbered_body_both_present
@@ -251,6 +270,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "3. Large"
     assert_equal({attachment_urls: ["https://example.com/sizing-chart.jpg"]}, result[2].slice(:attachment_urls))
     assert_equal choices, result[2][:choices]
+    assert_equal [
+      {uuid: "s", text: "Small"},
+      {uuid: "m", text: "Medium"},
+      {uuid: "l", text: "Large"}
+    ], result[2][:reply_options]
   end
 
   def test_render_selection_message_preserves_choice_order
@@ -265,7 +289,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "1. High Priority"
     assert_includes result[1], "2. Medium Priority"
     assert_includes result[1], "3. Low Priority"
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "high", text: "High Priority"},
+      {uuid: "medium", text: "Medium Priority"},
+      {uuid: "low", text: "Low Priority"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_with_special_characters
@@ -284,7 +312,11 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "your issue?"
     assert_includes result[1], "access my account"
     assert_includes result[1], "&amp;"  # & is escaped
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, reply_options: [
+      {uuid: "password", text: "I can't access my account"},
+      {uuid: "billing", text: "Billing & payment issues"},
+      {uuid: "bug", text: "Found a bug/error"}
+    ]}, result[2])
   end
 
   def test_render_selection_message_invalid_choices_raises_error
@@ -306,8 +338,8 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     assert_equal :text, result[0]
     assert_includes result[1], "Please choose:"
-    assert_includes result[1], "Reply with the number of your choice."
-    assert_equal({choices: choices}, result[2])
+    refute_includes result[1], "Reply with the number of your choice."
+    assert_equal({choices: choices, reply_options: []}, result[2])
   end
 
   def test_render_returns_array_with_three_elements

@@ -149,6 +149,9 @@ module FlowChat
 
             if latest_message
               context["request.message_id"] = latest_message[:id]
+              if latest_message[:quick_reply_uuid]
+                context["intercom.quick_reply_uuid"] = latest_message[:quick_reply_uuid]
+              end
               if latest_message[:media]
                 media = latest_message[:media]
                 body = latest_message[:body]
@@ -280,7 +283,8 @@ module FlowChat
               {
                 id: source["id"],
                 body: source["body"],
-                media: extract_attachments(source)
+                media: extract_attachments(source),
+                quick_reply_uuid: quick_reply_uuid_from(source)
               }.compact
             end
           when "conversation.user.replied"
@@ -299,10 +303,25 @@ module FlowChat
               {
                 id: latest_part["id"],
                 body: latest_part["body"],
-                media: extract_attachments(latest_part)
+                media: extract_attachments(latest_part),
+                quick_reply_uuid: quick_reply_uuid_from(latest_part)
               }.compact
             end
           end
+        end
+
+        # A tapped quick_reply comes back as a comment conversation part whose
+        # metadata carries the uuid of the option that was clicked - per the
+        # webhook reference, which documents the field but not which part
+        # carries it. This is our best guess at the path (the latest inbound
+        # part's own metadata); logged at debug on every message, present or
+        # not, so a real tap tells us whether the guess is right. A wrong guess
+        # costs nothing: the value is simply absent, and the choice mapper falls
+        # back to the typed number or label as it does today.
+        def quick_reply_uuid_from(part)
+          uuid = part.dig("metadata", "quick_reply_uuid")
+          FlowChat.logger.debug { "IntercomApi: metadata.quick_reply_uuid on inbound part #{part["id"].inspect} = #{uuid.inspect}" }
+          uuid
         end
 
         def extract_attachments(raw)

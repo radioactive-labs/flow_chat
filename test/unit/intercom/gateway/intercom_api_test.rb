@@ -683,6 +683,73 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert_equal :audio, result[:media][0][:type]
   end
 
+  # Path is a guess: latest inbound part's own metadata.quick_reply_uuid.
+  # Unverified against a real delivery - these tests pin down the guess so a
+  # real payload can be diffed against it later.
+  def test_extract_reply_event_reads_quick_reply_uuid_from_latest_part_metadata
+    conversation = {
+      "conversation_parts" => {
+        "conversation_parts" => [
+          {
+            "id" => "part_1",
+            "part_type" => "comment",
+            "body" => "Sales",
+            "author" => {"type" => "user"},
+            "metadata" => {"quick_reply_uuid" => "sales"}
+          }
+        ]
+      }
+    }
+
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.replied")
+
+    assert_equal "sales", result[:quick_reply_uuid]
+  end
+
+  def test_extract_reply_event_without_metadata_has_no_quick_reply_uuid_key
+    conversation = {
+      "conversation_parts" => {
+        "conversation_parts" => [
+          {
+            "id" => "part_1",
+            "part_type" => "comment",
+            "body" => "Sales",
+            "author" => {"type" => "user"}
+          }
+        ]
+      }
+    }
+
+    result = @gateway.send(:extract_latest_user_message, conversation, "conversation.user.replied")
+
+    refute result.key?(:quick_reply_uuid)
+  end
+
+  def test_webhook_carries_quick_reply_uuid_into_context
+    webhook_body = build_conversation_reply_webhook
+    webhook_body["data"]["item"]["conversation_parts"]["conversation_parts"].last["metadata"] = {"quick_reply_uuid" => "support"}
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_equal "support", @context["intercom.quick_reply_uuid"]
+  end
+
+  def test_webhook_without_quick_reply_uuid_leaves_context_key_unset
+    webhook_body = build_conversation_reply_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Got it", nil, nil], [@context])
+    @mock_client.expect(:send_message, {"id" => "sent_msg"}, ["conv_123", "Got it"], choices: nil, media: nil)
+
+    @gateway.call(@context)
+
+    assert_nil @context["intercom.quick_reply_uuid"]
+  end
+
   def test_extract_text_only_message_has_no_media_key
     conversation = {
       "source" => {"id" => "msg_3", "body" => "just text"}

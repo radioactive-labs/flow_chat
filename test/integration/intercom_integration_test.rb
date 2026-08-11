@@ -191,16 +191,66 @@ class IntercomIntegrationTest < Minitest::Test
 
     run_processor(controller, ChoiceFlow)
 
-    # Should send message with numbered choices
+    # Should send message with numbered choices, still, alongside the buttons.
+    # The quick_reply half of the turn carries no body at all, so guard
+    # against matching it here with to_s rather than assuming a String.
     assert_requested :post, "https://api.intercom.io/conversations/conv_123/reply" do |req|
       body = JSON.parse(req.body)
-      message = body["body"]
+      message = body["body"].to_s
       # Intercom renderer formats choices as numbered list
       message.include?("Pick a color:") &&
         message.include?("1.") && message.include?("Red") &&
         message.include?("2.") && message.include?("Green") &&
-        message.include?("3.") && message.include?("Blue") &&
-        message.include?("Reply with the number of your choice")
+        message.include?("3.") && message.include?("Blue")
+    end
+  end
+
+  def test_choice_flow_sends_quick_reply_buttons_after_the_numbered_prompt
+    controller = create_intercom_controller(
+      webhook: build_conversation_created_webhook(message: "start")
+    )
+
+    run_processor(controller, ChoiceFlow)
+
+    assert_requested :post, "https://api.intercom.io/conversations/conv_123/reply", times: 2
+
+    # The choice mapper renumbers before the renderer ever sees the flow's own
+    # keys ("red"/"green"/"blue"), so the uuid a button carries is that same
+    # number - the identical handle a typed "1"/"2"/"3" would resolve through.
+    assert_requested :post, "https://api.intercom.io/conversations/conv_123/reply" do |req|
+      body = JSON.parse(req.body)
+      body["message_type"] == "quick_reply" &&
+        !body.key?("body") &&
+        body["reply_options"] == [
+          {"uuid" => "1", "text" => "Red"},
+          {"uuid" => "2", "text" => "Green"},
+          {"uuid" => "3", "text" => "Blue"}
+        ]
+    end
+  end
+
+  def test_tapped_quick_reply_advances_the_flow_via_its_uuid
+    session_data = {}
+
+    # First turn: offer the choices, so the mapper's session mapping exists.
+    controller1 = create_intercom_controller(
+      webhook: build_conversation_created_webhook(message: "start")
+    )
+    run_processor(controller1, ChoiceFlow, session_data: session_data)
+
+    # Second turn: the tap comes back as a reply whose part metadata carries
+    # quick_reply_uuid - our best guess at Intercom's webhook shape. The uuid
+    # is "2", not "green": the choice mapper renumbers before the renderer
+    # ever sees the flow's own keys, so that's what a real tap would carry.
+    webhook = build_conversation_reply_webhook(message: "")
+    webhook["data"]["item"]["conversation_parts"]["conversation_parts"].last["metadata"] = {"quick_reply_uuid" => "2"}
+
+    controller2 = create_intercom_controller(webhook: webhook)
+    run_processor(controller2, ChoiceFlow, session_data: session_data)
+
+    assert_requested :post, "https://api.intercom.io/conversations/conv_123/reply" do |req|
+      body = JSON.parse(req.body)
+      body["body"].to_s.include?("You picked green!")
     end
   end
 
