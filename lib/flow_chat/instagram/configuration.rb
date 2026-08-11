@@ -1,7 +1,5 @@
 module FlowChat
   module Instagram
-    class ConfigurationError < StandardError; end
-
     class Configuration
       include FlowChat::NamedConfiguration
 

@@ -144,6 +144,16 @@ Messenger reports every message sent on a thread, including one typed by a human
 
 `:human_agent` is usually the signal an application wants: stand the flow down while a person is handling the conversation, and let it resume (or not) on your own logic.
 
+## Who can be on each side
+
+The account running the flow must be a Facebook **Page**, linked to the app the credentials belong to. Messenger has no person-to-person mode: an app cannot send as somebody's personal Facebook profile, and Meta has not allowed that for years. If you are looking for a way to automate replies from your own profile to your own friends, this gateway is not it, and neither is any Meta API.
+
+The person on the other side is an ordinary Facebook user messaging the Page, which is the normal case and needs nothing from them.
+
+Group threads are not supported. The webhook envelope pairs one sender with one recipient, and Meta does not expose group threads through this API.
+
+Unlike Instagram, a Messenger conversation does not have to begin with the user: a Page may open one with an approved message tag, subject to the window below. FlowChat does not model tags, so a flow that needs to speak first has to send through `context["messenger.client"]` with whatever the tag rules require.
+
 ## The 24-hour window
 
 Meta restricts free-form Messenger sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window or tag anything automatically. A send outside it is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.

@@ -1,6 +1,19 @@
 # Instagram
 
-The `FlowChat::Instagram::Gateway::SendApi` gateway integrates Instagram Direct Messages through the same Messenger Platform infrastructure Facebook Messenger uses: the Send API for outbound messages and the `entry[].messaging[]` webhook for inbound ones. FlowChat models the Facebook Login integration path only, where an Instagram professional account is linked to a Facebook Page and the webhook delivery is scoped to that Page; a standalone Instagram Login integration with no linked Page is not covered.
+The `FlowChat::Instagram::Gateway::SendApi` gateway integrates Instagram Direct Messages through the same Messenger Platform infrastructure Facebook Messenger uses: the Send API for outbound messages and the `entry[].messaging[]` webhook for inbound ones.
+
+Meta offers two ways to reach Instagram messaging, and FlowChat implements one of them.
+
+| | Instagram API with Instagram Login | Instagram API with Facebook Login |
+|---|---|---|
+| Linked Facebook Page | Not required | Required |
+| Login flow | Business Login for Instagram | Facebook Login for Business |
+| Access token | Instagram User token | Facebook User or Page token |
+| Base URL | `graph.instagram.com` | `graph.facebook.com` |
+| Account identifier | Instagram-scoped user id | Page-scoped user id |
+| Supported here | No | Yes |
+
+FlowChat models the **Facebook Login** path. The client posts to `graph.facebook.com`, authenticates with the Page access token, and matches an inbound delivery against the linked Page id rather than the Instagram account id. An Instagram professional account with no linked Facebook Page cannot be served by this gateway: supporting it would mean a different host, a different token type and a different account identifier, which is a separate integration rather than a configuration flag.
 
 Instagram shares its webhook envelope and most of its rendering logic with Messenger (`FlowChat::Meta::MessagingGateway`), but has its own configuration, client and limits, and one crucial rendering difference: Instagram's interactive surfaces do not render everywhere, described below.
 
@@ -149,9 +162,23 @@ Instagram reports every message sent on a thread, including one typed by a human
 
 `:human_agent` is usually the signal an application wants: stand the flow down while a person is handling the conversation, and let it resume (or not) on your own logic.
 
+## Who can be on each side
+
+The account running the flow must be an Instagram **professional** account, Business or Creator, with a Facebook Page linked to it. A personal Instagram account cannot be the business side of a conversation: Meta's messaging API does not accept one, and there is no FlowChat setting that works around it.
+
+The person on the other side is an ordinary Instagram user, which is the normal case and needs nothing from them.
+
+Group threads are not supported. The webhook envelope pairs one sender with one recipient, and Meta does not expose group threads through this API.
+
+## The user has to speak first
+
+Meta only permits a send once the user has messaged the professional account: "only after an Instagram user has sent your app user's Instagram professional account a message can your app send a message to the Instagram user."
+
+A flow therefore cannot open an Instagram conversation. There is no Instagram equivalent of an outbound-first WhatsApp template, so anything resembling a notification or a reminder has to begin with the user, or reach them on a platform that allows it. `FlowChat::Factory` and out-of-band sends through `context["instagram.client"]` are both bound by this: they can continue a conversation the user started, not start one.
+
 ## The 24-hour window
 
-Meta restricts free-form Instagram sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window or tag anything automatically. A send outside it is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
+Separately from the rule above, Meta restricts free-form Instagram sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window or tag anything automatically. A send outside it is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
 
 ## Limits
 

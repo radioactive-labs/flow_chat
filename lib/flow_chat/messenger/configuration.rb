@@ -1,7 +1,5 @@
 module FlowChat
   module Messenger
-    class ConfigurationError < StandardError; end
-
     class Configuration
       include FlowChat::NamedConfiguration
 
