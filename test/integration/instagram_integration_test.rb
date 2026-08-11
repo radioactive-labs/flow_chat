@@ -35,8 +35,8 @@ class InstagramIntegrationTest < Minitest::Test
     @sent = []
     sent = @sent
     @original_post_message = FlowChat::Instagram::Client.instance_method(:post_message)
-    FlowChat::Instagram::Client.define_method(:post_message) do |recipient_id, message|
-      sent << {to: recipient_id, message: message}
+    FlowChat::Instagram::Client.define_method(:post_message) do |recipient_id, message, tag|
+      sent << {to: recipient_id, message: message, tag: tag}
       {"recipient_id" => recipient_id, "message_id" => "mid.#{sent.length}"}
     end
   end

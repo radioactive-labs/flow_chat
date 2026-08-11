@@ -12,7 +12,14 @@ module FlowChat
         FlowChat.logger.info { "Messenger::Client: Initialized for page_id: #{@config.page_id}" }
       end
 
-      def send_message(recipient_id, prompt, choices: nil, media: nil)
+      # @param tag [String, nil] a Meta message tag (e.g. "HUMAN_AGENT") that
+      #   extends the free-form send window beyond 24 hours. The application
+      #   decides when a send qualifies; this only carries the value through
+      #   to every part of the send. Passed through unvalidated: Meta accepts
+      #   only HUMAN_AGENT as of 27 April 2026 and rejects anything else with
+      #   error 100, clearly enough that an allowlist here would only be one
+      #   more thing to keep in sync with Meta's own set.
+      def send_message(recipient_id, prompt, choices: nil, media: nil, tag: nil)
         response = renderer_class.new(prompt, choices: choices, media: media).render
         type, content, options = response
 
@@ -22,12 +29,12 @@ module FlowChat
           content_length: content.to_s.length,
           platform: platform
         }) do
-          deliver(recipient_id, type, content, options)
+          deliver(recipient_id, type, content, options, tag)
         end
       end
 
-      def send_text(recipient_id, text)
-        send_message(recipient_id, text)
+      def send_text(recipient_id, text, tag: nil)
+        send_message(recipient_id, text, tag: tag)
       end
 
       # Uploads a file for reuse and returns the id Meta assigned it.
@@ -62,35 +69,46 @@ module FlowChat
       # Anything over the platform's cap is rejected whole rather than trimmed by
       # Meta, so long text goes as several messages. Only the last result is
       # returned: it carries the id of the message the user ends up looking at.
-      def deliver(recipient_id, type, content, options)
+      # Every part - every chunk of a split message - carries the same tag.
+      def deliver(recipient_id, type, content, options, tag)
         case type
         when :text
-          split_text(content).map { |chunk| post_message(recipient_id, {text: chunk}) }.last
+          split_text(content).map { |chunk| post_message(recipient_id, {text: chunk}, tag) }.last
         when :quick_replies
           chunks = split_text(content)
           # Quick replies belong on the final chunk, next to the question.
-          chunks[0..-2].each { |chunk| post_message(recipient_id, {text: chunk}) }
-          post_message(recipient_id, {text: chunks.last, quick_replies: options[:quick_replies]})
+          chunks[0..-2].each { |chunk| post_message(recipient_id, {text: chunk}, tag) }
+          post_message(recipient_id, {text: chunks.last, quick_replies: options[:quick_replies]}, tag)
         when :carousel
-          post_message(recipient_id, {text: content}) if content.present?
+          post_message(recipient_id, {text: content}, tag) if content.present?
           post_message(recipient_id, {
             attachment: {
               type: "template",
               payload: {template_type: "generic", elements: options[:elements]}
             }
-          })
+          }, tag)
         when :attachment
           attachment_payload = options[:url] ? {url: options[:url], is_reusable: true} : {attachment_id: options[:attachment_id]}
-          post_message(recipient_id, {text: content}) if content.present?
+          post_message(recipient_id, {text: content}, tag) if content.present?
           post_message(recipient_id, {
             attachment: {type: options[:type].to_s, payload: attachment_payload}
-          })
+          }, tag)
         end
       end
 
-      def post_message(recipient_id, message)
+      def post_message(recipient_id, message, tag)
         payload = {recipient: {id: recipient_id}, message: message}
-        payload[:messaging_type] = "RESPONSE" if messaging_type?
+
+        # The tag branch is not gated on messaging_type?: Instagram never
+        # documents RESPONSE, but it does document MESSAGE_TAG with
+        # HUMAN_AGENT, so a tagged send needs the field there too even
+        # though an untagged Instagram send omits it entirely.
+        if tag
+          payload[:messaging_type] = "MESSAGE_TAG"
+          payload[:tag] = tag
+        elsif messaging_type?
+          payload[:messaging_type] = "RESPONSE"
+        end
 
         post_json(@config.messages_url, payload)
       end

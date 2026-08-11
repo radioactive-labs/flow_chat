@@ -89,4 +89,36 @@ class InstagramClientTest < Minitest::Test
 
     assert_nil @client.send_message("igsid_1", "Hello")
   end
+
+  # The judgement call: Instagram overrides messaging_type? to false because
+  # Meta never documented RESPONSE for Instagram, but Meta does document
+  # MESSAGE_TAG with HUMAN_AGENT for Instagram. A tagged send must set the
+  # field here even though an untagged send never does.
+  def test_tagged_send_sets_message_tag_even_though_messaging_type_is_undocumented
+    @client.send_message("igsid_1", "Hello", tag: "HUMAN_AGENT")
+
+    assert_requested(:post, @config.messages_url) do |req|
+      body = JSON.parse(req.body)
+      body["messaging_type"] == "MESSAGE_TAG" && body["tag"] == "HUMAN_AGENT"
+    end
+  end
+
+  def test_untagged_send_still_omits_messaging_type
+    @client.send_message("igsid_1", "Hello")
+
+    assert_requested(:post, @config.messages_url) do |req|
+      body = JSON.parse(req.body)
+      !body.key?("messaging_type") && !body.key?("tag")
+    end
+  end
+
+  def test_every_part_of_a_split_text_carries_the_tag
+    long = "word " * 300 # comfortably over the 1000 byte cap, splits into 2 sends
+
+    @client.send_message("igsid_1", long, tag: "HUMAN_AGENT")
+
+    assert_requested(:post, @config.messages_url, times: 2) do |req|
+      JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
+    end
+  end
 end

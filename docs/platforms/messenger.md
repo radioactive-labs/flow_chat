@@ -158,7 +158,17 @@ Unlike Instagram, a Messenger conversation does not have to begin with the user:
 
 ## The 24-hour window
 
-Meta restricts free-form Messenger sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window or tag anything automatically. A send outside it is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
+Meta restricts free-form Messenger sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window automatically, but it does carry a tag when you ask it to. Pass `tag:` to `context["messenger.client"]`'s `send_message` or `send_text`:
+
+```ruby
+context["messenger.client"].send_message(psid, "Following up on your case", tag: "HUMAN_AGENT")
+```
+
+`HUMAN_AGENT` is the only tag Meta still accepts as of 27 April 2026, and it extends the window to 7 days for human-agent support; it needs the Human Agent app feature approved on your app first. FlowChat passes whatever you give it straight through to the Send API without checking it against a list, since Meta already refuses an unknown tag clearly (error 100) and an allowlist here would be one more thing to keep in sync with Meta's own set. Deciding when a send qualifies for the tag is the application's job.
+
+The tag replaces `messaging_type: "RESPONSE"` rather than riding alongside it; a tagged send never carries both. When a reply is long enough to split into more than one message, every part carries the same tag - a customer should never end up with the first half of a reply going through on the tag and the second half rejected because it didn't.
+
+A send outside the window with no tag is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
 
 ## Limits
 
@@ -169,7 +179,7 @@ Meta restricts free-form Messenger sends to within 24 hours of the user's last m
 | Carousel | 10 elements, 3 postback buttons per element, button title truncated to 20 characters |
 | Choice payload | Generated ids are capped at 1000 characters |
 | Attachments | One per inbound message is read (the first); outbound is one attachment per send |
-| 24-hour window | Not tracked by FlowChat; see above |
+| 24-hour window | Not tracked automatically; `tag:` is passed through unvalidated, see above |
 
 ## Async
 

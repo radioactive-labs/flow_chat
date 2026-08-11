@@ -180,7 +180,17 @@ A flow therefore cannot open an Instagram conversation. There is no Instagram eq
 
 ## The 24-hour window
 
-Separately from the rule above, Meta restricts free-form Instagram sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window or tag anything automatically. A send outside it is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
+Separately from the rule above, Meta restricts free-form Instagram sends to within 24 hours of the user's last message, or to conversations opened with an approved message tag. FlowChat does not track this window automatically, but it does carry a tag when you ask it to. Pass `tag:` to `context["instagram.client"]`'s `send_message` or `send_text`:
+
+```ruby
+context["instagram.client"].send_message(igsid, "Following up on your case", tag: "HUMAN_AGENT")
+```
+
+`HUMAN_AGENT` is the only tag Meta still accepts as of 27 April 2026, and it extends the window to 7 days for human-agent support; it needs the Human Agent app feature approved on your app first. FlowChat passes whatever you give it straight through to the Send API without checking it against a list, since Meta already refuses an unknown tag clearly (error 100) and an allowlist here would be one more thing to keep in sync with Meta's own set. Deciding when a send qualifies for the tag is the application's job.
+
+Instagram's client never sends `messaging_type` on an untagged send, since Meta's Instagram reference does not document that field at all. A tagged send is the exception: Meta does document `MESSAGE_TAG` with `HUMAN_AGENT` for Instagram, so a tagged send sets `messaging_type: "MESSAGE_TAG"` and `tag: "HUMAN_AGENT"` even though nothing else here ever sets `messaging_type`. When a reply is long enough to split into more than one message, every part carries the same tag.
+
+A send outside the window with no tag is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
 
 ## Limits
 
@@ -191,7 +201,7 @@ Separately from the rule above, Meta restricts free-form Instagram sends to with
 | Carousel | 10 elements, 3 postback buttons per element, button title truncated to 20 characters, mobile app only |
 | Choice payload | Generated ids are capped at 1000 characters |
 | Attachments | One per inbound message is read (the first); outbound is one attachment per send |
-| 24-hour window | Not tracked by FlowChat; see above |
+| 24-hour window | Not tracked automatically; `tag:` is passed through unvalidated, see above |
 
 ## Async
 
