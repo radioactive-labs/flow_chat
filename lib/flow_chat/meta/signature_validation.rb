@@ -8,6 +8,11 @@ module FlowChat
     # #skip_signature_validation, and must include FlowChat::Meta::GatewayIdentity
     # (directly or via another Meta:: behavior module) to supply platform_label
     # and configuration_error_class.
+    #
+    # What it adds over FlowChat::Meta::Signature is the gateway's share: the
+    # opt out, treating a missing secret as the developer's mistake rather than
+    # an answer, reading the body off a Rack request, and the logging. An
+    # application holding Meta's webhooks outside a gateway wants Signature.
     module SignatureValidation
       include FlowChat::Meta::GatewayIdentity
 
@@ -29,25 +34,17 @@ module FlowChat
           raise configuration_error_class, error_msg
         end
 
-        signature_header = request.headers["X-Hub-Signature-256"]
+        signature_header = request.headers[FlowChat::Meta::Signature::HEADER]
         unless signature_header
-          FlowChat.logger.warn { "#{log_tag}: No X-Hub-Signature-256 header found in request" }
+          FlowChat.logger.warn { "#{log_tag}: No #{FlowChat::Meta::Signature::HEADER} header found in request" }
           return false
         end
-
-        expected_signature = signature_header.sub("sha256=", "")
 
         request.body.rewind
         body = request.body.read
         request.body.rewind
 
-        calculated_signature = OpenSSL::HMAC.hexdigest(
-          OpenSSL::Digest.new("sha256"),
-          @config.app_secret,
-          body
-        )
-
-        signature_valid = FlowChat::Security.secure_compare(expected_signature, calculated_signature)
+        signature_valid = FlowChat::Meta::Signature.valid?(body, signature_header, @config.app_secret)
 
         if signature_valid
           FlowChat.logger.debug { "#{log_tag}: Webhook signature validation successful" }
