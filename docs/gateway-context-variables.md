@@ -20,8 +20,8 @@ Every gateway parses its platform's webhook into a common set of context values.
 | `request.body` | set | set | set | set | set | set | set | Raw request body, string keys |
 | `request.input` | Text | Text | Text (note 1) | Text (note 4) | Text (note 4) | Text (note 2) | Text or nil (note 3) | The turn's text |
 | **Structured attachments** |
-| `request.location` | none | none | set | none | none | set | none | Location payload |
-| `request.media` | none | via `media_url` | set | set (note 5) | set (note 5) | set | set (may be several) | Media metadata |
+| `request.location` | none | none | set | set | set | set | none | Location payload |
+| `request.media` | none | via `media_url` | set | set | set | set | set (may be several) | Media metadata |
 | `request.contact` | none | none | none | none | none | set | none | Contact payload |
 | **WhatsApp** |
 | `whatsapp.business.phone_number` | | | E.164 business number | | | | | |
@@ -31,7 +31,7 @@ Every gateway parses its platform's webhook into a common set of context values.
 | `messenger.account.id` | | | | Page id | | | | |
 | `messenger.client` | | | | client instance | | | | |
 | **Instagram** |
-| `instagram.account.id` | | | | | Linked Page id | | | |
+| `instagram.account.id` | | | | | Page id or Instagram account id, whichever the webhook named | | | |
 | `instagram.client` | | | | | client instance | | | |
 | **Telegram** |
 | `telegram.client` | | | | | | client instance | | |
@@ -55,7 +55,7 @@ Notes on `request.input`:
 
 `request.msisdn` is `nil` on both Messenger and Instagram: neither platform exposes a phone number, only a PSID or IGSID scoped to the app and the connected account. Use `request.user_id` (or `app.user_id`) as the durable per-user identifier; sessions key on it by default for both platforms.
 
-5. Messenger and Instagram set `request.media` for any attachment type Meta sends, including non-media attachments such as a shared location: the gateway does not inspect the attachment's `type` before setting it, so a location share on these two platforms surfaces as `request.media` with `type: :location` rather than as `request.location`.
+5. Messenger and Instagram set `request.location`, not `request.media`, for a shared location: the gateway inspects the attachment's `type` and routes a `location` attachment to `request.location` with latitude, longitude, and name, the same as WhatsApp and Telegram. Every other attachment type still sets `request.media`.
 
 `context.input` is always plain text. There are no `"$media$"`/`"$location$"`/`"$contact$"` sentinel values: a structured turn with no text sets `input` to `""` and carries its payload on `request.media`, `request.location`, or `request.contact`. In flows, read `app.input` (a `FlowChat::Input`) or its accessors, described below.
 
@@ -122,7 +122,7 @@ A `FlowChat::Media` item's `type` is a normalized value; `raw_type` is the platf
 
 Messenger and Instagram attachments carry only `type` and `url`; there is no separate mime_type, filename, width, height, or duration, because the gateway does not call a lookup API the way WhatsApp does for a media id. `item.url` resolves a fetchable URL per platform (WhatsApp `get_media_url`, Telegram `getFile`, Messenger/Instagram/Intercom/HTTP use the direct URL already on the attachment). `item.download` returns the raw bytes.
 
-Meta sets `request.media` for whatever attachment type it sends, including a shared location: `FlowChat::Media#type` would read `:location` in that case, and the item is not also exposed through `request.location` the way it is on WhatsApp and Telegram.
+Meta routes a shared location to `request.location`, not `request.media`, the same as WhatsApp and Telegram - a location share is not a `FlowChat::Media` item on any of these platforms.
 
 ### Inspecting attachments in validate and transform
 

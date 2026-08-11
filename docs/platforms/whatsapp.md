@@ -132,7 +132,7 @@ Above 10 choices the options are already nothing but text, and a WhatsApp media 
 |---|---|
 | Button titles | Reply-button titles are truncated to 20 characters. |
 | List titles | List row titles are truncated to 24 characters; the full text is moved into the row description (up to 72 characters). |
-| List size | A list section holds at most 10 rows; longer lists are split into multiple sections. |
+| List size | A list holds at most 10 rows in a single section; above that there is no interactive surface left, and the options go into the numbered message body instead. |
 | Media with choices | 3 or fewer: one message, buttons with a media header. 4 to 10: media sent separately, then the list. Above 10: one captioned media message when the caption fits under 1024 characters and the media type supports a caption (image, video, document), otherwise media sent separately, then the numbered text. Never more than 3 reply buttons, with or without media. |
 | 24-hour window | WhatsApp only allows free-form messages within 24 hours of the user's last message. Outside that window you must send an approved template. FlowChat does not abstract this: `send_template` exists, but you manage templates and the window yourself. |
 
