@@ -36,9 +36,27 @@ module FlowChat
         end
       end
 
+      # Choices are a numbered list rather than Intercom's own quick replies,
+      # and that is a decision rather than an oversight. Intercom does document
+      # reply_options with message_type "quick_reply" on an admin reply, and it
+      # was built here and reverted. Three reasons, in the order they matter:
+      #
+      # - The uuid of a clicked option comes back as quick_reply_option_uuid,
+      #   and only if the Intercom app is set to the *Unstable* API version.
+      #   Webhooks inherit that setting, so an app on a stable version receives
+      #   no metadata at all. Requiring an unstable API version for something as
+      #   basic as reading which option was chosen is not a thing a library can
+      #   ask of its users.
+      # - body is forbidden on a quick_reply, so a choice screen becomes two
+      #   conversation parts: one for the prompt, one for the buttons. In an
+      #   inbox a human reads, that doubles the length of every flow.
+      # - Intercom's own community reports the endpoint returning errors for
+      #   this shape.
+      #
+      # A numbered list needs none of that and works on every API version. If
+      # Intercom stabilises quick replies, the git history has the
+      # implementation; check those three things before restoring it.
       def build_interactive_message(choice_hash)
-        # For Intercom, we'll present choices as a formatted text message
-        # since Intercom doesn't have the same interactive elements as WhatsApp
 
         formatted_message = message.to_s
 
