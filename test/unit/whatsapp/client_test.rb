@@ -308,11 +308,15 @@ class WhatsappClientTest < Minitest::Test
     assert_equal ["image", "interactive"], calls
   end
 
-  def test_media_above_ten_choices_posts_media_then_numbered_text
+  # Above the list cap the numbered options are already just text, and a
+  # WhatsApp media message takes a caption up to 1024 characters, so a
+  # short option list rides as the caption of a single media message
+  # instead of a separate media post and text post.
+  def test_media_above_ten_choices_with_short_labels_sends_a_single_captioned_message
     calls = []
     stub_request(:post, whatsapp_messages_url).to_return do |req|
       body = JSON.parse(req.body)
-      calls << body["type"]
+      calls << body
       {status: 200, body: success_response.to_json}
     end
 
@@ -321,7 +325,47 @@ class WhatsappClientTest < Minitest::Test
 
     @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
 
-    assert_equal ["image", "text"], calls
+    assert_equal 1, calls.length
+    assert_equal "image", calls[0]["type"]
+    assert_includes calls[0]["image"]["caption"], "Pick one"
+    assert_includes calls[0]["image"]["caption"], "12. Option 12"
+  end
+
+  # A long enough option list pushes the combined caption over Meta's 1024
+  # character cap; falling back to two messages must lose nothing.
+  def test_media_above_ten_choices_with_long_labels_falls_back_to_two_messages
+    calls = []
+    stub_request(:post, whatsapp_messages_url).to_return do |req|
+      body = JSON.parse(req.body)
+      calls << body
+      {status: 200, body: success_response.to_json}
+    end
+
+    choices = (1..40).to_h { |i| ["key#{i}", "A rather verbose option label number #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    assert_equal ["image", "text"], calls.map { |c| c["type"] }
+    assert_nil calls[0]["image"]["caption"]
+    assert_includes calls[1]["text"]["body"], "40. A rather verbose option label number 40"
+  end
+
+  # Audio and sticker messages have no caption field in Meta's schema, so
+  # above the list cap they can never merge into one message.
+  def test_media_above_ten_choices_with_audio_falls_back_to_two_messages
+    calls = []
+    stub_request(:post, whatsapp_messages_url).to_return do |req|
+      calls << JSON.parse(req.body)["type"]
+      {status: 200, body: success_response.to_json}
+    end
+
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :audio, url: "https://example.com/clip.mp3"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    assert_equal ["audio", "text"], calls
   end
 
   # However many choices, WhatsApp never emits more than 3 reply buttons,

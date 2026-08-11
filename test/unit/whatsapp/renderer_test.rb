@@ -316,15 +316,61 @@ class WhatsappRendererTest < Minitest::Test
     assert_nil result[2][:media][2][:caption]
   end
 
-  def test_media_above_ten_choices_sends_media_separately_and_keeps_numbered_text
+  # Above the list cap the choices are already just text, and a WhatsApp
+  # media message takes a caption up to 1024 characters (Meta: "Media asset
+  # caption text. Maximum 1024 characters."), so splitting into a media
+  # message and a text message would be an avoidable second post: the
+  # numbered body becomes the caption instead, in one message.
+  def test_media_above_ten_choices_merges_into_one_captioned_media_message
     choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
     media = {type: :image, url: "https://example.com/photo.jpg"}
 
     result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
 
+    assert_equal :media_image, result[0]
+    refute result[2].key?(:media) # this IS the whole message, not a companion
+    assert_includes result[2][:caption], "Pick one"
+    assert_includes result[2][:caption], "1. Option 1"
+    assert_includes result[2][:caption], "12. Option 12"
+    assert_equal "https://example.com/photo.jpg", result[2][:url]
+  end
+
+  # A long enough option list pushes the combined caption over Meta's 1024
+  # character cap; falling back to two messages must lose nothing.
+  def test_media_above_ten_choices_falls_back_to_two_messages_when_caption_too_long
+    choices = (1..40).to_h { |i| ["key#{i}", "A rather verbose option label number #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
     assert_equal :text, result[0]
-    assert_includes result[1], "12. Option 12"
+    assert_includes result[1], "1. A rather verbose option label number 1"
+    assert_includes result[1], "40. A rather verbose option label number 40"
     assert_equal :media_image, result[2][:media][0]
+    assert_nil result[2][:media][2][:caption]
+  end
+
+  # Meta's schema gives audio messages only id/link/voice and sticker
+  # messages only id/link - neither takes a caption - so above the list cap
+  # they can never merge into one message, however short the option list.
+  def test_media_above_ten_choices_with_audio_falls_back_to_two_messages
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :audio, url: "https://example.com/clip.mp3"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_equal :media_audio, result[2][:media][0]
+  end
+
+  def test_media_above_ten_choices_with_sticker_falls_back_to_two_messages
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :sticker, url: "https://example.com/sticker.webp"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_equal :media_sticker, result[2][:media][0]
   end
 
   # However many choices, WhatsApp never gets more than 3 reply buttons -

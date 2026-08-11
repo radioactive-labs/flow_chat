@@ -122,7 +122,9 @@ app.screen(:plan) do |prompt|
 end
 ```
 
-Above 3 choices there is no interactive surface left that can carry media: Meta's interactive message reference documents a `text`-only header for list messages, and image, video, and document headers are only defined for button messages. So above the button cap the image goes out as its own message first, with no caption (the question is about to appear in the list or numbered body right behind it), followed by the list or numbered rendering exactly as it would render with no media at all.
+From 4 to 10 choices there is no interactive surface left that can carry media: Meta's interactive message reference documents a `text`-only header for list messages, image and video and document headers are only defined for button messages. So the image goes out as its own message first, with no caption (the question is about to appear in the list body right behind it), followed by the list exactly as it would render with no media at all.
+
+Above 10 choices the options are already nothing but text, and a WhatsApp media message can carry a caption up to 1024 characters (documented for image, video, and document messages; audio and sticker messages have no caption field at all). When the media type supports a caption and the prompt plus the numbered options fit under that cap, FlowChat sends one message: the media with the whole numbered list as its caption. When either does not hold - a long option list, or an audio or sticker attachment - it falls back to the same two-message shape as the list rung: the media on its own, with no caption, followed by the numbered text.
 
 ## Limits to keep in mind
 
@@ -131,7 +133,7 @@ Above 3 choices there is no interactive surface left that can carry media: Meta'
 | Button titles | Reply-button titles are truncated to 20 characters. |
 | List titles | List row titles are truncated to 24 characters; the full text is moved into the row description (up to 72 characters). |
 | List size | A list section holds at most 10 rows; longer lists are split into multiple sections. |
-| Media with choices | 3 choices or fewer: one message, buttons with a media header. Above 3: the media is sent as its own message first, then the list or numbered text. Never more than 3 reply buttons, with or without media. |
+| Media with choices | 3 or fewer: one message, buttons with a media header. 4 to 10: media sent separately, then the list. Above 10: one captioned media message when the caption fits under 1024 characters and the media type supports a caption (image, video, document), otherwise media sent separately, then the numbered text. Never more than 3 reply buttons, with or without media. |
 | 24-hour window | WhatsApp only allows free-form messages within 24 hours of the user's last message. Outside that window you must send an approved template. FlowChat does not abstract this: `send_template` exists, but you manage templates and the window yourself. |
 
 ## Async

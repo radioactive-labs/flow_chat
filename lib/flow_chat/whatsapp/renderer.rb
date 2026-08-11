@@ -15,6 +15,14 @@ module FlowChat
       BUTTON_TITLE_LENGTH = 20
       LIST_ROW_TITLE_LENGTH = 24
 
+      # Meta: "Media asset caption text. Maximum 1024 characters." Documented
+      # for image, video, and document messages. Audio and sticker messages'
+      # own schemas list only id/link (audio also has voice) - no caption
+      # field at all - so they can never carry the numbered body this way,
+      # however short it is.
+      MAX_CAPTION_LENGTH = 1024
+      CAPTIONABLE_MEDIA_TYPES = [:image, :video, :document].freeze
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -117,15 +125,35 @@ module FlowChat
       # text for list messages; image, video and document headers are only
       # defined for button messages - so the media goes out as its own
       # message and the list or numbered rendering follows unchanged.
+      #
+      # The one exception is the numbered rung above the list cap: there the
+      # choices are already nothing but text, and a captionable media
+      # message can carry that text itself, so a captioned single message
+      # replaces the media-then-text split whenever it fits.
       def build_selection_message_with_media
         choice_hash = normalized_choices
 
-        if choice_hash.length <= MAX_BUTTONS
-          build_buttons_message_with_media(choice_hash)
-        else
-          type, content, options = build_interactive_message(choice_hash)
-          [type, content, options.merge(media: build_media_message(caption: nil))]
+        return build_buttons_message_with_media(choice_hash) if choice_hash.length <= MAX_BUTTONS
+
+        type, content, options = build_interactive_message(choice_hash)
+
+        if type == :text
+          merged = media_caption_message(content)
+          return merged if merged
         end
+
+        [type, content, options.merge(media: build_media_message(caption: nil))]
+      end
+
+      # Returns the single-message [type, content, options] triple when the
+      # media type can carry a caption and the combined text fits under
+      # Meta's cap, or nil when it does not - the caller falls back to the
+      # existing media-then-text split, which loses nothing.
+      def media_caption_message(content)
+        return nil unless CAPTIONABLE_MEDIA_TYPES.include?((media[:type] || :image).to_sym)
+        return nil if content.length > MAX_CAPTION_LENGTH
+
+        build_media_message(caption: content)
       end
 
       def normalized_choices
