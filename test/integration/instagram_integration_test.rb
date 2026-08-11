@@ -14,6 +14,41 @@ class InstagramIntegrationTest < Minitest::Test
     end
   end
 
+  # 25 normal-length options is the exact shape from the reported repro: it
+  # lands on the carousel rung (capacity is 10 elements * 3 buttons = 30),
+  # and Instagram's always_number? forces every option into the message body
+  # too, which is what pushed that body past Instagram's 1000-byte cap
+  # before Client#deliver split :carousel bodies (Blocker 2). Media riding
+  # alongside 25 choices additionally exercises Blocker 1: the old guard
+  # made this whole scenario impossible to reach from a flow at all.
+  class MediaCarouselFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:choice) do |prompt|
+        choices = (1..25).to_h { |i| ["opt#{i}", "This is a normal length menu option label #{i}"] }
+        prompt.select "Pick one from the following menu", choices, media: {type: :image, url: "https://example.com/menu.png"}
+      end
+      app.say "You picked #{choice}."
+    end
+  end
+
+  # Same Blocker 3 shape as MessengerIntegrationTest's ArrayMenuThenPinFlow:
+  # Array choices make key == label, so the generated id/position can
+  # collide with the resolved value and defeat a staleness check that asks
+  # about the resolved value instead of the original one. Instagram's
+  # ChoiceMapper is a subclass of Messenger's, sharing this exact code path.
+  class ArrayMenuThenPinFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:choice) do |prompt|
+        prompt.select "Choose one", [
+          "A very long label that gets truncated for sure",
+          "Another very long label here for sure too"
+        ]
+      end
+      pin = app.screen(:pin) { |prompt| prompt.ask "Enter your PIN:" }
+      app.say "You picked #{choice} and entered PIN #{pin}."
+    end
+  end
+
   def setup
     @config = FlowChat::Instagram::Configuration.new(nil)
     @config.page_id = "page_1"
@@ -84,6 +119,41 @@ class InstagramIntegrationTest < Minitest::Test
     assert_empty @sent
   end
 
+  # Blocker 1 + Blocker 2, exercised together against the exact repro shape:
+  # a carousel of 25 normal-length options, with media alongside it.
+  def test_media_with_a_carousel_of_choices_stays_under_the_text_cap
+    run_webhook(text: "start", session_data: {}, flow: MediaCarouselFlow)
+
+    media_message, *body_messages, template_message = @sent.map { |s| s[:message] }
+
+    assert_equal "image", media_message.dig(:attachment, :type)
+    assert_equal "https://example.com/menu.png", media_message.dig(:attachment, :payload, :url)
+
+    cap = FlowChat::Config.instagram.max_text_length
+    refute_empty body_messages
+    body_messages.each { |m| assert_operator m[:text].bytesize, :<=, cap }
+
+    elements = template_message.dig(:attachment, :payload, :elements)
+    assert_equal 25, elements.sum { |e| e[:buttons].length }
+    assert_operator elements.length, :<=, FlowChat::Config.instagram.max_carousel_elements
+  end
+
+  # Blocker 3, on Instagram's (inherited) mapper: a typed "1" resolves
+  # against the menu's position map, then the next screen is free text. A
+  # stale map would rewrite a typed PIN digit into the menu's first choice.
+  def test_typed_digit_on_free_text_screen_after_array_menu_stays_a_digit
+    session_data = {}
+
+    run_webhook(text: "start", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    assert_match(/1\. A very long label/, last_sent_prompt)
+
+    run_webhook(text: "1", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    assert_match(/Enter your PIN/, last_sent_prompt)
+
+    run_webhook(text: "1", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    assert_match(/PIN 1\./, last_sent_prompt)
+  end
+
   private
 
   def processor_for(controller, session_data:)
@@ -93,7 +163,7 @@ class InstagramIntegrationTest < Minitest::Test
     end
   end
 
-  def run_webhook(text: nil, quick_reply: nil, session_data: {})
+  def run_webhook(text: nil, quick_reply: nil, session_data: {}, flow: RegistrationFlow)
     message = {"mid" => "mid.in.#{@sent.length}"}
     if quick_reply
       message["text"] = "tapped"
@@ -113,13 +183,13 @@ class InstagramIntegrationTest < Minitest::Test
           "message" => message
         }]
       }]
-    }, session_data: session_data)
+    }, session_data: session_data, flow: flow)
   end
 
-  def run_raw_webhook(body, session_data: {})
+  def run_raw_webhook(body, session_data: {}, flow: RegistrationFlow)
     context = build_messaging_context(body)
     processor = processor_for(context.controller, session_data: session_data)
-    processor.run(RegistrationFlow, :main_page)
+    processor.run(flow, :main_page)
     context
   end
 

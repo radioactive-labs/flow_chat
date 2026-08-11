@@ -14,6 +14,42 @@ class MessengerIntegrationTest < Minitest::Test
     end
   end
 
+  # Media plus more than 3 choices used to be unreachable: Prompt raised
+  # ArgumentError before this ever reached a renderer (Blocker 1). 4 choices
+  # lands on Messenger's quick_replies rung (cap is 13), which is exactly the
+  # combination the old guard made impossible to exercise end to end.
+  class MediaChoiceFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:plan) do |prompt|
+        prompt.select "Choose a plan", {
+          "basic" => "Basic Plan",
+          "pro" => "Pro Plan",
+          "team" => "Team Plan",
+          "enterprise" => "Enterprise Plan"
+        }, media: {type: :image, url: "https://example.com/plans.png"}
+      end
+      app.say "You picked #{choice}."
+    end
+  end
+
+  # Array choices make key == label (see Prompt#normalize_choices), which is
+  # what let a resolved choice collide with its own mapping key and defeat
+  # clear_mappings_if_needed (Blocker 3). Long, similar-prefixed labels force
+  # FlowChat::ChoiceTitles to number them, so a plain "1" resolves via the
+  # position map exactly as in the reported repro.
+  class ArrayMenuThenPinFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:choice) do |prompt|
+        prompt.select "Choose one", [
+          "A very long label that gets truncated for sure",
+          "Another very long label here for sure too"
+        ]
+      end
+      pin = app.screen(:pin) { |prompt| prompt.ask "Enter your PIN:" }
+      app.say "You picked #{choice} and entered PIN #{pin}."
+    end
+  end
+
   class TestAsyncJob < FlowChat::AsyncJob
     cattr_accessor :last_execution
 
@@ -69,6 +105,48 @@ class MessengerIntegrationTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
+  # Blocker 1 + Blocker 2, exercised together: media rides alongside 4
+  # choices (the guard used to make this raise before it ever reached a
+  # renderer), and every posted part - the media and the choice message -
+  # must land, with nothing over Messenger's text cap.
+  def test_media_with_more_than_three_choices_sends_media_and_choices
+    with_raw_posts do |posts|
+      run_webhook(text: "start", flow: MediaChoiceFlow)
+
+      media_post, choice_post = posts
+
+      assert_equal "image", media_post.dig(:attachment, :type)
+      assert_equal "https://example.com/plans.png", media_post.dig(:attachment, :payload, :url)
+
+      assert_equal 4, choice_post[:quick_replies].length
+      cap = FlowChat::Config.messenger.max_text_length
+      posts.each do |post|
+        assert_operator post[:text].to_s.bytesize, :<=, cap if post[:text]
+      end
+    end
+  end
+
+  # Blocker 3: a typed "1" resolves against the menu's position map (the
+  # labels are long enough that FlowChat::ChoiceTitles numbers them), then
+  # the very next screen is free text. A stale map would rewrite a typed PIN
+  # digit into the menu's first choice; clear_mappings running unconditionally
+  # before the app is called is what stops that.
+  def test_typed_digit_on_free_text_screen_after_array_menu_stays_a_digit
+    session_data = {}
+
+    run_webhook(text: "start", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    assert_equal 2, last_sent_choices.length
+
+    run_webhook(text: "1", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    assert_match(/Enter your PIN/, last_sent_prompt)
+
+    run_webhook(text: "1", session_data: session_data, flow: ArrayMenuThenPinFlow)
+    # The bug rewrote this reply into the first menu choice's full label
+    # before the flow ever saw it. Bug present: "...and entered PIN A very
+    # long label...". Fixed: the typed digit reaches the flow untouched.
+    assert_match(/PIN 1\./, last_sent_prompt)
+  end
+
   private
 
   def processor_for(controller, session_data:, async: false)
@@ -79,7 +157,7 @@ class MessengerIntegrationTest < Minitest::Test
     end
   end
 
-  def run_webhook(text: nil, quick_reply: nil, session_data: {}, async: false)
+  def run_webhook(text: nil, quick_reply: nil, session_data: {}, async: false, flow: RegistrationFlow)
     message = {"mid" => "mid.in.#{@sent.length}"}
     if quick_reply
       message["text"] = "tapped"
@@ -110,13 +188,34 @@ class MessengerIntegrationTest < Minitest::Test
 
     if async
       TestAsyncJob.stub(:perform_later, ->(args) { true }) do
-        processor.run(RegistrationFlow, :main_page)
+        processor.run(flow, :main_page)
       end
     else
-      processor.run(RegistrationFlow, :main_page)
+      processor.run(flow, :main_page)
     end
 
     context
+  end
+
+  # setup patches Client#send_message so most tests can assert on the raw
+  # prompt/choices/media the flow produced without caring how the client
+  # turns that into wire posts. Asserting on what actually goes over the
+  # wire - the point of the media/cap test above - needs the real render and
+  # deliver path, so this restores send_message for the duration of the
+  # block and patches Client#post_message instead, one level below deliver's
+  # splitting logic, mirroring instagram_integration_test.rb's approach.
+  def with_raw_posts
+    FlowChat::Messenger::Client.define_method(:send_message, @original_send_message)
+    posts = []
+    original_post_message = FlowChat::Messenger::Client.instance_method(:post_message)
+    FlowChat::Messenger::Client.define_method(:post_message) do |recipient_id, message, tag|
+      posts << message
+      {"recipient_id" => recipient_id, "message_id" => "mid.#{posts.length}"}
+    end
+
+    yield posts
+  ensure
+    FlowChat::Messenger::Client.define_method(:post_message, original_post_message)
   end
 
   def last_sent_prompt
