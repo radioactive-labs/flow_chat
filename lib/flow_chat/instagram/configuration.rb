@@ -79,9 +79,12 @@ module FlowChat
       end
 
       def valid?
-        is_valid = access_token && !access_token.to_s.empty? &&
+        # Wrapped so a predicate answers true or false rather than nil, which
+        # the bare && chain returns for a missing first field. Intercom and
+        # Telegram already do this and pin it in their tests.
+        is_valid = !!(access_token && !access_token.to_s.empty? &&
           verify_token && !verify_token.to_s.empty? &&
-          account_id && !account_id.to_s.empty?
+          account_id && !account_id.to_s.empty?)
 
         FlowChat.logger.debug { "Instagram::Configuration: Configuration valid: #{is_valid}" }
         is_valid

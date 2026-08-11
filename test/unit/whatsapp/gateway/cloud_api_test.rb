@@ -27,6 +27,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     @subscribers&.each { |s| ActiveSupport::Notifications.unsubscribe(s) }
   end
 
+  # WhatsApp's configuration has no test file of its own, so its predicate is
+  # pinned here alongside the gateway that consumes it.
+  def test_configuration_valid_returns_a_boolean_not_nil
+    assert_equal true, @mock_config.valid?
+    assert_equal false, FlowChat::Whatsapp::Configuration.new(nil).valid?
+  end
+
   def test_get_request_webhook_verification
     context = create_context_with_request(
       method: :get,
