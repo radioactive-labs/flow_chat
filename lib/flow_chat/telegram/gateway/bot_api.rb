@@ -2,8 +2,6 @@ require "json"
 
 module FlowChat
   module Telegram
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class BotApi
         include FlowChat::Instrumentation

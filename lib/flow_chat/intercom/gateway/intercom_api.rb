@@ -3,9 +3,6 @@ require "openssl"
 
 module FlowChat
   module Intercom
-    # Configuration-related errors
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class IntercomApi
         include FlowChat::Instrumentation

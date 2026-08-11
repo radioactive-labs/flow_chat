@@ -4,9 +4,6 @@ require "reverse_markdown"
 
 module FlowChat
   module Intercom
-    # Configuration-related errors
-    class ConfigurationError < StandardError; end
-
     # Rate limiting error
     class RateLimitError < StandardError
       attr_reader :retry_after

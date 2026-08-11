@@ -1,5 +1,12 @@
 require "test_helper"
 
+# This file compares FlowChat's fallback against Active Support's own
+# implementation, so it depends on SecurityUtils directly rather than
+# incidentally. flow_chat/security.rb requires it too, but Zeitwerk loads that
+# file lazily, so a run whose order reaches this test first found the constant
+# undefined.
+require "active_support/security_utils"
+
 class SecurityTest < Minitest::Test
   def setup
     @original_secret = FlowChat::Config.simulator_secret
@@ -126,13 +133,19 @@ class SecurityTest < Minitest::Test
 
   # Hides the constant so secure_compare takes the branch an install without
   # Active Support's SecurityUtils would take.
+  #
+  # Restores only what it actually removed. Reading the constant into a local
+  # first means that if it was never loaded, that read raises and the ensure
+  # still ran, setting the constant to nil rather than putting it back. Every
+  # later secure_compare in the process then saw a defined-but-nil SecurityUtils
+  # and broke: signature validation, simulator cookies, webhook verification.
+  # One test took down whole unrelated suites depending on the order.
   def without_security_utils
-    security_utils = ActiveSupport::SecurityUtils
-    ActiveSupport.send(:remove_const, :SecurityUtils)
+    removed = ActiveSupport.const_defined?(:SecurityUtils) ? ActiveSupport.send(:remove_const, :SecurityUtils) : nil
     refute defined?(ActiveSupport::SecurityUtils), "expected the constant to be hidden"
 
     yield
   ensure
-    ActiveSupport.const_set(:SecurityUtils, security_utils)
+    ActiveSupport.const_set(:SecurityUtils, removed) if removed
   end
 end

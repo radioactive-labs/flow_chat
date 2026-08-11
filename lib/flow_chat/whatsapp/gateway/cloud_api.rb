@@ -3,9 +3,6 @@ require "json"
 
 module FlowChat
   module Whatsapp
-    # Configuration-related errors
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class CloudApi
         include FlowChat::Instrumentation
