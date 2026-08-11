@@ -432,16 +432,23 @@ class PromptTest < Minitest::Test
     assert_equal({type: :image, url: "https://example.com/sizes.jpg"}, error.media)
   end
 
-  def test_ask_with_media_and_many_choices_fails
+  # Media plus more than 3 choices used to raise ArgumentError here (see
+  # lib/flow_chat/prompt.rb's now-removed validate_media_choices_compatibility).
+  # That guard predated per-renderer support for the combination and blocked
+  # it outright on every platform; now every renderer carries media alongside
+  # any number of choices, so this is expected to succeed like any other ask.
+  def test_ask_with_media_and_many_choices_works
     prompt = FlowChat::Prompt.new(nil)
 
-    error = assert_raises(ArgumentError) do
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Choose color:",
         choices: ["Red", "Blue", "Green", "Yellow", "Purple"],
         media: {type: :image, url: "https://example.com/colors.jpg"})
     end
 
-    assert_equal "Media with more than 3 choices is not supported. Please use either media OR choices for more than 3 options.", error.message
+    assert_equal "Choose color:", error.prompt
+    assert_equal 5, error.choices.length
+    assert_equal :image, error.media[:type]
   end
 
   def test_ask_with_media_and_exactly_three_choices_works
@@ -458,28 +465,24 @@ class PromptTest < Minitest::Test
     assert_equal :video, error.media[:type]
   end
 
-  def test_ask_with_media_and_hash_choices_validates_count
+  # Both hash sizes are expected to succeed now: the choice-count guard this
+  # test used to exercise is gone (see test_ask_with_media_and_many_choices_works).
+  def test_ask_with_media_and_hash_choices_of_any_size_works
     prompt = FlowChat::Prompt.new(nil)
 
-    # Hash with 3 choices should work
-    begin
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Choose:",
         choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma"},
         media: {type: :image, url: "https://example.com/image.jpg"})
-    rescue FlowChat::Interrupt::Prompt
-      # Expected interrupt, validation passed
-    rescue ArgumentError => e
-      flunk "Should not raise ArgumentError for 3 choices: #{e.message}"
     end
+    assert_equal 3, error.choices.length
 
-    # Hash with 4 choices should fail
-    error = assert_raises(ArgumentError) do
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.ask("Choose:",
         choices: {"a" => "Alpha", "b" => "Beta", "c" => "Gamma", "d" => "Delta"},
         media: {type: :image, url: "https://example.com/image.jpg"})
     end
-
-    assert_includes error.message, "Media with more than 3 choices is not supported"
+    assert_equal 4, error.choices.length
   end
 
   def test_ask_with_choices_but_no_media_allows_many_choices
@@ -522,16 +525,17 @@ class PromptTest < Minitest::Test
     assert_equal :image, error.media[:type]
   end
 
-  def test_select_with_media_and_many_choices_fails
+  def test_select_with_media_and_many_choices_works
     prompt = FlowChat::Prompt.new(nil)
 
-    error = assert_raises(ArgumentError) do
+    error = assert_raises(FlowChat::Interrupt::Prompt) do
       prompt.select("Choose difficulty:",
         ["Easy", "Medium", "Hard", "Expert", "Nightmare"],
         media: {type: :image, url: "https://example.com/difficulty.jpg"})
     end
 
-    assert_includes error.message, "Media with more than 3 choices is not supported"
+    assert_equal 5, error.choices.length
+    assert_equal :image, error.media[:type]
   end
 
   def test_yes_question_with_media_works
@@ -547,13 +551,14 @@ class PromptTest < Minitest::Test
     assert_equal({"Yes" => "Yes", "No" => "No"}, error.choices)
   end
 
-  def test_validation_occurs_for_both_ask_and_select_methods
+  # Both entry points share the same prompt! path, so both are expected to
+  # accept media with more than 3 choices identically.
+  def test_media_with_many_choices_works_for_both_ask_and_select_methods
     prompt = FlowChat::Prompt.new(nil)
     media = {type: :image, url: "https://example.com/test.jpg"}
     many_choices = ["A", "B", "C", "D", "E"]
 
-    # Both ask and select should validate
-    assert_raises(ArgumentError) { prompt.ask("Test", choices: many_choices, media: media) }
-    assert_raises(ArgumentError) { prompt.select("Test", many_choices, media: media) }
+    assert_raises(FlowChat::Interrupt::Prompt) { prompt.ask("Test", choices: many_choices, media: media) }
+    assert_raises(FlowChat::Interrupt::Prompt) { prompt.select("Test", many_choices, media: media) }
   end
 end
