@@ -38,6 +38,34 @@ instagram:
 
 Equivalent environment variables: `INSTAGRAM_LOGIN`, `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_PAGE_ID`, `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_VERIFY_TOKEN`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`.
 
+### Which app id and secret, on the Instagram Login path
+
+Meta issues the Instagram product its own app id and app secret, separate from the
+app's, and shows them on the Instagram product's own settings page rather than under
+App settings. On the `instagram` login path, `app_id` and `app_secret` must be the
+Instagram product's pair, not the app's.
+
+Both matter, for different reasons, and getting either wrong fails quietly:
+
+- `app_secret` verifies `X-Hub-Signature-256`. An Instagram Login delivery is signed
+  with the Instagram product's secret, so the app's secret makes every delivery look
+  forged. The gateway drops it and answers 200, so the symptom is a bot that receives
+  nothing while Meta reports successful deliveries, with one warning line in the log.
+- `app_id` classifies echoes. Sends on this path go through the Instagram app, so an
+  echo of your own message carries the Instagram app id. With the app's id configured
+  instead, your own sends come back classified `:other_app` rather than `:self`, and
+  an application that stands its flow down when another sender appears will stand
+  down on its own replies.
+
+On the `facebook` login path both are the app's own pair, as they are for Messenger
+and WhatsApp.
+
+One endpoint serving several accounts has a harder version of this problem: the
+signature has to be checked before the delivery says whose it is, so there is no
+configuration to read the secret from yet. `FlowChat::Meta::Signature.valid?(body,
+header, secret)` exists for that, taking the secret as an argument so a caller can
+try each one an account of theirs could legitimately have used.
+
 Setting `login` to anything other than `:facebook` or `:instagram` raises `ArgumentError` rather than falling back silently: a typo here would otherwise pick the wrong host and the wrong account id without any error until a send or a webhook actually failed against it.
 
 ## Setup
