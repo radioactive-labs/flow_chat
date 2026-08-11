@@ -9,7 +9,7 @@ module FlowChat
 
       def initialize(config)
         @config = config
-        FlowChat.logger.info { "Messenger::Client: Initialized for page_id: #{@config.page_id}" }
+        FlowChat.logger.info { "Messenger::Client: Initialized for account #{@config.account_id}" }
       end
 
       # @param tag [String, nil] a Meta message tag (e.g. "HUMAN_AGENT") that
@@ -194,7 +194,7 @@ module FlowChat
           message,
           error: error,
           platform: platform,
-          page_id: @config.page_id,
+          account_id: @config.account_id,
           response_code: response_code,
           response_body: response_body
         )

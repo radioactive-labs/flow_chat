@@ -139,12 +139,16 @@ module FlowChat
     end
 
     class InstagramConfig
-      attr_reader :api_base_url, :max_text_length, :max_quick_replies,
+      attr_reader :api_base_url, :instagram_login_api_base_url, :max_text_length, :max_quick_replies,
         :max_quick_reply_title, :max_carousel_elements, :max_buttons_per_element,
         :max_button_title, :max_element_title
 
       def initialize
+        # Facebook Login path: the linked Page speaks through the general Graph API host.
         @api_base_url = "https://graph.facebook.com/v23.0"
+        # Instagram Login path: the Instagram professional account speaks through its
+        # own host instead, with no Facebook Page in the picture at all.
+        @instagram_login_api_base_url = "https://graph.instagram.com/v23.0"
         # Meta: "Message text must be UTF-8 and be 1,000 bytes or less."
         @max_text_length = 1000
         @max_quick_replies = 13

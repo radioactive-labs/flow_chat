@@ -65,4 +65,94 @@ class InstagramConfigurationTest < Minitest::Test
     assert_equal 10, FlowChat::Config.instagram.max_carousel_elements
     assert_equal 3, FlowChat::Config.instagram.max_buttons_per_element
   end
+
+  def test_login_defaults_to_facebook
+    config = FlowChat::Instagram::Configuration.new(nil)
+    assert_equal :facebook, config.login
+  end
+
+  def test_login_rejects_an_unknown_value
+    config = FlowChat::Instagram::Configuration.new(nil)
+    assert_raises(ArgumentError) { config.login = :whatsapp }
+    assert_equal :facebook, config.login, "a rejected assignment must not partially apply"
+  end
+
+  def test_login_rejects_nil
+    config = FlowChat::Instagram::Configuration.new(nil)
+    assert_raises(ArgumentError) { config.login = nil }
+  end
+
+  # Locks the exact literal values, not just their shape, since this path is
+  # the one already in production use and must not move under a refactor.
+  def test_facebook_login_path_is_byte_for_byte_unchanged
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.page_id = "page_1"
+    config.instagram_account_id = "ig_1"
+
+    assert_equal "https://graph.facebook.com/v23.0", config.api_base_url
+    assert_equal "page_1", config.account_id
+    assert_equal "https://graph.facebook.com/v23.0/page_1/messages", config.messages_url
+    assert_equal "https://graph.facebook.com/v23.0/page_1/message_attachments", config.attachment_upload_url
+  end
+
+  def test_instagram_login_path_uses_the_instagram_host_and_account
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.login = :instagram
+    config.page_id = "page_1"
+    config.instagram_account_id = "ig_1"
+
+    assert_equal "https://graph.instagram.com/v23.0", config.api_base_url
+    assert_equal "ig_1", config.account_id
+    assert_equal "https://graph.instagram.com/v23.0/ig_1/messages", config.messages_url
+    assert_equal "https://graph.instagram.com/v23.0/ig_1/message_attachments", config.attachment_upload_url
+  end
+
+  def test_valid_on_facebook_login_path_still_requires_page_id_not_instagram_account_id
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.access_token = "tok"
+    config.verify_token = "verify"
+    config.instagram_account_id = "ig_1"
+    refute config.valid?, "page_id is still missing"
+
+    config.page_id = "page_1"
+    assert config.valid?
+  end
+
+  def test_valid_on_instagram_login_path_requires_instagram_account_id_not_page_id
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.login = :instagram
+    config.access_token = "tok"
+    config.verify_token = "verify"
+    config.page_id = "page_1"
+    refute config.valid?, "instagram_account_id is still missing, and page_id must not substitute for it"
+
+    config.instagram_account_id = "ig_1"
+    assert config.valid?
+  end
+
+  def test_from_credentials_reads_login_from_environment
+    ENV["INSTAGRAM_ACCESS_TOKEN"] = "env_token"
+    ENV["INSTAGRAM_ACCOUNT_ID"] = "env_ig_account"
+    ENV["INSTAGRAM_VERIFY_TOKEN"] = "env_verify"
+    ENV["INSTAGRAM_LOGIN"] = "instagram"
+
+    config = FlowChat::Instagram::Configuration.from_credentials
+
+    assert_equal :instagram, config.login
+    assert config.valid?
+  ensure
+    %w[INSTAGRAM_ACCESS_TOKEN INSTAGRAM_ACCOUNT_ID INSTAGRAM_VERIFY_TOKEN INSTAGRAM_LOGIN].each { |k| ENV.delete(k) }
+  end
+
+  def test_from_credentials_defaults_login_to_facebook_when_unset
+    ENV["INSTAGRAM_ACCESS_TOKEN"] = "env_token"
+    ENV["INSTAGRAM_PAGE_ID"] = "env_page"
+    ENV["INSTAGRAM_VERIFY_TOKEN"] = "env_verify"
+
+    config = FlowChat::Instagram::Configuration.from_credentials
+
+    assert_equal :facebook, config.login
+  ensure
+    %w[INSTAGRAM_ACCESS_TOKEN INSTAGRAM_PAGE_ID INSTAGRAM_VERIFY_TOKEN].each { |k| ENV.delete(k) }
+  end
 end

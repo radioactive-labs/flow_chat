@@ -149,4 +149,35 @@ class InstagramClientTest < Minitest::Test
       JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
     end
   end
+
+  def test_facebook_login_path_posts_to_graph_facebook_com
+    @client.send_message("igsid_1", "Hello")
+
+    assert_requested(:post, "https://graph.facebook.com/v23.0/page_1/messages")
+  end
+
+  # The Instagram Login path speaks to a different host, with a different
+  # account id, under a different access token, but the same request shape
+  # (Meta documents recipient and message only, on either path).
+  def test_instagram_login_path_posts_to_graph_instagram_com
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.login = :instagram
+    config.instagram_account_id = "ig_1"
+    config.access_token = "ig_tok"
+    config.verify_token = "verify"
+    client = FlowChat::Instagram::Client.new(config)
+
+    stub_request(:post, "https://graph.instagram.com/v23.0/ig_1/messages")
+      .to_return(status: 200, body: {"recipient_id" => "igsid_1", "message_id" => "mid.ig"}.to_json)
+
+    result = client.send_message("igsid_1", "Hello")
+
+    assert_equal "mid.ig", result["message_id"]
+    assert_requested(:post, "https://graph.instagram.com/v23.0/ig_1/messages") do |req|
+      body = JSON.parse(req.body)
+      body["recipient"] == {"id" => "igsid_1"} &&
+        body["message"] == {"text" => "Hello"} &&
+        !body.key?("messaging_type")
+    end
+  end
 end

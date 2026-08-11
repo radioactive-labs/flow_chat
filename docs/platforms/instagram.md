@@ -2,37 +2,43 @@
 
 The `FlowChat::Instagram::Gateway::SendApi` gateway integrates Instagram Direct Messages through the same Messenger Platform infrastructure Facebook Messenger uses: the Send API for outbound messages and the `entry[].messaging[]` webhook for inbound ones.
 
-Meta offers two ways to reach Instagram messaging, and FlowChat implements one of them.
+Meta offers two ways to reach Instagram messaging, and FlowChat implements both as one gateway with a configuration switch, not two gateways.
 
-| | Instagram API with Instagram Login | Instagram API with Facebook Login |
+| | Instagram API with Facebook Login | Instagram API with Instagram Login |
 |---|---|---|
-| Linked Facebook Page | Not required | Required |
-| Login flow | Business Login for Instagram | Facebook Login for Business |
-| Access token | Instagram User token | Facebook User or Page token |
-| Base URL | `graph.instagram.com` | `graph.facebook.com` |
-| Account identifier | Instagram-scoped user id | Page-scoped user id |
-| Supported here | No | Yes |
+| Linked Facebook Page | Required | Not required |
+| Login flow | Facebook Login for Business | Business Login for Instagram |
+| Access token | Facebook User or Page token | Instagram User token |
+| Base URL | `graph.facebook.com` | `graph.instagram.com` |
+| Account identifier | Page-scoped user id | Instagram-scoped user id |
+| Scopes | Page messaging scopes | `instagram_business_basic`, `instagram_business_manage_messages` |
+| Supported here | Yes | Yes |
 
-FlowChat models the **Facebook Login** path. The client posts to `graph.facebook.com`, authenticates with the Page access token, and matches an inbound delivery against the linked Page id rather than the Instagram account id. An Instagram professional account with no linked Facebook Page cannot be served by this gateway: supporting it would mean a different host, a different token type and a different account identifier, which is a separate integration rather than a configuration flag.
+`FlowChat::Instagram::Configuration#login` picks the path: `:facebook` (the default) or `:instagram`. Everything a flow touches is identical either way: the renderer, the limits, the choice mapping, the sessions, the instrumentation. `app.platform` is always `:instagram`. Only the transport and the credentials differ: on `:facebook` the client posts to `graph.facebook.com`, authenticates with the Page access token, and matches an inbound delivery against the linked Page id; on `:instagram` it posts to `graph.instagram.com`, authenticates with the Instagram User access token, and matches against the Instagram professional account id instead, since there is no linked Page to key on.
+
+The Instagram Login path cannot do everything the Facebook Login path can: it has no access to ads that click into an Instagram DM and no access to conversation tagging, both of which stay tied to the Facebook Login path in Meta's own product boundaries. Pick Instagram Login only when the professional account genuinely has no linked Facebook Page; otherwise Facebook Login keeps every capability available.
 
 Instagram shares its webhook envelope and most of its rendering logic with Messenger (`FlowChat::Meta::MessagingGateway`), but has its own configuration, client and limits, and one crucial rendering difference: Instagram's interactive surfaces do not render everywhere, described below.
 
 ## Credentials
 
-The gateway needs an access token, the linked Page id, and a verify token; an app secret is needed to validate webhook signatures. `instagram_account_id` is accepted and stored but not used by the gateway itself (account matching is against the linked Page id, see below); keep it around if your own code calls the Instagram Graph API directly.
+The gateway needs an access token, an account id, and a verify token; an app secret is needed to validate webhook signatures. Which account id matters depends on `login`: `page_id` on the default `:facebook` path, `instagram_account_id` on the `:instagram` path. The one `login` does not need is still accepted and stored, in case your own code calls the Instagram Graph API directly with it.
 
 ```yaml
 # config/credentials.yml.enc
 instagram:
+  login: "facebook"              # or "instagram"; defaults to "facebook" if omitted
   access_token: "..."
-  page_id: "..."                # the Facebook Page the Instagram account is linked to
-  instagram_account_id: "..."   # informational; not used by the gateway
+  page_id: "..."                # the Facebook Page the Instagram account is linked to; required when login is "facebook"
+  instagram_account_id: "..."   # the Instagram professional account id; required when login is "instagram"
   verify_token: "..."           # your own value, echoed back during webhook setup
   app_id: "..."                 # used to classify echoes as :self, see below
   app_secret: "..."             # used to verify X-Hub-Signature-256
 ```
 
-Equivalent environment variables: `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_PAGE_ID`, `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_VERIFY_TOKEN`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`.
+Equivalent environment variables: `INSTAGRAM_LOGIN`, `INSTAGRAM_ACCESS_TOKEN`, `INSTAGRAM_PAGE_ID`, `INSTAGRAM_ACCOUNT_ID`, `INSTAGRAM_VERIFY_TOKEN`, `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET`.
+
+Setting `login` to anything other than `:facebook` or `:instagram` raises `ArgumentError` rather than falling back silently: a typo here would otherwise pick the wrong host and the wrong account id without any error until a send or a webhook actually failed against it.
 
 ## Setup
 
@@ -63,7 +69,7 @@ With no second argument, `use_gateway` loads credentials through `FlowChat::Inst
 
 ### The webhook `object` field
 
-Every delivery carries a top-level `object` field naming which subscription it came from. Messenger's is always `"page"`. Meta's own documentation is ambiguous about whether Instagram messaging events delivered via the Facebook Login path arrive under `"page"` or `"instagram"`, and this is not something FlowChat can settle for you: it depends on how your Meta app is configured. `FlowChat::Instagram::Gateway::SendApi#expected_webhook_object` defaults to `"instagram"`; confirm the real value against your app's dashboard, and override the method on a subclass if it disagrees. A delivery whose `object` does not match is dropped with `200 OK`, not an error, so a wrong value here fails silently rather than loudly.
+Every delivery carries a top-level `object` field naming which subscription it came from. Messenger's is always `"page"`. Meta's own documentation is ambiguous about whether Instagram messaging events delivered via the Facebook Login path arrive under `"page"` or `"instagram"`, and this is not something FlowChat can settle for you: it depends on how your Meta app is configured. `FlowChat::Instagram::Gateway::SendApi#expected_webhook_object` reads `login` off its configuration and answers from `FACEBOOK_LOGIN_WEBHOOK_OBJECT` or `INSTAGRAM_LOGIN_WEBHOOK_OBJECT`, both `"instagram"` by default; confirm the real value against your app's dashboard for whichever path you use, and override the method on a subclass if it disagrees. The two constants are kept separate on purpose: a correction to one path's value, once you confirm it against your dashboard, must not silently change the other's. A delivery whose `object` does not match is dropped with `200 OK`, not an error, so a wrong value here fails silently rather than loudly.
 
 ### Webhook fields
 
@@ -80,8 +86,9 @@ To run more than one linked account, or to load credentials from somewhere other
 
 ```ruby
 config = FlowChat::Instagram::Configuration.new(:support).tap do |c|
+  c.login = :instagram              # or :facebook, the default
   c.access_token = tenant.instagram_access_token
-  c.page_id = tenant.instagram_page_id
+  c.instagram_account_id = tenant.instagram_account_id
   c.verify_token = tenant.instagram_verify_token
   c.app_id = tenant.instagram_app_id
   c.app_secret = tenant.instagram_app_secret
@@ -93,7 +100,7 @@ processor = FlowChat::Processor.new(self) do |cfg|
 end
 ```
 
-Passing a name to `new` registers the configuration under that name, so you can retrieve it later with `FlowChat::Instagram::Configuration.get(:support)`. For an unnamed configuration, use `FlowChat::Instagram::Configuration.new(nil)`. The configuration attributes are `access_token`, `page_id`, `instagram_account_id`, `verify_token`, `app_id`, `app_secret`, and `skip_signature_validation` (set it to `true` to bypass the `X-Hub-Signature-256` check, for local testing only).
+Passing a name to `new` registers the configuration under that name, so you can retrieve it later with `FlowChat::Instagram::Configuration.get(:support)`. For an unnamed configuration, use `FlowChat::Instagram::Configuration.new(nil)`. The configuration attributes are `login`, `access_token`, `page_id`, `instagram_account_id`, `verify_token`, `app_id`, `app_secret`, and `skip_signature_validation` (set it to `true` to bypass the `X-Hub-Signature-256` check, for local testing only).
 
 ## The flow is the same
 
@@ -168,7 +175,7 @@ Instagram reports every message sent on a thread, including one typed by a human
 
 ## Who can be on each side
 
-The account running the flow must be an Instagram **professional** account, Business or Creator, with a Facebook Page linked to it. A personal Instagram account cannot be the business side of a conversation: Meta's messaging API does not accept one, and there is no FlowChat setting that works around it.
+The account running the flow must be an Instagram **professional** account, Business or Creator. A linked Facebook Page is required on the `:facebook` login path and not required on the `:instagram` path. A personal Instagram account cannot be the business side of a conversation on either path: Meta's messaging API does not accept one, and there is no FlowChat setting that works around it.
 
 The person on the other side is an ordinary Instagram user, which is the normal case and needs nothing from them.
 
