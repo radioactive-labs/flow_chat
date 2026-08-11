@@ -87,7 +87,7 @@ module FlowChat
           chunks[0..-2].each { |chunk| post_message(recipient_id, {text: chunk}, tag) }
           post_message(recipient_id, {text: chunks.last, quick_replies: options[:quick_replies]}, tag)
         when :carousel
-          post_message(recipient_id, {text: content}, tag) if content.present?
+          post_body_text(recipient_id, content, tag)
           post_message(recipient_id, {
             attachment: {
               type: "template",
@@ -95,9 +95,20 @@ module FlowChat
             }
           }, tag)
         when :attachment
-          post_message(recipient_id, {text: content}, tag) if content.present?
+          post_body_text(recipient_id, content, tag)
           post_media(recipient_id, options, tag)
         end
+      end
+
+      # content on these two branches is the numbered body Instagram's
+      # always_number? forces (or, on :attachment, just the flow's own
+      # message) - either can run over the platform's text cap on its own,
+      # with no relation to the template or attachment that follows, so it
+      # is split exactly like a plain text send rather than posted whole.
+      def post_body_text(recipient_id, content, tag)
+        return unless content.present?
+
+        split_text(content).each { |chunk| post_message(recipient_id, {text: chunk}, tag) }
       end
 
       def post_media(recipient_id, media_options, tag)
