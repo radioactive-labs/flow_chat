@@ -20,7 +20,10 @@ class WhatsappRendererTest < Minitest::Test
     renderer = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices)
     result = renderer.render
 
-    # Renderer uses the keys (which are already WhatsApp-safe IDs) as button IDs
+    # Renderer uses the keys (which are already WhatsApp-safe IDs) as button
+    # IDs. These titles are short and distinct, so FlowChat::ChoiceTitles
+    # does not prefix them - see test_button_titles_are_numbered_when_ambiguous
+    # for the case where it does.
     expected_buttons = [
       {id: "Option 1", title: "Option 1"},
       {id: "Option 2", title: "Option 2"},
@@ -33,6 +36,19 @@ class WhatsappRendererTest < Minitest::Test
 
     # No mapping in renderer anymore - middleware handles mapping
     assert_nil result[2][:mapping]
+  end
+
+  # Contrast with test_render_with_choices_as_buttons: an ambiguous set (here,
+  # one title needs truncation) gets every title in the set prefixed, not
+  # just the one that needed it - see FlowChat::ChoiceTitles for why.
+  def test_button_titles_are_numbered_when_ambiguous
+    long_label = "A label that is definitely longer than twenty chars"
+    choices = {"a" => long_label, "b" => "Beta"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices).render
+
+    assert_equal "1. A label that i...", result[2][:buttons][0][:title]
+    assert_equal "2. Beta", result[2][:buttons][1][:title]
   end
 
   def test_render_with_choices_as_list
@@ -86,7 +102,8 @@ class WhatsappRendererTest < Minitest::Test
     )
     result = renderer.render
 
-    # Renderer uses keys as IDs
+    # Renderer uses keys as IDs; these titles are short and distinct, so
+    # they are not prefixed
     expected_buttons = [
       {id: "Like", title: "Like"},
       {id: "Dislike", title: "Dislike"},
@@ -163,7 +180,8 @@ class WhatsappRendererTest < Minitest::Test
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices, media: media)
     result = renderer.render
 
-    # Renderer uses keys as IDs
+    # Renderer uses keys as IDs; these titles are short and distinct, so
+    # they are not prefixed
     expected_buttons = [
       {id: "First Option", title: "First Option"},
       {id: "Second Option", title: "Second Option"}
@@ -185,7 +203,7 @@ class WhatsappRendererTest < Minitest::Test
     result = renderer.render
 
     button = result[2][:buttons][0]
-    assert_equal "This is a very lo...", button[:title]
+    assert_equal "1. This is a very...", button[:title]
     assert button[:title].length <= 20
   end
 
@@ -247,7 +265,7 @@ class WhatsappRendererTest < Minitest::Test
     item = result[2][:sections][0][:rows][0] # First item with long title
     assert item.present?, "Item should be present"
 
-    assert_equal "This is a very long o...", item[:title] # Truncated at 24 chars
+    assert_equal "1. This is a very lon...", item[:title] # Numbered, then truncated to 24 chars
     if item[:description]
       # Description is truncated at 72 chars, so check for beginning portion
       assert_includes item[:description], "This is a very long option title that should be truncated"

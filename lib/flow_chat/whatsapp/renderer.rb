@@ -127,23 +127,22 @@ module FlowChat
         end
       end
 
+      # Whether titles are numbered, and the enumeration order positions come
+      # from, are both decided by FlowChat::ChoiceTitles over this same
+      # `choices` hash - the choice mapper's ChoiceAliasBuilder.build call
+      # goes through the same module over the same hash, so the two can
+      # never disagree on which titles are shown or which ones are aliased.
       def build_buttons_message(choices)
-        buttons = choices.map do |key, value|
-          {
-            id: key.to_s,
-            title: FlowChat::TextTruncator.truncate(value.to_s, BUTTON_TITLE_LENGTH)
-          }
+        buttons = FlowChat::ChoiceTitles.build(choices, BUTTON_TITLE_LENGTH).map do |key, _label, title, _truncated|
+          {id: key, title: title}
         end
 
         [:interactive_buttons, formatted_message, {buttons: buttons}]
       end
 
       def build_buttons_message_with_media(choices)
-        buttons = choices.map do |key, value|
-          {
-            id: key.to_s,
-            title: FlowChat::TextTruncator.truncate(value.to_s, BUTTON_TITLE_LENGTH)
-          }
+        buttons = FlowChat::ChoiceTitles.build(choices, BUTTON_TITLE_LENGTH).map do |key, _label, title, _truncated|
+          {id: key, title: title}
         end
 
         # Build media header
@@ -185,19 +184,23 @@ module FlowChat
         end
       end
 
+      # See the comment on build_buttons_message: numbering and position both
+      # come from FlowChat::ChoiceTitles over this same `choices` hash.
+      #
+      # The description (a longer, secondary line WhatsApp renders below the
+      # title, up to 72 chars) is not numbered: nothing resolves a typed
+      # description back to a choice, only the title and the position are
+      # aliased, so a prefix there would just be noise. It is populated
+      # whenever the title's own label portion didn't fit - whether that's
+      # because the label alone exceeds the cap, or because a position
+      # prefix ate into the room left for it.
       def build_list_message(choices)
-        items = choices.map do |key, value|
-          original_text = value.to_s
-          truncated_title = FlowChat::TextTruncator.truncate(original_text, LIST_ROW_TITLE_LENGTH)
-
-          # If title was truncated, put full text in description (up to 72 chars)
-          description = if original_text.length > LIST_ROW_TITLE_LENGTH
-            FlowChat::TextTruncator.truncate(original_text, 72)
-          end
+        items = FlowChat::ChoiceTitles.build(choices, LIST_ROW_TITLE_LENGTH).map do |key, label, title, truncated|
+          description = FlowChat::TextTruncator.truncate(label, 72) if truncated
 
           {
-            id: key.to_s,
-            title: truncated_title,
+            id: key,
+            title: title,
             description: description
           }.compact
         end

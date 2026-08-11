@@ -60,12 +60,17 @@ module FlowChat
         [:text, body, {}]
       end
 
+      # Whether titles are numbered, and the enumeration order positions come
+      # from, are both decided by FlowChat::ChoiceTitles over this same
+      # `choices` hash - the choice mapper's ChoiceAliasBuilder.build call
+      # goes through the same module over the same hash, so the two can
+      # never disagree on which titles are shown or which ones are aliased.
       def build_quick_replies
-        replies = choices.map do |key, label|
+        replies = FlowChat::ChoiceTitles.build(choices, limits.max_quick_reply_title).map do |key, _label, title, _truncated|
           {
             content_type: "text",
-            title: FlowChat::TextTruncator.truncate(label.to_s, limits.max_quick_reply_title),
-            payload: key.to_s
+            title: title,
+            payload: key
           }
         end
 
@@ -74,18 +79,29 @@ module FlowChat
 
       # One option is one button, and buttons live on elements, so the options
       # are packed across elements rather than one element per option.
+      #
+      # FlowChat::ChoiceTitles.build runs once over the whole choice set,
+      # before slicing into elements: both the ambiguity decision and the
+      # resulting position numbers have to consider every choice together,
+      # not each element's slice in isolation. Two different slices could
+      # each hold a "Foo" that only collides once the whole set is in view,
+      # and the numbering an element's buttons carry has to continue where
+      # the previous element's left off (button 14 reads "14.", not "2." of
+      # its own element) - both are only correct computed globally.
       def build_carousel
-        elements = choices.each_slice(limits.max_buttons_per_element).map.with_index(1) do |slice, index|
+        numbered_choices = FlowChat::ChoiceTitles.build(choices, limits.max_button_title)
+
+        elements = numbered_choices.each_slice(limits.max_buttons_per_element).map.with_index(1) do |slice, index|
           first = (index - 1) * limits.max_buttons_per_element + 1
           last = first + slice.length - 1
 
           {
             title: FlowChat::TextTruncator.truncate("Options #{first} to #{last}", limits.max_element_title),
-            buttons: slice.map do |key, label|
+            buttons: slice.map do |key, _label, title, _truncated|
               {
                 type: "postback",
-                title: FlowChat::TextTruncator.truncate(label.to_s, limits.max_button_title),
-                payload: key.to_s
+                title: title,
+                payload: key
               }
             end
           }

@@ -53,7 +53,7 @@ module FlowChat
 
           @middleware.call(@context)
 
-          @context.input = "A label that is d..." # 20 chars, as Instagram renders it on a quick reply
+          @context.input = "1. A label that i..." # 20 chars, as Instagram renders it on a quick reply
           @app.expect :call, [:text, "response", nil, nil], [@context]
 
           @middleware.call(@context)
@@ -62,19 +62,175 @@ module FlowChat
           @app.verify
         end
 
-        # Two labels that truncate to the same displayed string must not
-        # alias either, on Instagram exactly as on Messenger.
-        def test_colliding_truncated_titles_are_not_aliased
+        # a1d08a4 could alias neither of these labels on Instagram either,
+        # for the same reason as on Messenger: both truncate to the same
+        # "A label that is d..." at a 20-char cap. The position prefix makes
+        # the two titles distinct by construction, so both resolve now.
+        def test_labels_that_would_have_collided_without_a_prefix_both_resolve
           choices = {
             "a" => "A label that is definitely one thing",
             "b" => "A label that is definitely another"
           }
-          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
 
+          [["a", "1. A label that i..."], ["b", "2. A label that i..."]].each do |expected_key, typed|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            @middleware.call(@context)
+
+            @context.input = typed
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input
+            @app.verify
+          end
+        end
+
+        # Round-trip: render the actual payload, take each title exactly as
+        # Instagram would display it, feed it back as typed input, and
+        # confirm it resolves to the choice that produced it.
+        def test_round_trip_quick_reply_titles_resolve_including_the_pair_that_used_to_collide
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }
+
+          [["savings", 0], ["salary", 1]].each do |expected_key, reply_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Instagram::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:quick_replies][reply_index][:title]
+            assert_operator title.length, :<=, FlowChat::Config.instagram.max_quick_reply_title
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed title #{title.inspect} must resolve to #{expected_key.inspect}"
+            @app.verify
+          end
+        end
+
+        # Same loop on the carousel rung.
+        def test_round_trip_carousel_button_titles_resolve_including_the_pair_that_used_to_collide
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }.merge((3..14).to_h { |i| ["k#{i}", "Option #{i}"] })
+
+          [["savings", 0], ["salary", 1]].each do |expected_key, button_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Instagram::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:elements][0][:buttons][button_index][:title]
+            assert_operator title.length, :<=, FlowChat::Config.instagram.max_button_title
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed button title #{title.inspect} must resolve to #{expected_key.inspect}"
+            @app.verify
+          end
+        end
+
+        # The savings/salary pair is ambiguous (truncation), so its titles
+        # are numbered: typing the bare position, not just the full
+        # displayed title, must also resolve.
+        def test_typed_position_resolves_on_an_ambiguous_quick_reply_rung
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
           @middleware.call(@context)
 
-          assert_empty @session.get("instagram.alias_mapping"),
-            "colliding truncated titles must not be aliased"
+          @context.input = "2"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "salary", @context.input
+          @app.verify
+        end
+
+        # The duplicate-label case: no truncation is involved at all - both
+        # labels are "Accept", well under the 20-char quick-reply cap - but
+        # sharing a label is exactly as ambiguous as a truncation collision,
+        # so FlowChat::ChoiceTitles prefixes the whole set. Without the
+        # duplicate trigger this would render two identical "Accept" quick
+        # replies whose aliases collide, silently resolving to whichever
+        # choice's alias happened to be written last.
+        def test_round_trip_duplicate_labels_each_resolve_to_their_own_distinct_key
+          choices = {"yes" => "Accept", "no" => "Accept"}
+
+          [["yes", 0], ["no", 1]].each do |expected_key, reply_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Instagram::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:quick_replies][reply_index][:title]
+            assert_equal "#{reply_index + 1}. Accept", title, "the screen must be numbered when labels are duplicated"
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed title #{title.inspect} must resolve to its own choice, not the other \"Accept\""
+            @app.verify
+          end
+        end
+
+        # Instagram differs from Messenger/WhatsApp here: always_number?
+        # forces a number into the body regardless of title ambiguity, so a
+        # typed position resolves even on this unambiguous, unprefixed quick
+        # reply rung - unlike test_round_trip_unambiguous_quick_reply_rung_
+        # has_no_position on Messenger, where the equivalent digit is free
+        # text. The quick reply's own title is still unprefixed either way;
+        # always_number? only ever governs the body listing.
+        def test_unambiguous_quick_reply_rung_still_accepts_a_typed_position
+          choices = {"a" => "Alpha", "b" => "Beta"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+          _, prompt, transformed, _ = @middleware.call(@context)
+
+          rendered = FlowChat::Instagram::Renderer.new(prompt, choices: transformed).render
+          assert_equal "Beta", rendered[2][:quick_replies][1][:title], "an unambiguous title is not prefixed"
+
+          @context.input = "2"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "b", @context.input,
+            "always_number? puts a number in the body regardless of title ambiguity, so it must resolve"
+          @app.verify
+        end
+
+        # On the numbered rung (above the carousel capacity) there is no
+        # tappable surface and no separate title to alias, only the position
+        # printed in the body; the round trip there is pulling that number
+        # back out of the rendered body and typing it back.
+        def test_round_trip_numbered_body_position_resolves
+          choices = (1..31).to_h { |i| ["k#{i}", "Option #{i}"] }
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          _, prompt, transformed, _ = @middleware.call(@context)
+
+          rendered = FlowChat::Instagram::Renderer.new(prompt, choices: transformed).render
+          third_numbered_line = rendered[1].lines.grep(/^\d+\. /)[2]
+          typed_position = third_numbered_line[/^\d+/]
+
+          @context.input = typed_position
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "k3", @context.input
           @app.verify
         end
 

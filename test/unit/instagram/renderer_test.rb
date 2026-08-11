@@ -16,6 +16,30 @@ class InstagramRendererTest < Minitest::Test
     assert_includes result[1], "2. Beta"
   end
 
+  # always_number? only ever controls the body listing tested above; it
+  # says nothing about whether a title itself is prefixed. These titles are
+  # short and distinct, so the quick reply's own title is not prefixed even
+  # though the body right next to it always is - the two are independent
+  # mechanisms answering different questions (can a desktop user, with no
+  # tappable surface, still see the options? vs. can these titles identify
+  # a choice on their own?).
+  def test_quick_reply_titles_are_not_numbered_when_unambiguous
+    result = render("Pick one", choices: {"a" => "Alpha", "b" => "Beta"})
+
+    assert_equal "Alpha", result[2][:quick_replies][0][:title]
+    assert_equal "Beta", result[2][:quick_replies][1][:title]
+  end
+
+  # Contrast with the above: an ambiguous set (two choices sharing a label)
+  # does get its quick-reply titles prefixed too, on top of the numbered
+  # body Instagram always shows.
+  def test_quick_reply_titles_are_numbered_when_ambiguous
+    result = render("Pick one", choices: {"a" => "Accept", "b" => "Accept"})
+
+    assert_equal "1. Accept", result[2][:quick_replies][0][:title]
+    assert_equal "2. Accept", result[2][:quick_replies][1][:title]
+  end
+
   # The literal shape the plan's acceptance criteria call out: a five-choice
   # screen must carry both the tappable quick replies and the numbered list.
   def test_five_choices_carries_quick_replies_and_a_numbered_body

@@ -4,14 +4,14 @@ module FlowChat
       # Maps a reply back to the choice key the flow used.
       #
       # Three key spaces can be live at once. A tap sends the payload id the
-      # renderer put on the button; a user who instead types the (possibly
-      # truncated) title they see on that button types an alias; and on the
-      # numbered rung a typed digit sends a position. They are stored
+      # renderer put on the button; a user who instead types the title they
+      # see on that button types an alias; and, only when a number is
+      # genuinely on screen, a typed digit sends a position. They are stored
       # separately and resolved ids first, then aliases, then positions,
       # because the spaces overlap: IdGenerator keeps digits, so a choice
       # labelled "1" generates the id "1", which is not necessarily the first
-      # choice, and FlowChat::ChoiceAliasBuilder only ever registers an alias
-      # that differs from every generated id, so ids can never lose to one.
+      # choice, and FlowChat::ChoiceAliasBuilder never registers an alias
+      # equal to its own choice's generated id, so ids can never lose to one.
       class ChoiceMapper
         ID_KEY = "messenger.choice_mapping"
         ALIAS_KEY = "messenger.alias_mapping"
@@ -82,12 +82,12 @@ module FlowChat
         # Ids are resolved first, then aliases, then positions. Ids can
         # overlap with positions because IdGenerator#normalize_label keeps
         # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them because they are only ever
-        # registered when they differ from every generated id (see
-        # FlowChat::ChoiceAliasBuilder), so they cannot outrank one, but they
-        # must still beat a position: a typed alias is a match on what the
+        # id "1". Aliases sit between them: FlowChat::ChoiceAliasBuilder
+        # never registers an alias equal to its own choice's generated id
+        # (see its docs), so an alias never outranks an id, but it must
+        # still beat a position: a typed alias is a match on the title the
         # user actually saw, while a position is a fallback guess from a
-        # digit.
+        # bare digit that is only shown at all when the screen was numbered.
         def resolved_choice
           input = @context.input.to_s
           return nil if input.empty?
@@ -142,7 +142,7 @@ module FlowChat
           @session.set(id_key, id_mapping)
           @session.set(alias_key, FlowChat::ChoiceAliasBuilder.build(choices, generated_ids, display_title_cap(choices.length)))
 
-          if FlowChat::Meta::ChoiceLadder.numbers_in_body?(choices.length, platform_limits, always_number: always_number?)
+          if number_choices?(choices)
             @session.set(position_key, choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
           else
             @session.delete(position_key)
@@ -152,15 +152,32 @@ module FlowChat
         end
 
         # The title cap the renderer will use for these choices, or nil on
-        # the numbered rung, where the renderer shows the full label with no
-        # truncation, so no alias is needed. This calls the same
-        # FlowChat::Meta::ChoiceLadder the renderer consults, so the two
-        # cannot drift on which rung a given count lands on.
+        # the :none and :numbered rungs, where there is no separate title to
+        # alias: :none has no choices, and :numbered already lists each full
+        # label next to its number straight in the body, with nothing more
+        # to truncate. This calls the same FlowChat::Meta::ChoiceLadder the
+        # renderer consults, so the two cannot drift on which rung a given
+        # count lands on.
         def display_title_cap(count)
           case FlowChat::Meta::ChoiceLadder.rung_for(count, platform_limits)
           when :quick_replies then platform_limits.max_quick_reply_title
           when :carousel then platform_limits.max_button_title
           end
+        end
+
+        # A position number is only worth resolving when one is genuinely on
+        # screen: on the :numbered rung, or wherever always_number? forces
+        # the renderer's #body to list one regardless of rung (Instagram,
+        # for a desktop user with no tappable surface at all), or on a
+        # quick-reply/carousel rung whose titles FlowChat::ChoiceTitles
+        # decided were ambiguous and prefixed with a number. always_number?
+        # only ever governs that body listing; it says nothing about whether
+        # a title itself was numbered, so it cannot answer this alone.
+        def number_choices?(choices)
+          count = choices.length
+          return true if FlowChat::Meta::ChoiceLadder.numbers_in_body?(count, platform_limits, always_number: always_number?)
+
+          FlowChat::ChoiceTitles.ambiguous?(choices, display_title_cap(count))
         end
       end
     end

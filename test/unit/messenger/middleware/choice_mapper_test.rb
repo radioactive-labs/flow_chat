@@ -47,11 +47,13 @@ module FlowChat
         # choice labelled "5" generates the id "5". Ids must win: the id map is
         # consulted before the position map.
         #
-        # The collision only exists once a position map exists at all, which
-        # on Messenger's ladder means more than 30 choices (the numbered
-        # rung). A "special" choice labelled "5" sits first (position "1"),
-        # while a different choice, "k4", sits at position "5" - so typing
-        # "5" finds two different answers depending on which map wins.
+        # A position map is stored on every rung now, so this collision is
+        # live everywhere, not only on the numbered rung; exercising it here
+        # above 30 choices (the numbered rung) reuses the exact scenario
+        # a1d08a4 documented. A "special" choice labelled "5" sits first
+        # (position "1"), while a different choice, "k4", sits at position
+        # "5" - so typing "5" finds two different answers depending on which
+        # map wins.
         def test_generated_ids_win_over_positions
           choices = {"special" => "5"}.merge((1..30).to_h { |i| ["k#{i}", "Option #{i}"] })
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
@@ -70,10 +72,10 @@ module FlowChat
           @app.verify
         end
 
-        # The renderer truncates a quick reply title to
-        # limits.max_quick_reply_title (20), so a user who types exactly what
-        # they see (rather than the full, untruncated label the id was
-        # generated from) must still resolve.
+        # The renderer prefixes a quick reply title with its position and
+        # truncates to limits.max_quick_reply_title (20), so a user who types
+        # exactly what they see (rather than the full, unprefixed label the
+        # id was generated from) must still resolve.
         def test_typed_truncated_quick_reply_title_resolves
           long_label = "A label that is definitely longer than twenty chars"
           choices = {"a" => long_label, "b" => "Beta"}
@@ -81,7 +83,7 @@ module FlowChat
 
           @middleware.call(@context)
 
-          @context.input = "A label that is d..." # 20 chars, as Messenger renders it on a quick reply
+          @context.input = "1. A label that i..." # 20 chars, as Messenger renders it on a quick reply
           @app.expect :call, [:text, "response", nil, nil], [@context]
 
           @middleware.call(@context)
@@ -100,7 +102,7 @@ module FlowChat
 
           @middleware.call(@context)
 
-          @context.input = "A label that is d..."
+          @context.input = "1. A label that i..."
           @app.expect :call, [:text, "response", nil, nil], [@context]
 
           @middleware.call(@context)
@@ -109,27 +111,187 @@ module FlowChat
           @app.verify
         end
 
-        # Two labels that truncate to the same displayed string must not
-        # alias either: there is no way to tell which one the user meant.
-        def test_colliding_truncated_titles_are_not_aliased
+        # a1d08a4 could alias neither of these labels, because both truncate
+        # to the same "A label that is d..." at a 20-char cap. The position
+        # prefix makes the two titles distinct by construction, so both
+        # resolve now.
+        def test_labels_that_would_have_collided_without_a_prefix_both_resolve
           choices = {
             "a" => "A label that is definitely one thing",
             "b" => "A label that is definitely another"
           }
+
+          [["a", "1. A label that i..."], ["b", "2. A label that i..."]].each do |expected_key, typed|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            @middleware.call(@context)
+
+            @context.input = typed
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input
+            @app.verify
+          end
+        end
+
+        # Round-trip: render the actual payload, take each title exactly as
+        # Messenger would display it, feed it back as typed input, and
+        # confirm it resolves to the choice that produced it. This is the
+        # loop that a renderer/mapper disagreement on numbering would break
+        # silently.
+        def test_round_trip_quick_reply_titles_resolve_including_the_pair_that_used_to_collide
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }
+
+          [["savings", 0], ["salary", 1]].each do |expected_key, reply_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Messenger::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:quick_replies][reply_index][:title]
+            assert_operator title.length, :<=, platform_limits.max_quick_reply_title
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed title #{title.inspect} must resolve to #{expected_key.inspect}"
+            @app.verify
+          end
+        end
+
+        # Same loop, one rung up: more than 13 choices renders a carousel
+        # instead of quick replies.
+        def test_round_trip_carousel_button_titles_resolve_including_the_pair_that_used_to_collide
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }.merge((3..14).to_h { |i| ["k#{i}", "Option #{i}"] })
+
+          [["savings", 0], ["salary", 1]].each do |expected_key, button_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Messenger::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:elements][0][:buttons][button_index][:title]
+            assert_operator title.length, :<=, platform_limits.max_button_title
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed button title #{title.inspect} must resolve to #{expected_key.inspect}"
+            @app.verify
+          end
+        end
+
+        # The savings/salary pair is ambiguous (truncation), so the screen is
+        # numbered: typing the bare position, not just the full displayed
+        # title, must also resolve.
+        def test_typed_position_resolves_on_an_ambiguous_quick_reply_rung
+          choices = {
+            "savings" => "Transfer to savings account",
+            "salary" => "Transfer to salary account"
+          }
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+          @middleware.call(@context)
+
+          @context.input = "2"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "salary", @context.input
+          @app.verify
+        end
+
+        # The duplicate-label case: no truncation is involved at all - both
+        # labels are "Accept", well under the 20-char quick-reply cap - but
+        # sharing a label is exactly as ambiguous as a truncation collision,
+        # so FlowChat::ChoiceTitles prefixes the whole set. Without the
+        # duplicate trigger this would render two identical "Accept" quick
+        # replies whose aliases collide, silently resolving to whichever
+        # choice's alias happened to be written last.
+        def test_round_trip_duplicate_labels_each_resolve_to_their_own_distinct_key
+          choices = {"yes" => "Accept", "no" => "Accept"}
+
+          [["yes", 0], ["no", 1]].each do |expected_key, reply_index|
+            setup
+            @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+            _, prompt, transformed, _ = @middleware.call(@context)
+
+            rendered = FlowChat::Messenger::Renderer.new(prompt, choices: transformed).render
+            title = rendered[2][:quick_replies][reply_index][:title]
+            assert_equal "#{reply_index + 1}. Accept", title, "the screen must be numbered when labels are duplicated"
+
+            @context.input = title
+            @app.expect :call, [:text, "response", nil, nil], [@context]
+            @middleware.call(@context)
+
+            assert_equal expected_key, @context.input,
+              "typing the displayed title #{title.inspect} must resolve to its own choice, not the other \"Accept\""
+            @app.verify
+          end
+        end
+
+        # Contrast with the ambiguous cases above: "Alpha" and "Beta" are
+        # short and distinct, so the screen is not numbered at all. The
+        # displayed title still round-trips (it resolves via the id map,
+        # since the bare title equals the choice's own generated id here),
+        # but a typed bare digit is free text - no number was ever shown, so
+        # there is nothing for it to be a position of.
+        def test_round_trip_unambiguous_quick_reply_rung_has_no_position
+          choices = {"a" => "Alpha", "b" => "Beta"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+          _, prompt, transformed, _ = @middleware.call(@context)
+
+          rendered = FlowChat::Messenger::Renderer.new(prompt, choices: transformed).render
+          title = rendered[2][:quick_replies][1][:title]
+          assert_equal "Beta", title, "an unambiguous title is not prefixed"
+
+          @context.input = title
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+          assert_equal "b", @context.input, "the displayed title must still round-trip"
+
+          setup
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+          @middleware.call(@context)
+
+          @context.input = "1"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+          assert_equal "1", @context.input,
+            "no number was shown, so a typed digit must stay free text, not resolve to a position"
+          @app.verify
+        end
+
+        # On the numbered rung (above the carousel capacity) there is no
+        # separate title to alias, only the position printed in the body;
+        # the round trip there is pulling that number back out of the
+        # rendered body, exactly as a user reading it would, and typing it
+        # back.
+        def test_round_trip_numbered_body_position_resolves
+          choices = (1..31).to_h { |i| ["k#{i}", "Option #{i}"] }
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
 
-          @middleware.call(@context)
+          _, prompt, transformed, _ = @middleware.call(@context)
 
-          assert_empty @session.get("messenger.alias_mapping"),
-            "colliding truncated titles must not be aliased"
+          rendered = FlowChat::Messenger::Renderer.new(prompt, choices: transformed).render
+          third_numbered_line = rendered[1].lines.grep(/^\d+\. /)[2]
+          typed_position = third_numbered_line[/^\d+/]
 
-          @context.input = "A label that is d..."
+          @context.input = typed_position
           @app.expect :call, [:text, "response", nil, nil], [@context]
-
           @middleware.call(@context)
 
-          assert_equal "A label that is d...", @context.input,
-            "an ambiguous truncated title must pass through unresolved"
+          assert_equal "k3", @context.input
           @app.verify
         end
 
@@ -170,28 +332,46 @@ module FlowChat
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
           @middleware.call(@context)
 
-          @context.input = "A label that is d..."
+          @context.input = "1. A label that i..."
           @app.expect :call, [:prompt, "How many bags?", nil, nil], [@context]
           @middleware.call(@context)
 
           assert_equal "a", @context.input
 
-          @context.input = "A label that is d..."
+          @context.input = "1. A label that i..."
           @app.expect :call, [:text, "response", nil, nil], [@context]
           @middleware.call(@context)
 
-          assert_equal "A label that is d...", @context.input,
+          assert_equal "1. A label that i...", @context.input,
             "a stale alias mapping must not rewrite free text on a later screen"
           @app.verify
         end
 
-        def test_no_position_map_on_the_quick_reply_rung
+        # No number is on screen for a short, unique set of titles, so a
+        # typed digit here is free text, not a position: storing one anyway
+        # would let a coincidental digit hijack a reply it was never meant
+        # to resolve.
+        def test_no_position_map_on_an_unambiguous_quick_reply_rung
           choices = {"a" => "Alpha", "b" => "Beta"}
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
 
           @middleware.call(@context)
 
           assert_nil @session.get("messenger.position_mapping")
+          @app.verify
+        end
+
+        # Contrast with the test above: FlowChat::ChoiceTitles.ambiguous?
+        # decides a set needs numbering, so the position map is stored for
+        # it, on the same quick-reply rung that has none when unambiguous.
+        def test_position_map_exists_on_an_ambiguous_quick_reply_rung
+          choices = {"a" => "Accept", "b" => "Accept"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @session.get("messenger.position_mapping")["1"]
+          assert_equal "b", @session.get("messenger.position_mapping")["2"]
           @app.verify
         end
 
@@ -240,6 +420,10 @@ module FlowChat
           assert_equal FlowChat::Messenger::Renderer, gateway.renderer_class
           assert_equal FlowChat::Messenger::Middleware::ChoiceMapper,
             FlowChat::Messenger::Gateway::SendApi.choice_mapper_class
+        end
+
+        def platform_limits
+          FlowChat::Config.messenger
         end
 
         # Mock classes for testing, mirroring

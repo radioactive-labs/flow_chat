@@ -1,43 +1,35 @@
 module FlowChat
-  # Builds the reply alias for each choice's on-screen, possibly truncated,
-  # label, so a user who types exactly what they see resolves to the same
-  # choice as a user who types the untruncated generated id.
+  # Builds the reply alias for each choice's on-screen title, so a user who
+  # types exactly what they see resolves to the same choice as a user who
+  # types the generated id or, when one is shown, the bare position number.
   #
-  # An alias is registered only when it is safe:
-  # - it must differ from the choice's own generated id, or it is pointless
-  #   (that id already resolves the choice);
-  # - it must not collide with any choice's generated id, or with another
-  #   choice's truncated label.
+  # The titles themselves come from FlowChat::ChoiceTitles, which decides
+  # once per choice set whether the titles need a position prefix to stay
+  # distinct. That guarantee - that FlowChat::ChoiceTitles never hands back
+  # two identical titles for the same set - is what lets this module skip
+  # any cross-choice collision check: there is nothing left to collide.
   #
-  # A collision is worse than a miss. Dropping the alias just means a typed
-  # reply does not match and the flow re-prompts, which is recoverable;
-  # resolving it to the wrong choice is not.
+  # One guard remains, and it is reachable: on an unambiguous set (the
+  # common case - short, distinct labels), the title is just the bare
+  # label, which very often equals the choice's own generated id outright
+  # ("Yes" the label, "Yes" the id). Registering that as an alias would be
+  # redundant, not wrong - the id map already resolves it - so it is
+  # skipped to keep the alias map free of pointless duplicate entries.
   module ChoiceAliasBuilder
-    # @param choices [Hash] original choice key => label, as the flow wrote it
+    # @param choices [Hash] original choice key => label, as the flow wrote
+    #   it, enumerated in the same order FlowChat::ChoiceTitles and the
+    #   renderer number them in
     # @param generated_ids [Hash] choice key (String) => id from IdGenerator
     # @param display_cap [Integer, nil] the renderer's title length for the
-    #   rung these choices landed on, or nil when the rung shows the full
-    #   label (no truncation, so no alias is needed)
-    # @return [Hash] displayed label => choice key, for labels safe to alias
+    #   rung these choices landed on, or nil when the rung has no separate
+    #   title to alias (it numbers the message body directly instead)
+    # @return [Hash] displayed title => choice key
     def self.build(choices, generated_ids, display_cap)
       return {} unless display_cap
 
-      candidates = Hash.new { |h, k| h[k] = [] }
-
-      choices.each do |key, label|
-        key = key.to_s
-        generated_id = generated_ids.fetch(key)
-        truncated = FlowChat::TextTruncator.truncate(label.to_s, display_cap)
-        next if truncated == generated_id
-
-        candidates[truncated] << key
-      end
-
-      candidates.each_with_object({}) do |(truncated, keys), aliases|
-        next if keys.length > 1 # ambiguous: two choices display the same truncated text
-        next if generated_ids.value?(truncated) # collides with a generated id already in play
-
-        aliases[truncated] = keys.first
+      FlowChat::ChoiceTitles.build(choices, display_cap).each_with_object({}) do |(key, _label, title, _truncated), aliases|
+        next if title == generated_ids.fetch(key)
+        aliases[title] = key
       end
     end
   end

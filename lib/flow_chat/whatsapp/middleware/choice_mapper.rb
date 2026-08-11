@@ -32,13 +32,17 @@ module FlowChat
       #   # User clicks second, WhatsApp sends: "Accept 3a4"
       #   # Middleware maps back to: "no"
       #
-      # A button or list row also truncates a long label for display (see
+      # A button or list row title is truncated to fit (see
       # FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH /
       # LIST_ROW_TITLE_LENGTH), so a user who types exactly what they see
       # would otherwise fail to match the generated id, which was built from
       # the full label. This middleware additionally registers that
-      # truncated, on-screen form as an alias for the same choice key, via
-      # FlowChat::ChoiceAliasBuilder, whenever doing so is unambiguous.
+      # on-screen form as an alias for the same choice key, via
+      # FlowChat::ChoiceAliasBuilder. When truncation (or a duplicate label)
+      # would make titles ambiguous, FlowChat::ChoiceTitles prefixes every
+      # title in the set with its position instead, which is what actually
+      # keeps them distinct in that case; see its docs for why that decision
+      # is made once for the whole set rather than per title.
       #
       class ChoiceMapper
         def initialize(app)
@@ -78,12 +82,12 @@ module FlowChat
         # Ids are resolved first, then aliases, then positions. Ids can
         # overlap with positions because IdGenerator#normalize_label keeps
         # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them because they are only ever
-        # registered when they differ from every generated id (see
-        # FlowChat::ChoiceAliasBuilder), so they cannot outrank one, but they
-        # must still beat a position: a typed alias is a match on what the
+        # id "1". Aliases sit between them: FlowChat::ChoiceAliasBuilder
+        # never registers an alias equal to its own choice's generated id
+        # (see its docs), so an alias never outranks an id, but it must
+        # still beat a position: a typed alias is a match on the title the
         # user actually saw, while a position is a fallback guess from a
-        # digit.
+        # bare digit that is only shown at all when the screen was numbered.
         def resolved_choice
           input = @context.input.to_s
           get_choice_mapping[input] || get_alias_mapping[input] || get_position_mapping[input]
@@ -129,9 +133,7 @@ module FlowChat
 
           store_alias_mapping(FlowChat::ChoiceAliasBuilder.build(choices, generated_ids, display_title_cap(choices.length)))
 
-          # Above the row cap the renderer numbers the options in the body, so
-          # the reply is a digit rather than a row id.
-          if choices.length > FlowChat::Whatsapp::Renderer::MAX_LIST_ROWS
+          if number_choices?(choices)
             store_position_mapping(choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
           else
             clear_position_mapping
@@ -157,6 +159,18 @@ module FlowChat
           elsif count <= FlowChat::Whatsapp::Renderer::MAX_LIST_ROWS
             FlowChat::Whatsapp::Renderer::LIST_ROW_TITLE_LENGTH
           end
+        end
+
+        # A position number is only worth resolving when one is genuinely on
+        # screen: above the row cap, where the renderer has no title left to
+        # show and numbers the body directly (display_title_cap is nil), or
+        # on a button/list rung whose titles FlowChat::ChoiceTitles decided
+        # were ambiguous and prefixed with a number. A short, unique set of
+        # titles (the common case) shows no number at all, so a typed digit
+        # there is free text, not a position.
+        def number_choices?(choices)
+          cap = display_title_cap(choices.length)
+          cap.nil? || FlowChat::ChoiceTitles.ambiguous?(choices, cap)
         end
 
         def store_choice_mapping(mapping)

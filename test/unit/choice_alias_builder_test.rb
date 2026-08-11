@@ -9,60 +9,67 @@ module FlowChat
       assert_equal({}, ChoiceAliasBuilder.build(choices, generated_ids, nil))
     end
 
-    def test_short_label_is_not_aliased_because_it_already_equals_its_id
+    # "Alpha" is short and unique, so FlowChat::ChoiceTitles does not prefix
+    # it; its bare title is then identical to its own generated id, which is
+    # exactly the case ChoiceAliasBuilder skips as pointless - the id map
+    # already resolves it.
+    def test_short_unique_label_is_not_aliased_because_its_title_equals_its_own_id
       choices = {"a" => "Alpha"}
       generated_ids = {"a" => "Alpha"}
 
       assert_equal({}, ChoiceAliasBuilder.build(choices, generated_ids, 20))
     end
 
-    def test_truncated_label_is_aliased_to_its_choice_key
+    def test_long_label_is_aliased_to_its_numbered_truncated_title
       long_label = "A label that is definitely longer than twenty chars"
       choices = {"a" => long_label}
       generated_ids = {"a" => long_label}
 
       aliases = ChoiceAliasBuilder.build(choices, generated_ids, 20)
 
-      assert_equal({"A label that is d..." => "a"}, aliases)
+      assert_equal({"1. A label that i..." => "a"}, aliases)
     end
 
-    # Two different labels truncating to the same displayed string must not
-    # alias either: a truncated reply could be typed by a user looking at
-    # either choice, and there is no way to tell which one they meant.
-    def test_colliding_truncated_labels_alias_neither
-      choices = {
-        "a" => "A label that is definitely one thing",
-        "b" => "A label that is definitely another"
-      }
-      generated_ids = {
-        "a" => choices["a"],
-        "b" => choices["b"]
-      }
+    def test_position_is_read_from_enumeration_order_not_from_the_choice_key
+      long_label = "A label that is definitely longer than twenty chars"
+      choices = {"z" => long_label, "a" => "Beta"}
+      generated_ids = {"z" => long_label, "a" => "Beta"}
 
       aliases = ChoiceAliasBuilder.build(choices, generated_ids, 20)
 
-      assert_empty aliases
+      assert_equal({"1. A label that i..." => "z", "2. Beta" => "a"}, aliases)
     end
 
-    # A truncated label must not steal a string another choice already owns
-    # as its generated id, even though it is a singleton among the truncated
-    # candidates: typing that string is ambiguous between "the id" and "the
-    # alias". This mirrors the real duplicate-label case documented on the
-    # WhatsApp mapper: two choices labelled "Accept" get ids "Accept" and
-    # "Accept <hash>", but both still display "Accept" once rendered.
-    def test_truncated_label_colliding_with_another_choices_id_is_not_aliased
+    # This is the case a1d08a4 could not alias for either choice: both
+    # labels truncate to the same "Transfer to sa..." at a 20-char cap, so
+    # the old collision-dropping builder registered neither. FlowChat::
+    # ChoiceTitles now prefixes the whole set, making the two titles
+    # distinct by construction, so both are aliased.
+    def test_labels_that_would_collide_without_a_prefix_both_resolve
       choices = {
-        "special" => "Accept",
-        "other" => "Accept"
+        "savings" => "Transfer to savings account",
+        "salary" => "Transfer to salary account"
       }
-      generated_ids = {
-        "special" => "Accept",
-        "other" => "Accept a1b"
-      }
+      generated_ids = {"savings" => choices["savings"], "salary" => choices["salary"]}
 
       aliases = ChoiceAliasBuilder.build(choices, generated_ids, 20)
 
-      assert_empty aliases
+      assert_equal(
+        {"1. Transfer to sa..." => "savings", "2. Transfer to sa..." => "salary"},
+        aliases
+      )
+    end
+
+    # Two choices sharing a label outright, with no truncation involved:
+    # FlowChat::ChoiceTitles prefixes the set for this too, so each alias
+    # still identifies exactly one choice.
+    def test_duplicate_labels_are_both_aliased_to_their_own_distinct_key
+      choices = {"yes" => "Accept", "no" => "Accept"}
+      generated_ids = {"yes" => "Accept", "no" => "Accept a1b"}
+
+      aliases = ChoiceAliasBuilder.build(choices, generated_ids, 20)
+
+      assert_equal({"1. Accept" => "yes", "2. Accept" => "no"}, aliases)
     end
   end
 end

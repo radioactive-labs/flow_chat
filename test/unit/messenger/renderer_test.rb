@@ -21,14 +21,30 @@ class MessengerRendererTest < Minitest::Test
     assert_equal :quick_replies, result[0]
     assert_equal 13, result[2][:quick_replies].length
     assert_equal "text", result[2][:quick_replies][0][:content_type]
+    # These titles are short and distinct, so FlowChat::ChoiceTitles does
+    # not prefix them.
     assert_equal "Option 1", result[2][:quick_replies][0][:title]
     assert_equal "k1", result[2][:quick_replies][0][:payload]
+  end
+
+  # Two choices sharing a label is ambiguous with no truncation involved at
+  # all, and it is the case that exercises position coming from enumeration
+  # order rather than from the choice key: "z" is enumerated first, so it
+  # gets "1.", even though "a" would sort first by key.
+  def test_quick_reply_titles_are_numbered_by_position_not_by_key
+    choices = {"z" => "Accept", "a" => "Accept"}
+
+    result = render("Pick", choices: choices)
+
+    assert_equal "1. Accept", result[2][:quick_replies][0][:title]
+    assert_equal "2. Accept", result[2][:quick_replies][1][:title]
   end
 
   def test_quick_reply_titles_truncate_at_twenty
     result = render("Pick", choices: {"k" => "A title that is definitely longer than twenty"})
 
     assert_equal 20, result[2][:quick_replies][0][:title].length
+    assert_equal "1. A title that i...", result[2][:quick_replies][0][:title]
   end
 
   def test_carousel_between_fourteen_and_thirty
@@ -41,6 +57,33 @@ class MessengerRendererTest < Minitest::Test
     assert_equal 3, result[2][:elements][0][:buttons].length
     assert_equal "postback", result[2][:elements][0][:buttons][0][:type]
     assert_equal "k1", result[2][:elements][0][:buttons][0][:payload]
+    # These titles are short and distinct, so FlowChat::ChoiceTitles does
+    # not prefix them.
+    assert_equal "Option 1", result[2][:elements][0][:buttons][0][:title]
+  end
+
+  # Two choices can share a label without either being truncated, and they
+  # can do it across elements: the 1st and 14th options are in different
+  # elements (the 1st and 5th), so nothing within either element's own
+  # slice looks duplicated. FlowChat::ChoiceTitles.build runs on the whole
+  # `choices` hash before build_carousel slices it, so this is still caught
+  # and the whole set gets numbered - if the ambiguity check instead ran
+  # per slice, this collision would be invisible and neither title would be
+  # aliasable.
+  def test_carousel_ambiguity_is_detected_across_element_slices
+    choices = {"first" => "Foo"}.merge((2..13).to_h { |i| ["k#{i}", "Option #{i}"] }).merge("last" => "Foo")
+
+    result = render("Pick one", choices: choices)
+
+    first_element = result[2][:elements].first
+    last_element = result[2][:elements].last
+
+    assert_equal "1. Foo", first_element[:buttons].first[:title]
+    # Position numbers the option across the whole choice set, not within
+    # its element: the 14th option is the 2nd button of the 5th element,
+    # and it must still read "14.", continuing from the 13th option in the
+    # element before it, not restarting at "2." within its own element.
+    assert_equal "14. Foo", last_element[:buttons].last[:title]
   end
 
   def test_carousel_never_exceeds_ten_elements
