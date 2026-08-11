@@ -163,7 +163,15 @@ module FlowChat
 
       def handle_message(context, entry, event)
         account_id = entry["id"]
-        unless @config.account_ids.map(&:to_s).include?(account_id.to_s)
+
+        # Skipped in simulator mode rather than requiring the simulator to
+        # send an id that matches a real configuration: the simulator's
+        # whole point is running a turn with no live credentials at hand.
+        # Safe to skip, not a hole for real traffic, because
+        # context["simulator_mode"] is only ever true once simulate? has
+        # already checked the signed simulator cookie, above in
+        # handle_webhook.
+        unless context["simulator_mode"] || @config.account_ids.map(&:to_s).include?(account_id.to_s)
           FlowChat.logger.warn { "#{log_tag}: Webhook for account '#{account_id}' but configured for #{@config.account_ids.inspect} - rejecting" }
           return :rejected
         end

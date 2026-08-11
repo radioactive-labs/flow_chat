@@ -202,8 +202,15 @@ module FlowChat
           business_phone_number = value.dig("metadata", "display_phone_number")
           business_phone_number_id = value.dig("metadata", "phone_number_id")
 
-          # Validate that webhook is for our configured phone number
-          if business_phone_number_id != @config.phone_number_id
+          # Validate that webhook is for our configured phone number. Skipped
+          # in simulator mode rather than requiring the simulator to send an
+          # id that matches a real configuration: the simulator's whole
+          # point is running a turn with no live credentials at hand. Safe
+          # to skip, not a hole for real traffic, because
+          # context["simulator_mode"] is only ever true once simulate? has
+          # already checked the signed simulator cookie, above in
+          # handle_webhook.
+          if !context["simulator_mode"] && business_phone_number_id != @config.phone_number_id
             FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
             return :rejected
           end

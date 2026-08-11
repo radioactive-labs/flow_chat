@@ -139,6 +139,33 @@ class MessagingGatewayTest < Minitest::Test
     assert_equal :forbidden, context.controller.last_head_status
   end
 
+  # The simulator's whole point is completing a turn with no live
+  # credentials at hand, so it cannot be expected to send an entry.id that
+  # matches a real configuration.
+  def test_simulator_mode_completes_a_turn_despite_a_mismatched_account_id
+    with_simulator_secret do
+      context = simulator_context("not_the_configured_account", cookie: FlowChat::Security.simulator_cookie)
+
+      @gateway.call(context)
+
+      assert_equal "Hi", context.input
+      assert_equal "simulator", context.controller.last_render[:json][:mode]
+    end
+  end
+
+  # The account check is skipped only once simulate? has already checked the
+  # signed cookie - without one, the simulator_mode param alone changes
+  # nothing, so a real mismatch is still rejected.
+  def test_simulator_mode_param_without_a_valid_cookie_is_still_rejected
+    with_simulator_secret do
+      context = simulator_context("not_the_configured_account", cookie: nil)
+
+      @gateway.call(context)
+
+      assert_equal :forbidden, context.controller.last_head_status
+    end
+  end
+
   def test_session_identifier_defaults_to_user_id
     middleware = FlowChat::Session::Middleware.allocate
     context = FlowChat::Context.new
@@ -182,6 +209,27 @@ class MessagingGatewayTest < Minitest::Test
   end
 
   private
+
+  def with_simulator_secret
+    original = FlowChat::Config.simulator_secret
+    FlowChat::Config.simulator_secret = "test_simulator_secret"
+    yield
+  ensure
+    FlowChat::Config.simulator_secret = original
+  end
+
+  def simulator_context(account_id, cookie:)
+    context = build_messaging_context({
+      "object" => "page",
+      "simulator_mode" => true,
+      "entry" => [{
+        "id" => account_id,
+        "messaging" => [{"sender" => {"id" => "psid_1"}, "recipient" => {"id" => account_id}, "message" => {"mid" => "m", "text" => "Hi"}}]
+      }]
+    }, cookies: cookie ? {FlowChat::Security::SIMULATOR_COOKIE_NAME => cookie} : {})
+    context["enable_simulator"] = true
+    context
+  end
 
   def messaging_payload(event)
     {

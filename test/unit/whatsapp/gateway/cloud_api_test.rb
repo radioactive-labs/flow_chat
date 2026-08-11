@@ -278,6 +278,64 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_nil context.input
   end
 
+  # --- Simulator mode ----------------------------------------------------
+  #
+  # The simulator's whole point is completing a turn with no live
+  # credentials at hand, so it cannot be expected to send a phone_number_id
+  # that matches a real configuration.
+
+  def test_a_mismatched_phone_number_id_is_rejected_outside_simulator_mode
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.mismatch").tap { |p|
+        p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+      }
+    )
+
+    @gateway.call(context)
+
+    assert_equal :forbidden, context.controller.last_head_status
+  end
+
+  def test_simulator_mode_completes_a_turn_despite_a_mismatched_phone_number_id
+    with_simulator_secret do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.sim").tap { |p|
+          p["simulator_mode"] = true
+          p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+        },
+        cookies: {FlowChat::Security::SIMULATOR_COOKIE_NAME => FlowChat::Security.simulator_cookie}
+      )
+      context["enable_simulator"] = true
+
+      @gateway.call(context)
+
+      assert_equal "Hello", context.input
+      assert_equal "simulator", context.controller.last_render[:json][:mode]
+    end
+  end
+
+  # The account check is skipped only once simulate? has already checked the
+  # signed cookie - without one, simulator_mode param alone changes nothing.
+  def test_simulator_mode_param_without_a_valid_cookie_is_still_rejected
+    with_simulator_secret do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.nocookie").tap { |p|
+          p["simulator_mode"] = true
+          p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+        }
+        # No simulator cookie set.
+      )
+      context["enable_simulator"] = true
+
+      @gateway.call(context)
+
+      assert_equal :forbidden, context.controller.last_head_status
+    end
+  end
+
   def test_bad_request_handling
     context = create_context_with_request(method: :put)
 
@@ -890,6 +948,14 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
   end
 
   private
+
+  def with_simulator_secret
+    original = FlowChat::Config.simulator_secret
+    FlowChat::Config.simulator_secret = "test_simulator_secret"
+    yield
+  ensure
+    FlowChat::Config.simulator_secret = original
+  end
 
   # Captures at info level on purpose: a message logged at debug would not appear,
   # which is the regression this guards.
