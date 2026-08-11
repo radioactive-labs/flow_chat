@@ -62,8 +62,25 @@ module FlowChat
             handle_choice_input
           end
 
-          # Clear choice mapping state for new flows
-          clear_choice_state_if_needed
+          # The maps belong to exactly one screen: this turn's, if it had a
+          # resolvable answer, or one that already fell out of use otherwise.
+          # Either way nothing here is still owed to the next screen, so they
+          # are cleared unconditionally rather than asked whether they still
+          # look "live" - create_id_mapping immediately below repopulates
+          # them whenever the app actually returns choices.
+          #
+          # An earlier version asked should_clear_for_new_flow? that question
+          # after handle_choice_input had already rewritten @context.input to
+          # the *resolved* value, which can equal one of the map's own keys
+          # (an Array choice's key is its label, and IdGenerator can
+          # normalize a label to that same string), so the check answered
+          # "still live" about a value that was never a fresh reply. That let
+          # the maps survive into a free-text screen and reinterpret a typed
+          # answer there as the previous menu's choice. This was fixed once
+          # here in Task 6 and once for Messenger in Task 13; both fixes had
+          # the same shape and the same blind spot, which is why the guard is
+          # gone rather than patched a third time.
+          clear_choice_state
 
           # Call the app (executor -> flow)
           type, prompt, choices, media = @app.call(context)
@@ -213,33 +230,10 @@ module FlowChat
           @session.delete("whatsapp.position_mapping")
         end
 
-        def clear_choice_state_if_needed
-          # Clear choice state if this is a new flow (no input or fresh start).
-          # All three maps are cleared together: a screen with no choices
-          # never calls create_id_mapping, so a stale position (or id, or
-          # alias) map left behind here would go on hijacking plain numeric
-          # answers, or replies that happen to match a stale alias, on later
-          # free-text screens.
-          if @context.input.blank? || should_clear_for_new_flow?
-            clear_choice_mapping
-            clear_alias_mapping
-            clear_position_mapping
-          end
-        end
-
-        def should_clear_for_new_flow?
-          # Clear mapping if this input doesn't match any stored mapping
-          # This indicates we're in a new flow step
-          choice_mapping = get_choice_mapping
-          alias_mapping = get_alias_mapping
-          position_mapping = get_position_mapping
-          return false if choice_mapping.empty? && alias_mapping.empty? && position_mapping.empty?
-
-          # If input is present but doesn't match any mapping, we're in a new flow
-          @context.input.present? &&
-            !choice_mapping.key?(@context.input.to_s) &&
-            !alias_mapping.key?(@context.input.to_s) &&
-            !position_mapping.key?(@context.input.to_s)
+        def clear_choice_state
+          clear_choice_mapping
+          clear_alias_mapping
+          clear_position_mapping
         end
       end
     end

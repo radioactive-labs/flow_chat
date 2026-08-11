@@ -28,15 +28,25 @@ module FlowChat
 
           handle_choice_input if intercept?
 
-          # Clear stale mapping state for a new flow step. All three maps are
-          # cleared together: create_mappings only runs when a screen HAS
-          # choices, so a screen without them clears nothing unless clearing
-          # is explicit here. Leaving one map behind would let it hijack a
-          # later turn, e.g. a position map surviving a numbered menu
-          # rewriting a typed "3" on the next free-text screen into that
-          # menu's third choice key. This was a real bug in the WhatsApp
-          # mapper, found and fixed in Task 6.
-          clear_mappings_if_needed
+          # The maps belong to exactly one screen: this turn's, if it had a
+          # resolvable answer, or one that already fell out of use otherwise.
+          # Either way nothing here is still owed to the next screen, so they
+          # are cleared unconditionally rather than asked whether they still
+          # look "live" - create_mappings immediately below repopulates them
+          # whenever the app actually returns choices.
+          #
+          # An earlier version asked stale_mappings? that question after
+          # handle_choice_input had already rewritten @context.input to the
+          # *resolved* value, which can equal one of the map's own keys (an
+          # Array choice's key is its label, and IdGenerator can normalize a
+          # label to that same string), so the check answered "still live"
+          # about a value that was never a fresh reply. That let the maps
+          # survive into a free-text screen and reinterpret a typed answer
+          # there as the previous menu's choice. This was fixed once for
+          # WhatsApp in Task 6 and once here in Task 13; both fixes had the
+          # same shape and the same blind spot, which is why the guard is
+          # gone rather than patched a third time.
+          clear_mappings
 
           type, prompt, choices, media = @app.call(context)
 
@@ -105,25 +115,10 @@ module FlowChat
           @context.input = original
         end
 
-        def clear_mappings_if_needed
-          if @context.input.blank? || stale_mappings?
-            @session.delete(id_key)
-            @session.delete(alias_key)
-            @session.delete(position_key)
-          end
-        end
-
-        # True once the current input no longer names a live mapping entry,
-        # which is the signal that the flow has moved past the screen the
-        # mappings were built for.
-        def stale_mappings?
-          id_mapping = get_id_mapping
-          alias_mapping = get_alias_mapping
-          position_mapping = get_position_mapping
-          return false if id_mapping.empty? && alias_mapping.empty? && position_mapping.empty?
-
-          input = @context.input.to_s
-          input.present? && !id_mapping.key?(input) && !alias_mapping.key?(input) && !position_mapping.key?(input)
+        def clear_mappings
+          @session.delete(id_key)
+          @session.delete(alias_key)
+          @session.delete(position_key)
         end
 
         def create_mappings(choices)
