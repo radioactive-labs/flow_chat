@@ -40,25 +40,46 @@ Equivalent environment variables: `INSTAGRAM_LOGIN`, `INSTAGRAM_ACCESS_TOKEN`, `
 
 ### Which app id and secret, on the Instagram Login path
 
-Meta issues the Instagram product its own app id and app secret, separate from the
-app's, and shows them on the Instagram product's own settings page rather than under
-App settings. On the `instagram` login path, `app_id` and `app_secret` must be the
-Instagram product's pair, not the app's.
+**This is not settled, and the consequences of getting it wrong are quiet, so read
+this before going live on the Instagram Login path.**
 
-Both matter, for different reasons, and getting either wrong fails quietly:
+Meta's App Dashboard shows the Instagram product its own app id and app secret, on
+the Instagram product's settings page rather than under App settings. So there are
+two candidate pairs for `app_id` and `app_secret` on this path: the app's, and the
+Instagram product's.
 
-- `app_secret` verifies `X-Hub-Signature-256`. An Instagram Login delivery is signed
-  with the Instagram product's secret, so the app's secret makes every delivery look
+What signs an Instagram Login webhook is unconfirmed. Meta's Instagram webhooks page
+says to generate the signature with "your app's App Secret" from App settings, and
+names no separate Instagram secret. Against that, the Instagram product plainly has
+its own secret, and it would be odd for it to exist and sign nothing. Neither the
+documentation nor any delivery we have seen settles it.
+
+Both values fail quietly if wrong, in different ways:
+
+- A wrong `app_secret` makes every delivery fail `X-Hub-Signature-256` and look
   forged. The gateway drops it and answers 200, so the symptom is a bot that receives
-  nothing while Meta reports successful deliveries, with one warning line in the log.
-- `app_id` classifies echoes. Sends on this path go through the Instagram app, so an
-  echo of your own message carries the Instagram app id. With the app's id configured
-  instead, your own sends come back classified `:other_app` rather than `:self`, and
-  an application that stands its flow down when another sender appears will stand
-  down on its own replies.
+  nothing while Meta's dashboard reports successful deliveries. `Meta::MessagingGateway`
+  logs a warning naming the failure, so the log tells you.
+- A wrong `app_id` misclassifies echoes. `echo_origin` compares an echo's `app_id`
+  against this one, so if sends on this path carry the Instagram app id and the app's
+  is configured, your own replies come back as `:other_app` rather than `:self`. An
+  application that stands its flow down when another sender appears would then stand
+  down on its own messages. Whether sends on this path carry the Instagram app id is
+  also unconfirmed.
 
-On the `facebook` login path both are the app's own pair, as they are for Messenger
-and WhatsApp.
+**How to settle it:** send one message and let one delivery arrive. If deliveries drop
+with a signature warning, the other secret is the right one. If your own sends echo
+back as `:other_app`, the other app id is.
+
+**For one endpoint serving several accounts, do not pick.** The signature has to be
+checked before the delivery says whose it is, so there is no configuration to read a
+secret from yet. `FlowChat::Meta::Signature.valid?(body, header, secret)` takes the
+secret as an argument for that reason: a caller can try each secret an account of
+theirs could legitimately have used, and accept the delivery if any matches. That is
+correct whichever secret Meta actually signs with, which is why it is the better
+answer than choosing.
+
+On the `facebook` login path, use the app's own pair, as for Messenger and WhatsApp.
 
 One endpoint serving several accounts has a harder version of this problem: the
 signature has to be checked before the delivery says whose it is, so there is no
