@@ -83,6 +83,23 @@ class InstagramClientTest < Minitest::Test
     assert_requested(:post, @config.messages_url, times: 2)
   end
 
+  # A single token with no whitespace inside it (a long URL, most often)
+  # used to ride through whole, over the 1000-byte cap, since the
+  # whitespace splitter has no smaller boundary inside it to break on.
+  # Multibyte characters throughout, so a hard split that cut on a byte
+  # offset instead of a character boundary would produce invalid UTF-8.
+  def test_a_single_oversized_multibyte_token_is_hard_split_without_corrupting_utf8
+    long_token = "é" * 750 # one word, 1500 bytes, over the 1000 byte cap
+
+    @client.send_message("igsid_1", long_token)
+
+    cap = FlowChat::Config.instagram.max_text_length
+    assert_requested(:post, @config.messages_url, times: 2) do |req|
+      text = JSON.parse(req.body)["message"]["text"]
+      text.bytesize <= cap && text.valid_encoding?
+    end
+  end
+
   def test_failed_request_returns_nil
     WebMock.reset!
     stub_request(:post, @config.messages_url).to_return(status: 400, body: '{"error":{"message":"bad"}}')

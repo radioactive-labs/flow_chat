@@ -144,6 +144,13 @@ module FlowChat
 
       # Splits on whitespace so a word is never cut in half. Measured with the
       # platform's own unit, which is bytes on Instagram and characters here.
+      #
+      # A single piece that is itself too large to fit in one chunk (a long
+      # URL, most often) cannot be handled by that whitespace splitting
+      # alone: with no smaller boundary inside it to break on, it would
+      # otherwise ride through untouched as one chunk over the cap, exactly
+      # the case this method exists to prevent. #hard_split below breaks it
+      # up directly.
       def split_text(text)
         limit = limits.max_text_length
         return [text.to_s] if measure(text.to_s) <= limit
@@ -152,7 +159,12 @@ module FlowChat
         current = ""
 
         text.to_s.split(/(\s+)/).each do |piece|
-          if measure(current + piece) > limit && current.present?
+          if measure(piece) > limit
+            chunks << current.strip if current.present?
+            oversized_chunks = hard_split(piece.strip, limit)
+            chunks.concat(oversized_chunks[0..-2])
+            current = oversized_chunks.last.to_s
+          elsif measure(current + piece) > limit && current.present?
             chunks << current.strip
             current = piece.lstrip
           else
@@ -161,6 +173,29 @@ module FlowChat
         end
 
         chunks << current.strip if current.strip.present?
+        chunks
+      end
+
+      # Breaks a single oversized piece into cap-sized chunks one character
+      # at a time, so the cut always lands on a character boundary. Never a
+      # byte offset: on Instagram, where the cap is measured in bytes, a
+      # multibyte character sliced by byte position would leave one half a
+      # valid UTF-8 sequence and the other invalid, and #measure has no way
+      # to tell that apart from a character that legitimately does not fit.
+      def hard_split(piece, limit)
+        chunks = []
+        current = ""
+
+        piece.each_char do |char|
+          if current.present? && measure(current + char) > limit
+            chunks << current
+            current = char
+          else
+            current += char
+          end
+        end
+
+        chunks << current if current.present?
         chunks
       end
 

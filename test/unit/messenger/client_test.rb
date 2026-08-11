@@ -60,6 +60,20 @@ class MessengerClientTest < Minitest::Test
     assert_requested(:post, @config.messages_url, times: 2)
   end
 
+  # A single token with no whitespace inside it to split on (a long URL,
+  # most often) used to ride through whole, over cap, since the whitespace
+  # splitter has no smaller boundary to break it on.
+  def test_a_single_oversized_token_is_hard_split
+    long_token = "a" * 2500 # one word, no whitespace at all, over the 2000 char cap
+
+    @client.send_message("psid_1", long_token)
+
+    cap = FlowChat::Config.messenger.max_text_length
+    assert_requested(:post, @config.messages_url, times: 2) do |req|
+      JSON.parse(req.body)["message"]["text"].length <= cap
+    end
+  end
+
   def test_failed_request_returns_nil
     WebMock.reset!
     stub_request(:post, @config.messages_url).to_return(status: 400, body: '{"error":{"message":"bad"}}')
