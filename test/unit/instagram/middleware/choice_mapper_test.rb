@@ -42,6 +42,42 @@ module FlowChat
           @app.verify
         end
 
+        # Same alias mechanism as Messenger's mapper (Instagram inherits it
+        # unchanged), but exercised here on the quick-reply rung, which on
+        # Instagram is reachable with as few as two choices since numbering
+        # is always on.
+        def test_typed_truncated_quick_reply_title_resolves
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label, "b" => "Beta"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..." # 20 chars, as Instagram renders it on a quick reply
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+          @app.verify
+        end
+
+        # Two labels that truncate to the same displayed string must not
+        # alias either, on Instagram exactly as on Messenger.
+        def test_colliding_truncated_titles_are_not_aliased
+          choices = {
+            "a" => "A label that is definitely one thing",
+            "b" => "A label that is definitely another"
+          }
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_empty @session.get("instagram.alias_mapping"),
+            "colliding truncated titles must not be aliased"
+          @app.verify
+        end
+
         def test_typed_number_resolves_on_the_carousel_rung
           choices = (1..14).to_h { |i| ["k#{i}", "Option #{i}"] }
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]

@@ -213,6 +213,120 @@ module FlowChat
           assert_equal "k1", @context.input, "the id for the label \"5\" must win over position 5"
         end
 
+        # The renderer truncates a button title to 20 chars, so a user who
+        # types exactly what they see (rather than the full, untruncated
+        # label the id was generated from) must still resolve.
+        def test_typed_truncated_button_title_resolves
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label, "b" => "Beta"}
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..." # 20 chars, as WhatsApp renders it on a button
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+          @app.verify
+        end
+
+        # Above 3 choices WhatsApp renders a list instead of buttons, with a
+        # 24 char row title cap instead of 20.
+        def test_typed_truncated_list_row_title_resolves
+          long_label = "A label that is definitely longer than twenty-four chars"
+          choices = {"a" => long_label}.merge((2..4).to_h { |i| ["k#{i}", "Option #{i}"] })
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "A label that is defin..." # 24 chars, as WhatsApp renders it in a list row
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+          @app.verify
+        end
+
+        # Two labels that truncate to the same displayed string must not
+        # alias either: there is no way to tell which one the user meant.
+        def test_colliding_truncated_titles_are_not_aliased
+          choices = {
+            "a" => "A label that is definitely one thing",
+            "b" => "A label that is definitely another"
+          }
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_empty @session.get("whatsapp.alias_mapping"),
+            "colliding truncated titles must not be aliased"
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "A label that is d...", @context.input,
+            "an ambiguous truncated title must pass through unresolved"
+          @app.verify
+        end
+
+        # Precedence must be id, then alias, then position, no matter which
+        # maps happen to hold the same key. Set up all three directly so the
+        # test isolates resolution order from how each map gets populated.
+        def test_generated_ids_win_over_aliases
+          @session.set("whatsapp.choice_mapping", {"tied" => "from_id"})
+          @session.set("whatsapp.alias_mapping", {"tied" => "from_alias"})
+          @session.set("whatsapp.position_mapping", {"tied" => "from_position"})
+          @context.input = "tied"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "from_id", @context.input
+          @app.verify
+        end
+
+        # Mirrors test_stale_position_map_does_not_hijack_a_later_free_text_digit:
+        # resolving the alias rewrites @context.input to the choice key, which
+        # no longer matches any stored map, so clear_mappings_if_needed clears
+        # everything (including the alias map) before the next turn.
+        def test_stale_alias_map_does_not_hijack_a_later_free_text_reply
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label, "b" => "Beta"}
+          @app.expect :call, [:text, "response", choices, nil], [@context]
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:prompt, "How many bags?", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "A label that is d...", @context.input,
+            "a stale alias mapping must not rewrite free text on a later screen"
+          @app.verify
+        end
+
+        def test_aliases_win_over_positions
+          @session.set("whatsapp.alias_mapping", {"tied" => "from_alias"})
+          @session.set("whatsapp.position_mapping", {"tied" => "from_position"})
+          @context.input = "tied"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "from_alias", @context.input
+          @app.verify
+        end
+
         # create_id_mapping only runs when the next screen has choices. A screen
         # with none (a plain prompt.ask) never touches the position map, so a
         # position map left over from an earlier numbered rung must be cleared

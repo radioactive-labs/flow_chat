@@ -3,6 +3,7 @@ module FlowChat
     module Middleware
       class ChoiceMapper < FlowChat::Messenger::Middleware::ChoiceMapper
         ID_KEY = "instagram.choice_mapping"
+        ALIAS_KEY = "instagram.alias_mapping"
         POSITION_KEY = "instagram.position_mapping"
 
         private

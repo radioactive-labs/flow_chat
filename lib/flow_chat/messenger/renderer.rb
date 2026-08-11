@@ -64,7 +64,7 @@ module FlowChat
         replies = choices.map do |key, label|
           {
             content_type: "text",
-            title: truncate_text(label.to_s, limits.max_quick_reply_title),
+            title: FlowChat::TextTruncator.truncate(label.to_s, limits.max_quick_reply_title),
             payload: key.to_s
           }
         end
@@ -80,11 +80,11 @@ module FlowChat
           last = first + slice.length - 1
 
           {
-            title: truncate_text("Options #{first} to #{last}", limits.max_element_title),
+            title: FlowChat::TextTruncator.truncate("Options #{first} to #{last}", limits.max_element_title),
             buttons: slice.map do |key, label|
               {
                 type: "postback",
-                title: truncate_text(label.to_s, limits.max_button_title),
+                title: FlowChat::TextTruncator.truncate(label.to_s, limits.max_button_title),
                 payload: key.to_s
               }
             end
@@ -101,11 +101,6 @@ module FlowChat
         options[:attachment_id] = media[:id] if media[:id]
 
         [:attachment, to_plain_text(message), options]
-      end
-
-      def truncate_text(text, length)
-        return text if text.length <= length
-        text[0, length - 3] + "..."
       end
     end
   end

@@ -32,6 +32,14 @@ module FlowChat
       #   # User clicks second, WhatsApp sends: "Accept 3a4"
       #   # Middleware maps back to: "no"
       #
+      # A button or list row also truncates a long label for display (see
+      # FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH /
+      # LIST_ROW_TITLE_LENGTH), so a user who types exactly what they see
+      # would otherwise fail to match the generated id, which was built from
+      # the full label. This middleware additionally registers that
+      # truncated, on-screen form as an alias for the same choice key, via
+      # FlowChat::ChoiceAliasBuilder, whenever doing so is unambiguous.
+      #
       class ChoiceMapper
         def initialize(app)
           @app = app
@@ -67,12 +75,18 @@ module FlowChat
 
         private
 
-        # Ids are resolved before positions because the two key spaces can
-        # overlap: IdGenerator#normalize_label keeps \w, which includes digits,
-        # so a choice labelled "1" generates the id "1".
+        # Ids are resolved first, then aliases, then positions. Ids can
+        # overlap with positions because IdGenerator#normalize_label keeps
+        # \w, which includes digits, so a choice labelled "1" generates the
+        # id "1". Aliases sit between them because they are only ever
+        # registered when they differ from every generated id (see
+        # FlowChat::ChoiceAliasBuilder), so they cannot outrank one, but they
+        # must still beat a position: a typed alias is a match on what the
+        # user actually saw, while a position is a fallback guess from a
+        # digit.
         def resolved_choice
           input = @context.input.to_s
-          get_choice_mapping[input] || get_position_mapping[input]
+          get_choice_mapping[input] || get_alias_mapping[input] || get_position_mapping[input]
         end
 
         def intercept?
@@ -100,16 +114,20 @@ module FlowChat
           id_generator = FlowChat::IdGenerator.new
           id_choices = {}
           choice_mapping = {}
+          generated_ids = {}
 
           choices.each do |key, value|
             # Generate WhatsApp-safe ID from the label
             generated_id = id_generator.generate_id(value.to_s)
             id_choices[generated_id] = value
             choice_mapping[generated_id] = key.to_s
+            generated_ids[key.to_s] = generated_id
           end
 
           store_choice_mapping(choice_mapping)
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Created mapping: #{choice_mapping}" }
+
+          store_alias_mapping(FlowChat::ChoiceAliasBuilder.build(choices, generated_ids, display_title_cap(choices.length)))
 
           # Above the row cap the renderer numbers the options in the body, so
           # the reply is a digit rather than a row id.
@@ -120,6 +138,25 @@ module FlowChat
           end
 
           id_choices
+        end
+
+        # The title cap the renderer will use for these choices, or nil above
+        # the list cap, where the renderer falls back to a numbered body and
+        # shows the full label (no truncation, so no alias is needed).
+        #
+        # This repeats the count comparison build_interactive_message makes,
+        # because the mapper runs before the renderer and has no way to ask it
+        # which rung it chose. WhatsApp's ladder already lives here rather
+        # than in FlowChat::Meta::ChoiceLadder (see create_id_mapping's
+        # existing MAX_LIST_ROWS comparison above), so this is one more count
+        # comparison alongside one already present, not a new kind of
+        # duplication.
+        def display_title_cap(count)
+          if count <= FlowChat::Whatsapp::Renderer::MAX_BUTTONS
+            FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH
+          elsif count <= FlowChat::Whatsapp::Renderer::MAX_LIST_ROWS
+            FlowChat::Whatsapp::Renderer::LIST_ROW_TITLE_LENGTH
+          end
         end
 
         def store_choice_mapping(mapping)
@@ -134,6 +171,19 @@ module FlowChat
         def clear_choice_mapping
           @session.delete("whatsapp.choice_mapping")
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Cleared choice mapping" }
+        end
+
+        def store_alias_mapping(mapping)
+          @session.set("whatsapp.alias_mapping", mapping)
+          FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Stored alias mapping: #{mapping}" }
+        end
+
+        def get_alias_mapping
+          @session.get("whatsapp.alias_mapping") || {}
+        end
+
+        def clear_alias_mapping
+          @session.delete("whatsapp.alias_mapping")
         end
 
         def store_position_mapping(mapping)
@@ -151,11 +201,14 @@ module FlowChat
 
         def clear_choice_state_if_needed
           # Clear choice state if this is a new flow (no input or fresh start).
-          # Both maps are cleared together: a screen with no choices never calls
-          # create_id_mapping, so a stale position (or id) map left behind here
-          # would go on hijacking plain numeric answers on later free-text screens.
+          # All three maps are cleared together: a screen with no choices
+          # never calls create_id_mapping, so a stale position (or id, or
+          # alias) map left behind here would go on hijacking plain numeric
+          # answers, or replies that happen to match a stale alias, on later
+          # free-text screens.
           if @context.input.blank? || should_clear_for_new_flow?
             clear_choice_mapping
+            clear_alias_mapping
             clear_position_mapping
           end
         end
@@ -164,12 +217,14 @@ module FlowChat
           # Clear mapping if this input doesn't match any stored mapping
           # This indicates we're in a new flow step
           choice_mapping = get_choice_mapping
+          alias_mapping = get_alias_mapping
           position_mapping = get_position_mapping
-          return false if choice_mapping.empty? && position_mapping.empty?
+          return false if choice_mapping.empty? && alias_mapping.empty? && position_mapping.empty?
 
-          # If input is present but doesn't match either mapping, we're in a new flow
+          # If input is present but doesn't match any mapping, we're in a new flow
           @context.input.present? &&
             !choice_mapping.key?(@context.input.to_s) &&
+            !alias_mapping.key?(@context.input.to_s) &&
             !position_mapping.key?(@context.input.to_s)
         end
       end

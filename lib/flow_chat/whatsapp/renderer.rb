@@ -9,6 +9,12 @@ module FlowChat
       MAX_LIST_ROWS = 10
       MAX_BUTTONS = 3
 
+      # WhatsApp button and list row title limits. The choice mapper reads
+      # these too, to alias the truncated title it knows this renderer will
+      # display for a given choice count.
+      BUTTON_TITLE_LENGTH = 20
+      LIST_ROW_TITLE_LENGTH = 24
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -125,7 +131,7 @@ module FlowChat
         buttons = choices.map do |key, value|
           {
             id: key.to_s,
-            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
+            title: FlowChat::TextTruncator.truncate(value.to_s, BUTTON_TITLE_LENGTH)
           }
         end
 
@@ -136,7 +142,7 @@ module FlowChat
         buttons = choices.map do |key, value|
           {
             id: key.to_s,
-            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
+            title: FlowChat::TextTruncator.truncate(value.to_s, BUTTON_TITLE_LENGTH)
           }
         end
 
@@ -182,11 +188,11 @@ module FlowChat
       def build_list_message(choices)
         items = choices.map do |key, value|
           original_text = value.to_s
-          truncated_title = truncate_text(original_text, 24)
+          truncated_title = FlowChat::TextTruncator.truncate(original_text, LIST_ROW_TITLE_LENGTH)
 
           # If title was truncated, put full text in description (up to 72 chars)
-          description = if original_text.length > 24
-            truncate_text(original_text, 72)
+          description = if original_text.length > LIST_ROW_TITLE_LENGTH
+            FlowChat::TextTruncator.truncate(original_text, 72)
           end
 
           {
@@ -206,11 +212,6 @@ module FlowChat
         numbered = choices.values.map.with_index(1) { |label, i| "#{i}. #{label}" }.join("\n")
 
         [:text, "#{formatted_message}\n\n#{numbered}", {}]
-      end
-
-      def truncate_text(text, length)
-        return text if text.length <= length
-        text[0, length - 3] + "..."
       end
 
       # Convert text to WhatsApp format

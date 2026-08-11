@@ -70,6 +70,121 @@ module FlowChat
           @app.verify
         end
 
+        # The renderer truncates a quick reply title to
+        # limits.max_quick_reply_title (20), so a user who types exactly what
+        # they see (rather than the full, untruncated label the id was
+        # generated from) must still resolve.
+        def test_typed_truncated_quick_reply_title_resolves
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label, "b" => "Beta"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..." # 20 chars, as Messenger renders it on a quick reply
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+          @app.verify
+        end
+
+        # On the carousel rung the truncation cap is limits.max_button_title
+        # (also 20), applied to each option's button rather than a quick
+        # reply.
+        def test_typed_truncated_carousel_button_title_resolves
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label}.merge((2..14).to_h { |i| ["k#{i}", "Option #{i}"] })
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+          @app.verify
+        end
+
+        # Two labels that truncate to the same displayed string must not
+        # alias either: there is no way to tell which one the user meant.
+        def test_colliding_truncated_titles_are_not_aliased
+          choices = {
+            "a" => "A label that is definitely one thing",
+            "b" => "A label that is definitely another"
+          }
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_empty @session.get("messenger.alias_mapping"),
+            "colliding truncated titles must not be aliased"
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "A label that is d...", @context.input,
+            "an ambiguous truncated title must pass through unresolved"
+          @app.verify
+        end
+
+        # Precedence must be id, then alias, then position, no matter which
+        # maps happen to hold the same key.
+        def test_generated_ids_win_over_aliases
+          @session.set("messenger.choice_mapping", {"tied" => "from_id"})
+          @session.set("messenger.alias_mapping", {"tied" => "from_alias"})
+          @session.set("messenger.position_mapping", {"tied" => "from_position"})
+          @context.input = "tied"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "from_id", @context.input
+          @app.verify
+        end
+
+        def test_aliases_win_over_positions
+          @session.set("messenger.alias_mapping", {"tied" => "from_alias"})
+          @session.set("messenger.position_mapping", {"tied" => "from_position"})
+          @context.input = "tied"
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+
+          @middleware.call(@context)
+
+          assert_equal "from_alias", @context.input
+          @app.verify
+        end
+
+        # Mirrors test_stale_maps_do_not_hijack_a_later_free_text_digit: once
+        # the alias resolves, @context.input becomes the choice key, which no
+        # longer matches any stored map, so the next call's
+        # clear_mappings_if_needed clears everything, including the alias map.
+        def test_stale_alias_map_does_not_hijack_a_later_free_text_reply
+          long_label = "A label that is definitely longer than twenty chars"
+          choices = {"a" => long_label, "b" => "Beta"}
+          @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
+          @middleware.call(@context)
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:prompt, "How many bags?", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "a", @context.input
+
+          @context.input = "A label that is d..."
+          @app.expect :call, [:text, "response", nil, nil], [@context]
+          @middleware.call(@context)
+
+          assert_equal "A label that is d...", @context.input,
+            "a stale alias mapping must not rewrite free text on a later screen"
+          @app.verify
+        end
+
         def test_no_position_map_on_the_quick_reply_rung
           choices = {"a" => "Alpha", "b" => "Beta"}
           @app.expect :call, [:prompt, "Pick", choices, nil], [@context]
