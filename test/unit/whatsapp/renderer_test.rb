@@ -350,6 +350,27 @@ class WhatsappRendererTest < Minitest::Test
     assert_nil result[2][:media][2][:caption]
   end
 
+  def test_audio_carries_no_caption
+    result = FlowChat::Whatsapp::Renderer.new(
+      "Listen to this",
+      media: {type: :audio, url: "https://example.com/clip.mp3"}
+    ).render
+
+    assert_equal :media_audio, result[0]
+    refute result[2].key?(:caption), "Meta's audio schema has no caption field"
+    assert_equal "https://example.com/clip.mp3", result[2][:url]
+  end
+
+  def test_sticker_carries_no_caption
+    result = FlowChat::Whatsapp::Renderer.new(
+      "A sticker",
+      media: {type: :sticker, url: "https://example.com/s.webp"}
+    ).render
+
+    assert_equal :media_sticker, result[0]
+    refute result[2].key?(:caption), "Meta's sticker schema has no caption field"
+  end
+
   # Meta's schema gives audio messages only id/link/voice and sticker
   # messages only id/link - neither takes a caption - so above the list cap
   # they can never merge into one message, however short the option list.

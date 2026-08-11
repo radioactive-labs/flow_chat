@@ -85,7 +85,9 @@ module FlowChat
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = caption if caption
+          # Meta's audio message schema carries id, link and voice, with no
+          # caption, so a caption here would claim a field the API does not
+          # accept. Same as stickers below.
           [:media_audio, "", options]
         when :video
           options = {}
