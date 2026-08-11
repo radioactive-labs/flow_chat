@@ -66,4 +66,18 @@ class InstagramRendererTest < Minitest::Test
 
     assert_equal "Just a message", result[1]
   end
+
+  # Inherited from Messenger::Renderer#render: media rides along on the same
+  # rung, whichever the choice count would pick anyway - Instagram just adds
+  # its own always-numbered body on top.
+  def test_media_with_choices_carries_media_and_still_numbers_the_body
+    choices = (1..5).to_h { |i| ["k#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/a.png"}
+
+    result = render("Pick one", choices: choices, media: media)
+
+    assert_equal :quick_replies, result[0]
+    assert_includes result[1], "5. Option 5"
+    assert_equal({type: :image, url: "https://example.com/a.png"}, result[2][:media])
+  end
 end

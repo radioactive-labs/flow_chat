@@ -121,4 +121,69 @@ class MessengerClientTest < Minitest::Test
       JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
     end
   end
+
+  # Media used to be silently dropped whenever choices were also present,
+  # because render() only ever built the attachment when choices were blank.
+
+  def test_media_with_a_small_choice_set_posts_media_then_quick_replies
+    calls = []
+    stub_request(:post, @config.messages_url).to_return do |req|
+      calls << JSON.parse(req.body)["message"]
+      {status: 200, body: {"message_id" => "mid.1"}.to_json}
+    end
+
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("psid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"}, media: media)
+
+    assert_equal 2, calls.length
+    assert_equal "image", calls[0]["attachment"]["type"]
+    assert_equal "https://example.com/a.png", calls[0]["attachment"]["payload"]["url"]
+    assert calls[1].key?("quick_replies")
+  end
+
+  def test_media_with_a_mid_size_choice_set_posts_media_then_carousel
+    calls = []
+    stub_request(:post, @config.messages_url).to_return do |req|
+      calls << JSON.parse(req.body)["message"]
+      {status: 200, body: {"message_id" => "mid.1"}.to_json}
+    end
+
+    choices = (1..14).to_h { |i| ["k#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("psid_1", "Pick", choices: choices, media: media)
+
+    # Media, then the carousel's own caption text, then the carousel
+    # attachment - the caption-then-attachment split is the carousel's
+    # existing behaviour, unrelated to media.
+    assert_equal 3, calls.length
+    assert_equal "image", calls[0]["attachment"]["type"]
+    assert_equal "generic", calls[2].dig("attachment", "payload", "template_type")
+  end
+
+  def test_media_above_the_carousel_cap_posts_media_then_numbered_text
+    calls = []
+    stub_request(:post, @config.messages_url).to_return do |req|
+      calls << JSON.parse(req.body)["message"]
+      {status: 200, body: {"message_id" => "mid.1"}.to_json}
+    end
+
+    choices = (1..31).to_h { |i| ["k#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("psid_1", "Pick", choices: choices, media: media)
+
+    assert_equal 2, calls.length
+    assert_equal "image", calls[0]["attachment"]["type"]
+    assert_includes calls[1]["text"], "31. Option 31"
+  end
+
+  # Every part of a media-plus-choices send is a place the tag can go
+  # missing just as easily as on a split text reply.
+  def test_media_with_choices_carries_the_tag_on_every_part
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("psid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"}, media: media, tag: "HUMAN_AGENT")
+
+    assert_requested(:post, @config.messages_url, times: 2) do |req|
+      JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
+    end
+  end
 end

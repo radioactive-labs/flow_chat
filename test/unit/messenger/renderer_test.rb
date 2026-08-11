@@ -114,4 +114,46 @@ class MessengerRendererTest < Minitest::Test
     assert_equal :image, result[2][:type]
     assert_equal "https://example.com/a.png", result[2][:url]
   end
+
+  # Media is additive: it rides along on whichever rung the choice count
+  # would render anyway, rather than changing the choice surface.
+
+  def test_media_with_a_small_choice_set_still_renders_quick_replies
+    choices = {"a" => "Alpha", "b" => "Beta"}
+    media = {type: :image, url: "https://example.com/a.png"}
+
+    result = render("Pick one", choices: choices, media: media)
+
+    assert_equal :quick_replies, result[0]
+    assert_equal 2, result[2][:quick_replies].length
+    assert_equal({type: :image, url: "https://example.com/a.png"}, result[2][:media])
+  end
+
+  def test_media_with_a_mid_size_choice_set_still_renders_a_carousel
+    choices = (1..14).to_h { |i| ["k#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/a.png"}
+
+    result = render("Pick one", choices: choices, media: media)
+
+    assert_equal :carousel, result[0]
+    assert_equal 5, result[2][:elements].length
+    assert_equal({type: :image, url: "https://example.com/a.png"}, result[2][:media])
+  end
+
+  def test_media_above_the_carousel_cap_still_renders_numbered_text
+    choices = (1..31).to_h { |i| ["k#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/a.png"}
+
+    result = render("Pick one", choices: choices, media: media)
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "31. Option 31"
+    assert_equal({type: :image, url: "https://example.com/a.png"}, result[2][:media])
+  end
+
+  def test_media_with_an_attachment_id_instead_of_url
+    result = render("Pick one", choices: {"a" => "Alpha"}, media: {type: :image, id: "att_1"})
+
+    assert_equal({type: :image, attachment_id: "att_1"}, result[2][:media])
+  end
 end

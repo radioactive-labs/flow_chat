@@ -49,7 +49,11 @@ module FlowChat
         message.present? ? to_whatsapp(message) : nil
       end
 
-      def build_media_message
+      # @param caption [String, nil] defaults to the prompt text. Pass nil when
+      #   this media is a companion sent ahead of a choice message: the prompt
+      #   is about to appear in that message's body, and a caption here would
+      #   just duplicate it.
+      def build_media_message(caption: formatted_caption)
         media_type = media[:type] || :image
         url = media[:url]
         id = media[:id]
@@ -60,26 +64,26 @@ module FlowChat
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           [:media_image, "", options]
         when :document
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           options[:filename] = filename if filename
           [:media_document, "", options]
         when :audio
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           [:media_audio, "", options]
         when :video
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           [:media_video, "", options]
         when :sticker
           options = {}
@@ -105,13 +109,30 @@ module FlowChat
         end
       end
 
+      # Media is additive: it does not change which choice surface is used.
+      # 3 or fewer choices is the one case WhatsApp can carry both in a
+      # single message (buttons with a media header), so that stays as is.
+      # Above that, there is no interactive surface left that can carry
+      # media - Meta's interactive message reference documents header.type:
+      # text for list messages; image, video and document headers are only
+      # defined for button messages - so the media goes out as its own
+      # message and the list or numbered rendering follows unchanged.
       def build_selection_message_with_media
-        # Convert array to hash with index-based keys if needed, same as build_selection_message
-        if choices.is_a?(Array)
-          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
+        choice_hash = normalized_choices
+
+        if choice_hash.length <= MAX_BUTTONS
           build_buttons_message_with_media(choice_hash)
+        else
+          type, content, options = build_interactive_message(choice_hash)
+          [type, content, options.merge(media: build_media_message(caption: nil))]
+        end
+      end
+
+      def normalized_choices
+        if choices.is_a?(Array)
+          choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
         elsif choices.is_a?(Hash)
-          build_buttons_message_with_media(choices)
+          choices
         else
           raise ArgumentError, "choices must be an Array or Hash"
         end

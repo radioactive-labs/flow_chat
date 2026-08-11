@@ -274,6 +274,78 @@ class WhatsappClientTest < Minitest::Test
   end
 
   # ============================================================================
+  # MEDIA + CHOICES TESTS
+  # ============================================================================
+
+  # 3 or fewer choices is the one case WhatsApp can carry both media and
+  # choices in a single message: this must survive as exactly one POST.
+  def test_media_with_three_or_fewer_choices_sends_a_single_message
+    stub_whatsapp_messages_api(success_response)
+    choices = {"a" => "Alpha", "b" => "Beta"}
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    assert_requested :post, whatsapp_messages_url, times: 1
+  end
+
+  # Above the button cap, WhatsApp's interactive list header cannot carry
+  # media (Meta's schema documents header.type: text only for lists), so the
+  # media has to go out as its own message before the list.
+  def test_media_above_the_button_cap_posts_media_then_list
+    calls = []
+    stub_request(:post, whatsapp_messages_url).to_return do |req|
+      body = JSON.parse(req.body)
+      calls << body["type"]
+      {status: 200, body: success_response.to_json}
+    end
+
+    choices = (1..5).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    assert_equal ["image", "interactive"], calls
+  end
+
+  def test_media_above_ten_choices_posts_media_then_numbered_text
+    calls = []
+    stub_request(:post, whatsapp_messages_url).to_return do |req|
+      body = JSON.parse(req.body)
+      calls << body["type"]
+      {status: 200, body: success_response.to_json}
+    end
+
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    assert_equal ["image", "text"], calls
+  end
+
+  # However many choices, WhatsApp never emits more than 3 reply buttons,
+  # with or without media.
+  def test_media_above_the_button_cap_never_yields_more_than_three_buttons
+    calls = []
+    stub_request(:post, whatsapp_messages_url).to_return do |req|
+      body = JSON.parse(req.body)
+      calls << body
+      {status: 200, body: success_response.to_json}
+    end
+
+    choices = (1..25).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    @client.send_message("+1234567890", "Pick one", choices: choices, media: media)
+
+    calls.each do |body|
+      buttons = body.dig("interactive", "action", "buttons")
+      assert_operator buttons.length, :<=, 3 if buttons
+    end
+  end
+
+  # ============================================================================
   # MEDIA UPLOAD TESTS
   # ============================================================================
 

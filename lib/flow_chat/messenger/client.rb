@@ -69,8 +69,15 @@ module FlowChat
       # Anything over the platform's cap is rejected whole rather than trimmed by
       # Meta, so long text goes as several messages. Only the last result is
       # returned: it carries the id of the message the user ends up looking at.
-      # Every part - every chunk of a split message - carries the same tag.
+      #
+      # Media rides in options[:media] on every rung except :attachment, where
+      # it already is the message: it goes out as its own send, ahead of the
+      # choice message, because the choice surface is rendered exactly as it
+      # would be with no media at all. Every part - the media and every chunk
+      # of the choice message - carries the same tag.
       def deliver(recipient_id, type, content, options, tag)
+        post_media(recipient_id, options[:media], tag) if options[:media]
+
         case type
         when :text
           split_text(content).map { |chunk| post_message(recipient_id, {text: chunk}, tag) }.last
@@ -88,12 +95,16 @@ module FlowChat
             }
           }, tag)
         when :attachment
-          attachment_payload = options[:url] ? {url: options[:url], is_reusable: true} : {attachment_id: options[:attachment_id]}
           post_message(recipient_id, {text: content}, tag) if content.present?
-          post_message(recipient_id, {
-            attachment: {type: options[:type].to_s, payload: attachment_payload}
-          }, tag)
+          post_media(recipient_id, options, tag)
         end
+      end
+
+      def post_media(recipient_id, media_options, tag)
+        attachment_payload = media_options[:url] ? {url: media_options[:url], is_reusable: true} : {attachment_id: media_options[:attachment_id]}
+        post_message(recipient_id, {
+          attachment: {type: media_options[:type].to_s, payload: attachment_payload}
+        }, tag)
       end
 
       def post_message(recipient_id, message, tag)

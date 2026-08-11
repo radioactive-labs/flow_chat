@@ -25,7 +25,7 @@ module FlowChat
 
         # Use renderer to convert to structured response
         response = FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
-        type, content, _options = response
+        type, content, options = response
 
         result = instrument(Events::MESSAGE_SENT, {
           to: to,
@@ -33,6 +33,11 @@ module FlowChat
           content_length: content.to_s.length,
           platform: :whatsapp
         }) do
+          # Above the button cap there is no interactive surface that can
+          # carry media (see the renderer), so it rides in options[:media]
+          # and goes out as its own message ahead of the choice message.
+          send_message_payload(build_message_payload(options[:media], to)) if options[:media]
+
           message_data = build_message_payload(response, to)
           send_message_payload(message_data)
         end

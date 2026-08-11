@@ -16,12 +16,14 @@ module FlowChat
       def render
         return build_attachment if media && choices.blank?
 
-        case FlowChat::Meta::ChoiceLadder.rung_for(choice_count, limits)
+        result = case FlowChat::Meta::ChoiceLadder.rung_for(choice_count, limits)
         when :none then build_text
         when :quick_replies then build_quick_replies
         when :carousel then build_carousel
         when :numbered then build_text
         end
+
+        attach_media(result)
       end
 
       private
@@ -111,12 +113,26 @@ module FlowChat
       end
 
       def build_attachment
+        [:attachment, to_plain_text(message), media_attachment_options]
+      end
+
+      # Media is additive: it does not change which choice surface is used.
+      # It rides along in options[:media] so the client can post it as its
+      # own message ahead of whichever rung the choice count would render
+      # with no media at all.
+      def attach_media(result)
+        return result unless media
+
+        type, content, options = result
+        [type, content, options.merge(media: media_attachment_options)]
+      end
+
+      def media_attachment_options
         type = (media[:type] || :image).to_sym
         options = {type: type}
         options[:url] = media[:url] if media[:url]
         options[:attachment_id] = media[:id] if media[:id]
-
-        [:attachment, to_plain_text(message), options]
+        options
       end
     end
   end

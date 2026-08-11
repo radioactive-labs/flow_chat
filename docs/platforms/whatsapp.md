@@ -113,6 +113,17 @@ app.say "Your receipt", media: { type: :document, url: "https://example.com/rece
 
 The WhatsApp client also exposes direct senders (`send_image`, `send_document`, `send_audio`, `send_video`, `send_sticker`, `send_template`) and `upload_media`, which uploads a file and returns a media id you can reuse.
 
+Media and choices combine, but media never changes which choice surface renders. 3 choices or fewer is the one case WhatsApp can carry both in a single message: the media becomes the header on the reply buttons.
+
+```ruby
+app.screen(:plan) do |prompt|
+  prompt.select "Choose a plan", { "basic" => "Basic", "pro" => "Pro" },
+    media: { type: :image, url: "https://example.com/plans.png" }
+end
+```
+
+Above 3 choices there is no interactive surface left that can carry media: Meta's interactive message reference documents a `text`-only header for list messages, and image, video, and document headers are only defined for button messages. So above the button cap the image goes out as its own message first, with no caption (the question is about to appear in the list or numbered body right behind it), followed by the list or numbered rendering exactly as it would render with no media at all.
+
 ## Limits to keep in mind
 
 | Area | Behavior on WhatsApp |
@@ -120,7 +131,7 @@ The WhatsApp client also exposes direct senders (`send_image`, `send_document`, 
 | Button titles | Reply-button titles are truncated to 20 characters. |
 | List titles | List row titles are truncated to 24 characters; the full text is moved into the row description (up to 72 characters). |
 | List size | A list section holds at most 10 rows; longer lists are split into multiple sections. |
-| Media with choices | Passing `media:` together with more than 3 choices raises `ArgumentError`. |
+| Media with choices | 3 choices or fewer: one message, buttons with a media header. Above 3: the media is sent as its own message first, then the list or numbered text. Never more than 3 reply buttons, with or without media. |
 | 24-hour window | WhatsApp only allows free-form messages within 24 hours of the user's last message. Outside that window you must send an approved template. FlowChat does not abstract this: `send_template` exists, but you manage templates and the window yourself. |
 
 ## Async

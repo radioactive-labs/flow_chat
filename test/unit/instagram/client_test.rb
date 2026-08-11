@@ -121,4 +121,32 @@ class InstagramClientTest < Minitest::Test
       JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
     end
   end
+
+  # Media used to be silently dropped whenever choices were also present.
+  def test_media_with_choices_posts_media_then_quick_replies
+    calls = []
+    stub_request(:post, @config.messages_url).to_return do |req|
+      calls << JSON.parse(req.body)["message"]
+      {status: 200, body: {"message_id" => "mid.1"}.to_json}
+    end
+
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("igsid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"}, media: media)
+
+    assert_equal 2, calls.length
+    assert_equal "image", calls[0]["attachment"]["type"]
+    assert calls[1].key?("quick_replies")
+    # Instagram's interactive surfaces render on mobile only, so the numbered
+    # body must survive alongside the media, same as with no media at all.
+    assert_includes calls[1]["text"], "1. Alpha"
+  end
+
+  def test_media_with_choices_carries_the_tag_on_every_part
+    media = {type: :image, url: "https://example.com/a.png"}
+    @client.send_message("igsid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"}, media: media, tag: "HUMAN_AGENT")
+
+    assert_requested(:post, @config.messages_url, times: 2) do |req|
+      JSON.parse(req.body)["tag"] == "HUMAN_AGENT"
+    end
+  end
 end

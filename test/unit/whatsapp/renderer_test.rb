@@ -290,6 +290,64 @@ class WhatsappRendererTest < Minitest::Test
     assert_nil result[2][:url]
   end
 
+  # Media is additive: it does not change which choice surface is used.
+  # 3 or fewer choices is the one case WhatsApp can carry both in a single
+  # message, and that single-message behaviour (asserted above in
+  # test_render_media_with_buttons and test_hash_choices_with_media) must
+  # survive untouched.
+
+  # Meta's interactive list header schema documents type: text only; image,
+  # video and document headers are only defined for button messages. Above
+  # the button cap there is no interactive surface that can carry the media,
+  # so it has to go as its own message ahead of the list.
+  def test_media_above_the_button_cap_sends_media_separately_and_keeps_a_list
+    choices = (1..5).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :interactive_list, result[0]
+    assert_equal 5, result[2][:sections][0][:rows].length
+    refute result[2].key?(:header) # list headers cannot carry media
+    assert_equal :media_image, result[2][:media][0]
+    assert_equal "https://example.com/photo.jpg", result[2][:media][2][:url]
+    # No caption on the companion media message: the prompt text is about
+    # to appear in the list body right after it.
+    assert_nil result[2][:media][2][:caption]
+  end
+
+  def test_media_above_ten_choices_sends_media_separately_and_keeps_numbered_text
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "12. Option 12"
+    assert_equal :media_image, result[2][:media][0]
+  end
+
+  # However many choices, WhatsApp never gets more than 3 reply buttons -
+  # with or without media riding along.
+  def test_media_above_the_button_cap_never_uses_buttons
+    choices = (1..4).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    refute_equal :interactive_buttons, result[0]
+  end
+
+  def test_media_with_array_choices_above_the_button_cap
+    choices = ["A", "B", "C", "D"]
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :interactive_list, result[0]
+    assert_equal 4, result[2][:sections][0][:rows].length
+  end
+
   def test_unsupported_media_type_raises_error
     media = {type: :unsupported, url: "https://example.com/file"}
     renderer = FlowChat::Whatsapp::Renderer.new("Test", media: media)

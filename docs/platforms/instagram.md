@@ -152,6 +152,8 @@ app.say "Here is the map", media: { type: :image, url: "https://example.com/map.
 
 `upload_media` uploads a file for reuse and returns an attachment id you can pass as `media: { type: :image, id: attachment_id }` on a later send, avoiding a re-upload.
 
+Media and choices combine: pass both `media:` and `choices:` to `ask` or `say` and you get both, not one or the other. Media does not change which choice surface renders - it is additive, sent as its own message ahead of whichever quick replies, carousel, or numbered text the choice count would render with no media at all. Instagram's always-numbered body still applies on top: a mobile user gets the image, then tappable quick replies (or a carousel) with the options numbered in the body next to them, and a desktop user gets the image, then the numbered body with nothing tappable, same as with no media at all.
+
 ## Echoes and coexistence
 
 Instagram reports every message sent on a thread, including one typed by a human in the linked inbox and one sent by a different app connected to the same account, as a `message_echoes` event. FlowChat never lets an echo drive a flow (an echo of the bot's own send driving the flow again would loop), but it is published through the usual `WEBHOOK_RECEIVED` event, `field: "message_echoes"`, with a derived `echo_origin`:
@@ -188,7 +190,7 @@ context["instagram.client"].send_message(igsid, "Following up on your case", tag
 
 `HUMAN_AGENT` is the only tag Meta still accepts as of 27 April 2026, and it extends the window to 7 days for human-agent support; it needs the Human Agent app feature approved on your app first. FlowChat passes whatever you give it straight through to the Send API without checking it against a list, since Meta already refuses an unknown tag clearly (error 100) and an allowlist here would be one more thing to keep in sync with Meta's own set. Deciding when a send qualifies for the tag is the application's job.
 
-Instagram's client never sends `messaging_type` on an untagged send, since Meta's Instagram reference does not document that field at all. A tagged send is the exception: Meta does document `MESSAGE_TAG` with `HUMAN_AGENT` for Instagram, so a tagged send sets `messaging_type: "MESSAGE_TAG"` and `tag: "HUMAN_AGENT"` even though nothing else here ever sets `messaging_type`. When a reply is long enough to split into more than one message, every part carries the same tag.
+Instagram's client never sends `messaging_type` on an untagged send, since Meta's Instagram reference does not document that field at all. A tagged send is the exception: Meta does document `MESSAGE_TAG` with `HUMAN_AGENT` for Instagram, so a tagged send sets `messaging_type: "MESSAGE_TAG"` and `tag: "HUMAN_AGENT"` even though nothing else here ever sets `messaging_type`. When a reply is long enough to split, or carries media alongside choices and so goes out as more than one message, every part carries the same tag.
 
 A send outside the window with no tag is attempted like any other send: the Send API rejects it, the rejection is logged and reported through the standard API-error instrumentation, and the flow's turn otherwise proceeds as if the send had gone out. There is no retry and no automatic fallback to a template; both are the application's responsibility.
 
@@ -201,6 +203,7 @@ A send outside the window with no tag is attempted like any other send: the Send
 | Carousel | 10 elements, 3 postback buttons per element, button title truncated to 20 characters, mobile app only |
 | Choice payload | Generated ids are capped at 1000 characters |
 | Attachments | One per inbound message is read (the first); outbound is one attachment per send |
+| Media with choices | Sent as its own message ahead of the choice message; does not change which rung renders |
 | 24-hour window | Not tracked automatically; `tag:` is passed through unvalidated, see above |
 
 ## Async
