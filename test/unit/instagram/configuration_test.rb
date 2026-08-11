@@ -59,6 +59,25 @@ class InstagramConfigurationTest < Minitest::Test
     assert_equal "page_1", config.account_id
   end
 
+  # Unlike account_id, this does not depend on login: both ids are accepted
+  # regardless of which login path the app uses, since an inbound delivery's
+  # entry.id is not confirmed to carry one or the other.
+  def test_account_ids_includes_both_the_page_and_the_instagram_account
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.page_id = "page_1"
+    config.instagram_account_id = "ig_1"
+    config.login = :instagram
+
+    assert_equal ["page_1", "ig_1"], config.account_ids
+  end
+
+  def test_account_ids_omits_a_blank_id
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.page_id = "page_1"
+
+    assert_equal ["page_1"], config.account_ids
+  end
+
   def test_limits_are_instagram_specific
     assert_equal 1000, FlowChat::Config.instagram.max_text_length
     assert_equal 13, FlowChat::Config.instagram.max_quick_replies

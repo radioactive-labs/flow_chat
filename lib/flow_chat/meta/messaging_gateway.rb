@@ -163,8 +163,8 @@ module FlowChat
 
       def handle_message(context, entry, event)
         account_id = entry["id"]
-        if account_id.to_s != @config.account_id.to_s
-          FlowChat.logger.warn { "#{log_tag}: Webhook for account '#{account_id}' but configured for '#{@config.account_id}' - rejecting" }
+        unless @config.account_ids.map(&:to_s).include?(account_id.to_s)
+          FlowChat.logger.warn { "#{log_tag}: Webhook for account '#{account_id}' but configured for #{@config.account_ids.inspect} - rejecting" }
           return :rejected
         end
 

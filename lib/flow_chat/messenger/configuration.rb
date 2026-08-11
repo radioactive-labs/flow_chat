@@ -72,6 +72,13 @@ module FlowChat
         page_id
       end
 
+      # The id(s) an inbound webhook's entry.id is allowed to name. Messenger
+      # has exactly one, unlike Instagram::Configuration#account_ids, which
+      # answers for two - see its comment for why.
+      def account_ids
+        [account_id]
+      end
+
       def messages_url
         "#{api_base_url}/#{page_id}/messages"
       end

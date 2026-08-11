@@ -53,6 +53,13 @@ class MessengerConfigurationTest < Minitest::Test
     assert_equal "page_1", config.account_id
   end
 
+  def test_account_ids_is_the_single_page_id
+    config = FlowChat::Messenger::Configuration.new(nil)
+    config.page_id = "page_1"
+
+    assert_equal ["page_1"], config.account_ids
+  end
+
   # A predicate should answer true or false. The bare && chain returned nil for
   # a missing first field, which also logged "Configuration valid: " with an
   # empty value. Intercom and Telegram already pin this; these did not.

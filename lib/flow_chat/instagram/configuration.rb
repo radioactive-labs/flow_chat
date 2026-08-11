@@ -100,6 +100,20 @@ module FlowChat
         (login == :instagram) ? instagram_account_id : page_id
       end
 
+      # The id(s) an inbound webhook's entry.id is allowed to name, which is
+      # not the same question account_id above answers. Meta's docs do not
+      # say definitively whether entry.id carries the linked Page id or the
+      # Instagram professional account id on this webhook object (see
+      # FACEBOOK_LOGIN_WEBHOOK_OBJECT's comment in the gateway for the same
+      # kind of unconfirmed fact), and unlike api_base_url/messages_url,
+      # this does not depend on login: both ids genuinely belong to the one
+      # account this configuration is for, either way. Accepting either
+      # removes the need to guess right; an id matching neither is still
+      # rejected.
+      def account_ids
+        [page_id, instagram_account_id].compact.map(&:to_s).uniq
+      end
+
       def messages_url
         "#{api_base_url}/#{account_id}/messages"
       end
