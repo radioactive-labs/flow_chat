@@ -57,7 +57,6 @@ module FlowChat
       # Intercom stabilises quick replies, the git history has the
       # implementation; check those three things before restoring it.
       def build_interactive_message(choice_hash)
-
         formatted_message = message.to_s
 
         unless formatted_message.empty?
