@@ -106,6 +106,17 @@ class MessengerRendererTest < Minitest::Test
     assert_includes result[1], "31. Option 31"
   end
 
+  # Prompt normalizes an Array to a Hash before a flow's own choices ever
+  # reach a renderer, but the documented direct-client path
+  # (`context["messenger.client"].send_message(psid, msg, choices: [...])`)
+  # skips that normalization. Silently returning 0 choices dropped the
+  # options with no error; this must raise instead, matching what
+  # WhatsApp's own renderer does for the same input.
+  def test_array_choices_raise_instead_of_vanishing
+    error = assert_raises(ArgumentError) { render("Pick", choices: ["A", "B"]) }
+    assert_equal "choices must be a Hash", error.message
+  end
+
   def test_attachment_without_choices
     result = render("A caption", media: {type: :image, url: "https://example.com/a.png"})
 

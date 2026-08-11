@@ -38,8 +38,19 @@ module FlowChat
         false
       end
 
+      # nil (no choices at all) is the only non-Hash tolerated: Prompt
+      # normalizes an Array upstream in the flow path, so the only way an
+      # Array reaches here is a direct client send, e.g.
+      # `context["messenger.client"].send_message(psid, msg, choices: [...])`.
+      # Silently returning 0 for that made the choices vanish from the render
+      # with no error at all; raising matches what WhatsApp's own
+      # build_selection_message does for the same input instead of
+      # disagreeing with it.
       def choice_count
-        choices.is_a?(Hash) ? choices.length : 0
+        return 0 if choices.nil?
+        raise ArgumentError, "choices must be a Hash" unless choices.is_a?(Hash)
+
+        choices.length
       end
 
       # Neither Messenger nor Instagram renders markup, so the prompt is
@@ -64,7 +75,7 @@ module FlowChat
 
       # Whether titles are numbered, and the enumeration order positions come
       # from, are both decided by FlowChat::ChoiceTitles over this same
-      # `choices` hash - the choice mapper's ChoiceAliasBuilder.build call
+      # `choices` hash - the choice mapper's ChoiceTitles.aliases_for call
       # goes through the same module over the same hash, so the two can
       # never disagree on which titles are shown or which ones are aliased.
       def build_quick_replies

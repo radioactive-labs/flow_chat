@@ -61,6 +61,14 @@ class InstagramRendererTest < Minitest::Test
     assert_includes result[1], "14. Option 14"
   end
 
+  # Inherited from Messenger::Renderer#choice_count: Instagram does not
+  # override it, so an Array reaching the renderer raises here too rather
+  # than silently dropping the choices.
+  def test_array_choices_raise_instead_of_vanishing
+    error = assert_raises(ArgumentError) { render("Pick", choices: ["A", "B"]) }
+    assert_equal "choices must be a Hash", error.message
+  end
+
   def test_no_choices_means_no_numbers
     result = render("Just a message")
 
