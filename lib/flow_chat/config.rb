@@ -108,7 +108,15 @@ module FlowChat
     end
 
     class WhatsappConfig
-      attr_reader :api_base_url, :max_buttons, :max_list_rows
+      # api_base_url is writable, unlike the limits beside it. Those are facts
+      # about the platform that an application cannot change by disagreeing. The
+      # version in the host is a choice, and one an application has to be able
+      # to make: Meta retires a version roughly every two years and pins the
+      # webhook payloads it sends to whatever the app's dashboard says, so an
+      # application straddling two versions must be able to close the gap
+      # without waiting for a release here.
+      attr_accessor :api_base_url
+      attr_reader :max_buttons, :max_list_rows
 
       def initialize
         @api_base_url = "https://graph.facebook.com/v23.0"
@@ -139,7 +147,9 @@ module FlowChat
     end
 
     class MessengerConfig
-      attr_reader :api_base_url, :max_text_length, :max_quick_replies,
+      # Writable for the same reason as WhatsappConfig's, above.
+      attr_accessor :api_base_url
+      attr_reader :max_text_length, :max_quick_replies,
         :max_quick_reply_title, :max_carousel_elements, :max_buttons_per_element,
         :max_button_title, :max_element_title
 
@@ -162,7 +172,11 @@ module FlowChat
     end
 
     class InstagramConfig
-      attr_reader :api_base_url, :instagram_login_api_base_url, :max_text_length, :max_quick_replies,
+      # Both hosts writable, and separately: the two integration paths are
+      # configured independently at Meta, so an application moving one to a new
+      # version has not necessarily moved the other.
+      attr_accessor :api_base_url, :instagram_login_api_base_url
+      attr_reader :max_text_length, :max_quick_replies,
         :max_quick_reply_title, :max_carousel_elements, :max_buttons_per_element,
         :max_button_title, :max_element_title
 
