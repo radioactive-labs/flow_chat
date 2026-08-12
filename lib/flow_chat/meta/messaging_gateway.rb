@@ -171,8 +171,11 @@ module FlowChat
         # context["simulator_mode"] is only ever true once simulate? has
         # already checked the signed simulator cookie, above in
         # handle_webhook.
-        unless context["simulator_mode"] || @config.account_ids.map(&:to_s).include?(account_id.to_s)
-          FlowChat.logger.warn { "#{log_tag}: Webhook for account '#{account_id}' but configured for #{@config.account_ids.inspect} - rejecting" }
+        expected = @config.webhook_account_id
+        ours = expected.present? && account_id.to_s == expected.to_s
+
+        unless context["simulator_mode"] || ours
+          FlowChat.logger.warn { "#{log_tag}: Webhook for account '#{account_id}' but configured for #{expected.inspect} - rejecting" }
           return :rejected
         end
 

@@ -66,17 +66,18 @@ module FlowChat
       end
 
       # The account this configuration speaks for. Named generically, not
-      # page_id, so the shared gateway coming in Task 12 can check an inbound
-      # event's account without knowing which platform it holds.
+      # page_id, so the shared gateway can check an inbound event's account
+      # without knowing which platform it holds.
       def account_id
         page_id
       end
 
-      # The id(s) an inbound webhook's entry.id is allowed to name. Messenger
-      # has exactly one, unlike Instagram::Configuration#account_ids, which
-      # answers for two - see its comment for why.
-      def account_ids
-        [account_id]
+      # The id an inbound webhook's entry.id names. Messenger only ever handles
+      # `page`, which names the Page, so this is the same id a send is
+      # addressed to. Instagram's two differ, which is why the gateway asks for
+      # this rather than reusing account_id.
+      def webhook_account_id
+        account_id
       end
 
       def messages_url

@@ -18,39 +18,35 @@ class InstagramSendApiGatewayTest < Minitest::Test
     assert_equal "instagram", gateway.expected_webhook_object
   end
 
-  # Meta's docs do not say definitively whether an Instagram delivery's
-  # entry.id carries the linked Page id or the Instagram professional
-  # account id, and this is unaffected by which login path the app uses:
-  # both ids belong to the one configured account, so either arriving is a
-  # legitimate delivery. A fresh gateway per call, matching how
+  # An Instagram delivery arrives under `object: "instagram"`, which names the
+  # Instagram professional account in entry.id. The linked Page is what a send
+  # is addressed to and is not a legitimate inbound id, on either login path:
+  # accepting it is what let a page-keyed connection look configured while
+  # never receiving. A fresh gateway per call, matching how
   # FlowChat::Processor builds one per request: the gateway memoizes the
   # parsed body for the request's lifetime, so reusing one across two posts
   # would answer the second from the first request's body.
-  def test_inbound_delivery_matches_either_the_page_id_or_the_instagram_account_id_on_facebook_login_path
-    page_gateway = build_gateway(login: :facebook)
-    stub_send(page_gateway)
-    matched_by_page = post(page_gateway, entry_id: "page_1")
-    assert_equal "Hello", matched_by_page.input
-
+  def test_inbound_delivery_names_the_instagram_account_on_facebook_login_path
     ig_gateway = build_gateway(login: :facebook)
     stub_send(ig_gateway)
-    matched_by_ig_account = post(ig_gateway, entry_id: "ig_1")
-    assert_equal "Hello", matched_by_ig_account.input
+    assert_equal "Hello", post(ig_gateway, entry_id: "ig_1").input
+
+    page_gateway = build_gateway(login: :facebook)
+    stub_send(page_gateway)
+    assert_nil post(page_gateway, entry_id: "page_1").input
   end
 
-  # Same either-id acceptance on the Instagram Login path: which login the
-  # app uses only changes which id account_id resolves to for building API
-  # URLs, not which id an inbound webhook is allowed to name.
-  def test_inbound_delivery_matches_either_the_page_id_or_the_instagram_account_id_on_instagram_login_path
-    page_gateway = build_gateway(login: :instagram)
-    stub_send(page_gateway)
-    matched_by_page = post(page_gateway, entry_id: "page_1")
-    assert_equal "Hello", matched_by_page.input
-
+  # Same id on the Instagram Login path, where there is no Page to confuse it
+  # with. Which login the app uses only changes which id account_id resolves to
+  # for building API URLs.
+  def test_inbound_delivery_names_the_instagram_account_on_instagram_login_path
     ig_gateway = build_gateway(login: :instagram)
     stub_send(ig_gateway)
-    matched_by_ig_account = post(ig_gateway, entry_id: "ig_1")
-    assert_equal "Hello", matched_by_ig_account.input
+    assert_equal "Hello", post(ig_gateway, entry_id: "ig_1").input
+
+    page_gateway = build_gateway(login: :instagram)
+    stub_send(page_gateway)
+    assert_nil post(page_gateway, entry_id: "page_1").input
   end
 
   # An id naming neither the linked Page nor the Instagram account is still

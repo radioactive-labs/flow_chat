@@ -48,9 +48,8 @@ class InstagramConfigurationTest < Minitest::Test
     assert_same config, FlowChat::Instagram::Configuration.get(:acme)
   end
 
-  # On the Facebook Login integration path the webhook entry is keyed on the
-  # linked Facebook Page, not the Instagram account, so that is what an
-  # inbound event must be checked against. Deliberate, not a bug.
+  # An account reached through a Page answers as that Page, so that is what a
+  # send is addressed to. Deliberate, not a bug.
   def test_account_id_is_the_linked_page
     config = FlowChat::Instagram::Configuration.new(nil)
     config.page_id = "page_1"
@@ -59,23 +58,28 @@ class InstagramConfigurationTest < Minitest::Test
     assert_equal "page_1", config.account_id
   end
 
-  # Unlike account_id, this does not depend on login: both ids are accepted
-  # regardless of which login path the app uses, since an inbound delivery's
-  # entry.id is not confirmed to carry one or the other.
-  def test_account_ids_includes_both_the_page_and_the_instagram_account
+  # The two answer different questions and differ on this path: deliveries
+  # arrive under `object: "instagram"`, which names the account, while a send
+  # goes to the Page. Keying inbound on the Page is what left a page-linked
+  # account unable to receive.
+  def test_webhook_account_id_is_the_instagram_account_even_when_a_page_is_linked
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.page_id = "page_1"
+    config.instagram_account_id = "ig_1"
+
+    assert_equal "page_1", config.account_id
+    assert_equal "ig_1", config.webhook_account_id
+  end
+
+  # Unlike account_id, this does not depend on login: both paths deliver under
+  # the same object, so both name the account.
+  def test_webhook_account_id_does_not_depend_on_login
     config = FlowChat::Instagram::Configuration.new(nil)
     config.page_id = "page_1"
     config.instagram_account_id = "ig_1"
     config.login = :instagram
 
-    assert_equal ["page_1", "ig_1"], config.account_ids
-  end
-
-  def test_account_ids_omits_a_blank_id
-    config = FlowChat::Instagram::Configuration.new(nil)
-    config.page_id = "page_1"
-
-    assert_equal ["page_1"], config.account_ids
+    assert_equal "ig_1", config.webhook_account_id
   end
 
   def test_limits_are_instagram_specific

@@ -31,17 +31,17 @@ module FlowChat
           FlowChat::Instagram::Middleware::ChoiceMapper
         end
 
-        # Confirm against the Meta app dashboard before relying on this. On
-        # the Facebook Login path Meta's own docs were ambiguous about
-        # whether these arrive under "page" or "instagram", which is why
-        # this is a hook rather than a hard-coded assumption.
+        # Confirmed against a live delivery for a page-linked account: Meta's
+        # docs are ambiguous about whether these arrive under "page" or
+        # "instagram", and they arrive under "instagram". The delivery named
+        # the Instagram professional account in entry.id, not the linked Page,
+        # which is what webhook_account_id encodes.
         FACEBOOK_LOGIN_WEBHOOK_OBJECT = "instagram"
 
-        # Confirm against the Meta app dashboard before relying on this, same
-        # as FACEBOOK_LOGIN_WEBHOOK_OBJECT above. Kept as its own constant
-        # rather than sharing one: the two integration paths are configured
-        # independently in Meta's dashboard, so a correction to one path's
-        # value must not silently change the other's.
+        # Kept as its own constant rather than sharing one with the path above:
+        # the two integrations are configured independently in Meta's
+        # dashboard, so a correction to one path's value must not silently
+        # change the other's.
         INSTAGRAM_LOGIN_WEBHOOK_OBJECT = "instagram"
 
         def expected_webhook_object

@@ -51,7 +51,10 @@ class InstagramIntegrationTest < Minitest::Test
 
   def setup
     @config = FlowChat::Instagram::Configuration.new(nil)
+    # A page-linked account: the page is what a send is addressed to, the
+    # account is what an inbound delivery names.
     @config.page_id = "page_1"
+    @config.instagram_account_id = "ig_1"
     @config.access_token = "tok"
     @config.verify_token = "verify"
     @config.skip_signature_validation = true
@@ -172,13 +175,15 @@ class InstagramIntegrationTest < Minitest::Test
       message["text"] = text
     end
 
+    # entry.id and recipient.id both name the Instagram account, not the linked
+    # page, which is the shape Meta sends under `object: "instagram"`.
     run_raw_webhook({
       "object" => "instagram",
       "entry" => [{
-        "id" => "page_1",
+        "id" => "ig_1",
         "messaging" => [{
           "sender" => {"id" => "igsid_1"},
-          "recipient" => {"id" => "page_1"},
+          "recipient" => {"id" => "ig_1"},
           "timestamp" => 1_700_000_000,
           "message" => message
         }]

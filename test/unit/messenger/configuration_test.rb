@@ -53,11 +53,14 @@ class MessengerConfigurationTest < Minitest::Test
     assert_equal "page_1", config.account_id
   end
 
-  def test_account_ids_is_the_single_page_id
+  # Messenger only handles `object: "page"`, which names the Page, so the id a
+  # delivery names and the id a send goes to are the same one. Instagram's
+  # differ, which is why the gateway asks for this rather than account_id.
+  def test_webhook_account_id_is_the_page_id
     config = FlowChat::Messenger::Configuration.new(nil)
     config.page_id = "page_1"
 
-    assert_equal ["page_1"], config.account_ids
+    assert_equal "page_1", config.webhook_account_id
   end
 
   # A predicate should answer true or false. The bare && chain returned nil for

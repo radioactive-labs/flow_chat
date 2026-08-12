@@ -90,28 +90,24 @@ module FlowChat
         is_valid
       end
 
-      # The account this configuration speaks for. On the Facebook Login
-      # integration path the webhook entry is keyed on the linked Facebook
-      # Page, not the Instagram account, so that is what an inbound event is
-      # checked against. On the Instagram Login path there is no linked Page
-      # at all, so the Instagram professional account id is the only thing to
-      # check against.
+      # What a send is addressed to. An account reached through a Page answers
+      # as that Page over graph.facebook.com; an account with no Page answers
+      # for itself over graph.instagram.com. This is not the id an inbound
+      # delivery names, which is webhook_account_id below.
       def account_id
         (login == :instagram) ? instagram_account_id : page_id
       end
 
-      # The id(s) an inbound webhook's entry.id is allowed to name, which is
-      # not the same question account_id above answers. Meta's docs do not
-      # say definitively whether entry.id carries the linked Page id or the
-      # Instagram professional account id on this webhook object (see
-      # FACEBOOK_LOGIN_WEBHOOK_OBJECT's comment in the gateway for the same
-      # kind of unconfirmed fact), and unlike api_base_url/messages_url,
-      # this does not depend on login: both ids genuinely belong to the one
-      # account this configuration is for, either way. Accepting either
-      # removes the need to guess right; an id matching neither is still
-      # rejected.
-      def account_ids
-        [page_id, instagram_account_id].compact.map(&:to_s).uniq
+      # The id an inbound webhook's entry.id names, which is a different
+      # question from account_id above and has a different answer on the
+      # Facebook Login path.
+      #
+      # The top-level object of a delivery decides the id space, and this
+      # gateway only ever handles `instagram` (see expected_webhook_object),
+      # which names the Instagram professional account. That holds on both
+      # paths, so unlike account_id this does not depend on login.
+      def webhook_account_id
+        instagram_account_id
       end
 
       def messages_url
