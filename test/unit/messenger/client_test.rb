@@ -32,6 +32,21 @@ class MessengerClientTest < Minitest::Test
     end
   end
 
+  # A sender action, not a message: no messaging_type and no message body,
+  # which is what tells Meta to show a typing bubble rather than deliver
+  # anything.
+  def test_indicates_typing_as_a_sender_action
+    @client.indicate_typing("psid_1")
+
+    assert_requested(:post, @config.messages_url) do |req|
+      body = JSON.parse(req.body)
+      body["recipient"] == {"id" => "psid_1"} &&
+        body["sender_action"] == "typing_on" &&
+        !body.key?("message") &&
+        !body.key?("messaging_type")
+    end
+  end
+
   def test_quick_replies_ride_on_the_text_message
     @client.send_message("psid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"})
 

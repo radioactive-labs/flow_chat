@@ -42,6 +42,18 @@ class InstagramClientTest < Minitest::Test
     end
   end
 
+  # Inherited from Messenger rather than overridden. Meta lists only react and
+  # unreact as Instagram sender actions, but a live account accepts typing_on
+  # and answers with the recipient id, so the reference understates it.
+  def test_indicates_typing_the_same_way_messenger_does
+    @client.indicate_typing("igsid_1")
+
+    assert_requested(:post, @config.messages_url) do |req|
+      body = JSON.parse(req.body)
+      body["recipient"] == {"id" => "igsid_1"} && body["sender_action"] == "typing_on"
+    end
+  end
+
   def test_quick_replies_ride_on_the_text_message
     @client.send_message("igsid_1", "Pick", choices: {"a" => "Alpha", "b" => "Beta"})
 

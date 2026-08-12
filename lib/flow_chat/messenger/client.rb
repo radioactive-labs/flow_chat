@@ -37,6 +37,21 @@ module FlowChat
         send_message(recipient_id, text, tag: tag)
       end
 
+      # Shows the person a typing bubble while a turn is being worked out.
+      #
+      # Meta clears it when the next message arrives or after about twenty
+      # seconds, whichever comes first, so a caller holding one open for longer
+      # has to repeat it.
+      #
+      # Inherited by Instagram rather than overridden there. Meta documents
+      # sender actions under the Messenger Platform and lists only react and
+      # unreact for Instagram, but an Instagram send of typing_on is accepted
+      # and answered with the recipient id, same as Messenger. Confirmed
+      # against a live account, since the reference does not settle it.
+      def indicate_typing(recipient_id)
+        post_json(@config.messages_url, {recipient: {id: recipient_id}, sender_action: "typing_on"})
+      end
+
       # Uploads a file for reuse and returns the id Meta assigned it.
       def upload_media(url, type: :image)
         payload = {
