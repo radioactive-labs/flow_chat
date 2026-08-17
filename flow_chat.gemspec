@@ -14,7 +14,11 @@ Gem::Specification.new do |spec|
   DESC
   spec.homepage = "https://github.com/radioactive-labs/flow_chat"
   spec.license = "MIT"
-  spec.required_ruby_version = Gem::Requirement.new(">= 2.3.0")
+  # Matches the versions CI actually exercises. The previous ">= 2.3.0" was
+  # three Rubies out of date and promised a floor nothing here could honour:
+  # activesupport 8 requires Ruby 3.2, so a 2.x user hit an unexplained
+  # resolution failure rather than a clear statement of what this gem needs.
+  spec.required_ruby_version = Gem::Requirement.new(">= 3.0")
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["rubygems_mfa_required"] = "true"
@@ -32,9 +36,25 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "zeitwerk"
+  # Deliberately unbounded above, and RubyGems' warning about that is
+  # overridden knowingly rather than overlooked.
+  #
+  # A "< N" cap does not protect this gem from the next major - it decides
+  # where the breakage surfaces. Capping blocks every downstream application on
+  # the day that major ships, until this gem cuts a release, which is a cost
+  # paid by everyone for a break that may never come.
+  #
+  # Leaving it open moves the risk from install time to runtime, and the CI job
+  # against rails main is what pays for that: an incompatible change is found
+  # while it is still unreleased, rather than in a bug report the week it lands.
+  # If that job is ever removed, these bounds should be revisited.
+  #
+  # No floor is needed beyond ">= 6" either. Bundler resolves an activesupport
+  # that suits the running Ruby, so a Ruby 3.0 application lands on Rails 7.x
+  # without this gem having to say so.
   spec.add_dependency "activesupport", ">= 6"
   spec.add_dependency "actionpack", ">= 6"
+  spec.add_dependency "zeitwerk"
   spec.add_dependency "phonelib"
   spec.add_dependency "ibsciss-middleware", "~> 0.4.2"
   spec.add_dependency "intercom", "~> 4.2"

@@ -13,3 +13,6 @@
 # Ignore Gemfile.lock for our gem
 /Gemfile.lock
 .DS_Store
+# Resolved fresh on every CI run, so the rails-main job sees the latest main
+# rather than a pinned revision.
+gemfiles/*.lock

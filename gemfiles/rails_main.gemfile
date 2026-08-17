@@ -1,0 +1,13 @@
+# Resolves against unreleased Rails, for the CI job that watches for breaking
+# changes before they ship.
+#
+# This exists because flow_chat's activesupport and actionpack dependencies are
+# deliberately unbounded above (see flow_chat.gemspec). Without an upper bound,
+# an incompatible major would otherwise be discovered by an application that
+# upgraded, rather than here. The job is allowed to fail: a red run is a signal
+# to look, not a broken build.
+source "https://rubygems.org"
+
+gemspec path: ".."
+
+gem "rails", github: "rails/rails", branch: "main"
