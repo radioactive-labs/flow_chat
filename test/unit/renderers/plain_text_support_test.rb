@@ -19,6 +19,35 @@ class PlainTextSupportTest < Minitest::Test
     assert_equal "• one\n• two", @subject.to_plain_text("- one\n- two")
   end
 
+  # A single non-greedy pass over <ul>(.*?)</ul> paired the outer opening tag
+  # with the inner list's closing tag, so only the first item kept its bullet
+  # and the leftover </li></ul> was stripped later as a bare tag - leaving
+  # stray indented lines in a message a user reads. Messenger and Instagram
+  # send every prompt through here, so it shipped.
+  def test_nested_unordered_list_keeps_every_bullet
+    assert_equal "• a\n  • b\n• c", @subject.to_plain_text("- a\n  - b\n- c")
+  end
+
+  def test_nested_ordered_list_keeps_every_number
+    assert_equal "1. one\n  1. sub\n2. two", @subject.to_plain_text("1. one\n   1. sub\n2. two")
+  end
+
+  def test_a_list_nested_three_deep_indents_each_level
+    assert_equal "• a\n  • b\n    • c\n• d", @subject.to_plain_text("- a\n  - b\n    - c\n- d")
+  end
+
+  def test_an_ordered_list_nested_in_an_unordered_one_keeps_both_markers
+    assert_equal "• top\n  1. first\n  2. second\n• other",
+      @subject.to_plain_text("- top\n  1. first\n  2. second\n- other")
+  end
+
+  def test_no_markup_survives_a_nested_list
+    result = @subject.to_plain_text("Pick one:\n\n- a\n  - b\n- c\n")
+
+    refute_includes result, "<"
+    refute_includes result, ">"
+  end
+
   def test_ordered_list_is_numbered
     assert_equal "1. one\n2. two", @subject.to_plain_text("1. one\n2. two")
   end
