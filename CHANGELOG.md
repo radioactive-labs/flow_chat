@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-08-17
+
+### Bug Fixes
+
+- Publish side events when no foreground pass ran
+
+### Documentation
+
+- Record #9 in the 0.10.0 release notes
+
+### Miscellaneous Tasks
+
+- State the Ruby floor, and watch unreleased Rails instead of capping ([#10](https://github.com/radioactive-labs/flow_chat/issues/10))
+- Prepend the changelog instead of regenerating it
+
 ## [0.10.0] - 2026-08-17
 
 > **Note.** [#9](https://github.com/radioactive-labs/flow_chat/pull/9) was squash-merged with a non-conventional title, so git-cliff did not pick it up when this section was generated. It is the largest change in the release and is listed by hand below. Releases now prepend rather than regenerate, so this survives.
