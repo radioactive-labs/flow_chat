@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [0.10.0] - 2026-08-17
 
+> **Note.** [#9](https://github.com/radioactive-labs/flow_chat/pull/9) was squash-merged with a non-conventional title, so git-cliff did not pick it up when this section was generated. It is the largest change in the release and is listed by hand below. Releases now prepend rather than regenerate, so this survives.
+
+### Behaviour changes
+
+- **Intercom resolves numbers only.** The renderer already prints a number beside every option and asks for one; matching typed labels as well is what allowed two options reading the same to collapse onto a single mapping entry. Typing the words now falls through to the flow's own validation.
+- **HTTP matches replies exactly**, with no case or whitespace folding. A web client echoes back the string it was handed, so nothing drifts in transit. A client that lowercases its reply will stop resolving.
+
 ### Bug Fixes
 
 - Correct runtime-breaking session and API misuse
@@ -18,6 +25,7 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- Add Facebook Messenger and Instagram DM gateways, unify choice resolution, and fix delivery instrumentation ([#9](https://github.com/radioactive-labs/flow_chat/pull/9))
 - Map choices on Intercom and HTTP ([#4](https://github.com/radioactive-labs/flow_chat/issues/4))
 - Let a flow declare that it consumed the turn ([#6](https://github.com/radioactive-labs/flow_chat/issues/6))
 - Report a reply the platform would not take ([#7](https://github.com/radioactive-labs/flow_chat/issues/7))
