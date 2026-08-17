@@ -104,6 +104,36 @@ class ChoiceMapperTest < Minitest::Test
     assert_equal expected_new_mapping, stored_mapping
   end
 
+  # USSD needs no fold and no aliasing, unlike every other choice mapper: a
+  # numeric keypad can only send a position, and positions are unique by
+  # construction. Two choices sharing a label - which collapses the mapping
+  # on any resolver that matches on words - stays unambiguous here.
+  def test_duplicate_labels_still_resolve_distinctly
+    context = FlowChat::Context.new
+    context["controller"] = @controller
+    context["session.store"] = @session_store.class
+    context["session.id"] = "duplicate_labels_session"
+    context.session = @session_store
+
+    seen = nil
+    mock_app = lambda do |ctx|
+      seen = ctx.input
+      [:prompt, "Which account?", {"a" => "Savings", "b" => "Savings"}, nil]
+    end
+
+    choice_mapper = FlowChat::Ussd::Middleware::ChoiceMapper.new(mock_app)
+
+    context.input = nil
+    result = choice_mapper.call(context)
+
+    assert_equal({"1" => "Savings", "2" => "Savings"}, result[2])
+
+    context.input = "2"
+    choice_mapper.call(context)
+
+    assert_equal "b", seen, "position 2 must reach the second choice, not the first"
+  end
+
   def test_ussd_choice_mapper_handles_invalid_choice
     # Test invalid choice handling
 
