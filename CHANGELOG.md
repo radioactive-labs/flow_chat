@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2026-08-17
+
+### Bug Fixes
+
+- Correct runtime-breaking session and API misuse
+- Use the full SHA256 for hashed identifiers
+- Use a 128-bit (32-char) hashed identifier
+- Give api.error a contract other than its prose ([#5](https://github.com/radioactive-labs/flow_chat/issues/5))
+
+### Documentation
+
+- [**breaking**] Revamp README and all docs, add GitHub Pages landing page ([#3](https://github.com/radioactive-labs/flow_chat/issues/3))
+- Explain how session boundaries build the session id
+
+### Features
+
+- Map choices on Intercom and HTTP ([#4](https://github.com/radioactive-labs/flow_chat/issues/4))
+- Let a flow declare that it consumed the turn ([#6](https://github.com/radioactive-labs/flow_chat/issues/6))
+- Report a reply the platform would not take ([#7](https://github.com/radioactive-labs/flow_chat/issues/7))
+- Dispatch webhooks on their field, and handle coexistence ([#8](https://github.com/radioactive-labs/flow_chat/issues/8))
+
+### Refactoring
+
+- Fix outdated APIs, dedupe, and harden
+- Drop dead first_message? branch in Intercom flow
+
 ## [0.9.0] - 2026-07-09
 
 ### Features
