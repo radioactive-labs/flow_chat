@@ -28,6 +28,35 @@ jobs:
     - name: Build gem
       run: bundle exec gem build *.gemspec
 
+  # Watches unreleased Rails, because flow_chat's activesupport and actionpack
+  # dependencies are deliberately unbounded above (see flow_chat.gemspec).
+  #
+  # Allowed to fail. A red run here means Rails main changed something this gem
+  # relies on, and is a prompt to look rather than a broken build - the point is
+  # to find out while the change is still unreleased, instead of from a bug
+  # report the week the major ships.
+  rails-main:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      BUNDLE_GEMFILE: gemfiles/rails_main.gemfile
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # Newest stable, deliberately ahead of the matrix above. Rails main already
+    # requires Ruby >= 3.3 (via ractor-dispatch) and that floor keeps rising, so
+    # pinning this job to the minimum would fail it for a Ruby version rather
+    # than for the API change it exists to catch.
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: '3.4'
+        bundler-cache: true
+
+    - name: Run tests against rails main
+      run: bundle exec rake test
+
   lint:
     runs-on: ubuntu-latest
     steps:

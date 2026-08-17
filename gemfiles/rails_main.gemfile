@@ -1,0 +1,18 @@
+# Resolves against unreleased Rails, for the CI job that watches for breaking
+# changes before they ship.
+#
+# This exists because flow_chat's activesupport and actionpack dependencies are
+# deliberately unbounded above (see flow_chat.gemspec). Without an upper bound,
+# an incompatible major would otherwise be discovered by an application that
+# upgraded, rather than here. The job is allowed to fail: a red run is a signal
+# to look, not a broken build.
+#
+# The root Gemfile is evaluated rather than restated, so this file carries the
+# development dependencies too - rake, minitest, standard and the rest. Listing
+# only the gemspec here left the suite unable to load its own Rakefile, which
+# failed the job for a reason that had nothing to do with Rails.
+eval_gemfile File.expand_path("../Gemfile", __dir__)
+
+# Overrides the activesupport/actionpack the gemspec resolved, which is the
+# whole point of this file.
+gem "rails", github: "rails/rails", branch: "main"
