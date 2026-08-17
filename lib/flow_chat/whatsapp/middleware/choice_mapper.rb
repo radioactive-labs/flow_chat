@@ -1,48 +1,37 @@
 module FlowChat
   module Whatsapp
     module Middleware
-      # Maps WhatsApp button/list IDs back to original choice keys
+      # Maps what WhatsApp sends back to the choice key the flow branches on.
       #
-      # Similar to USSD::ChoiceMapper, but for WhatsApp interactive messages.
-      # WhatsApp uses generated IDs (from IdGenerator) for buttons and list items,
-      # and this middleware maps the user's response back to the original choice key.
+      # The value on the wire is the title the user was shown, so a tap and a
+      # user typing what they read arrive as the same string and resolve
+      # through the same map.
       #
       # Flow:
-      # 1. Flow returns choices with original keys (e.g., {"create" => "Create Account"})
-      # 2. Middleware generates WhatsApp-safe IDs from labels
-      # 3. Middleware transforms choices to use generated IDs as keys
-      # 4. Middleware stores mapping (generated_id → original_key)
-      # 5. Renderer receives transformed choices and renders them
-      # 6. User selects a button/list item (WhatsApp sends the ID)
-      # 7. This middleware intercepts and replaces ID with original key
-      # 8. Flow sees the original choice key (not the generated ID)
+      # 1. Flow returns choices with original keys ({"create" => "Create Account"})
+      # 2. This middleware asks FlowChat::ChoiceTitles for each displayed title
+      # 3. It re-keys the choices by title and stores title => original key
+      # 4. Renderer receives the re-keyed choices and renders them
+      # 5. User taps a button, or types the title on it
+      # 6. This middleware resolves either back to the original key
       #
       # @example
       #   # Flow provides: {"create" => "Create Account"}
-      #   # Middleware generates ID: "Create Account"
-      #   # Middleware transforms to: {"Create Account" => "Create Account"}
-      #   # Middleware stores: {"Create Account" => "create"}
-      #   # User clicks, WhatsApp sends: "Create Account"
-      #   # Middleware intercepts and maps back to: "create"
+      #   # Titles built:  "Create Account"
+      #   # Transformed:   {"Create Account" => "Create Account"}
+      #   # Mapping:       {"Create Account" => "create"}
       #
       #   # With duplicates: {"yes" => "Accept", "no" => "Accept"}
-      #   # IDs generated: "Accept", "Accept 3a4"
-      #   # Transformed: {"Accept" => "Accept", "Accept 3a4" => "Accept"}
-      #   # Mapping: {"Accept" => "yes", "Accept 3a4" => "no"}
-      #   # User clicks second, WhatsApp sends: "Accept 3a4"
-      #   # Middleware maps back to: "no"
+      #   # Titles built:  "1. Accept", "2. Accept"
+      #   # Mapping:       {"1. Accept" => "yes", "2. Accept" => "no"}
       #
-      # A button or list row title is truncated to fit (see
+      # A title is truncated to the rung's cap (see
       # FlowChat::Whatsapp::Renderer::BUTTON_TITLE_LENGTH /
-      # LIST_ROW_TITLE_LENGTH), so a user who types exactly what they see
-      # would otherwise fail to match the generated id, which was built from
-      # the full label. This middleware additionally registers that
-      # on-screen form as an alias for the same choice key, via
-      # FlowChat::ChoiceTitles.aliases_for. When truncation (or a duplicate
-      # label) would make titles ambiguous, FlowChat::ChoiceTitles prefixes every
-      # title in the set with its position instead, which is what actually
-      # keeps them distinct in that case; see its docs for why that decision
-      # is made once for the whole set rather than per title.
+      # LIST_ROW_TITLE_LENGTH). When truncation, or a duplicate label, would
+      # leave two titles indistinguishable, FlowChat::ChoiceTitles numbers
+      # every title in the set instead - which is what keeps them distinct,
+      # and why nothing here has to check for collisions itself. See its docs
+      # for why that decision is made once for the whole set.
       #
       class ChoiceMapper
         def initialize(app)
@@ -72,8 +61,8 @@ module FlowChat
           # An earlier version asked should_clear_for_new_flow? that question
           # after handle_choice_input had already rewritten @context.input to
           # the *resolved* value, which can equal one of the map's own keys
-          # (an Array choice's key is its label, and IdGenerator can
-          # normalize a label to that same string), so the check answered
+          # (an Array choice's key is its label, and the wire value is the
+          # title built from that label), so the check answered
           # "still live" about a value that was never a fresh reply. That let
           # the maps survive into a free-text screen and reinterpret a typed
           # answer there as the previous menu's choice. This was fixed once
@@ -96,18 +85,15 @@ module FlowChat
 
         private
 
-        # Ids are resolved first, then aliases, then positions. Ids can
-        # overlap with positions because IdGenerator#normalize_label keeps
-        # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them: FlowChat::ChoiceTitles.aliases_for
-        # never registers an alias equal to its own choice's generated id
-        # (see its docs), so an alias never outranks an id, but it must
-        # still beat a position: a typed alias is a match on the title the
-        # user actually saw, while a position is a fallback guess from a
-        # bare digit that is only shown at all when the screen was numbered.
+        # Titles first, then positions. A tap sends the title as its payload
+        # and a user who types what they read sends the same string, so both
+        # arrive at the same entry - which is why there is no separate alias
+        # map any more. A position is the fallback, and only means anything
+        # when a number is genuinely on screen; it loses to a title because a
+        # choice labelled "1" would otherwise be unreachable.
         def resolved_choice
           input = @context.input.to_s
-          get_choice_mapping[input] || get_alias_mapping[input] || get_position_mapping[input]
+          get_choice_mapping[input] || get_position_mapping[input]
         end
 
         def intercept?
@@ -130,25 +116,30 @@ module FlowChat
           @context.input = original_choice
         end
 
+        # The value WhatsApp sends back IS the displayed title.
+        # FlowChat::ChoiceTitles guarantees the titles in a set are distinct -
+        # numbering the whole set when they would not be - so a title needs no
+        # separate id space to be unique in, and there is nothing left for a
+        # generated id to collide with.
+        #
+        # This replaces an id generated by normalizing the label, which was
+        # lossy: stripping "!" turned "Yes!" into the id "Yes", which was
+        # another choice's label verbatim, and the id map was consulted before
+        # the alias map. Titles are also bounded by the rung's cap (20 button,
+        # 24 list row), comfortably inside WhatsApp's id caps of 256 and 200.
         def create_id_mapping(choices)
-          # Choices are always a hash after normalize_choices
-          id_generator = FlowChat::IdGenerator.new
-          id_choices = {}
-          choice_mapping = {}
-          generated_ids = {}
+          cap = display_title_cap(choices.length)
+          return passthrough_mapping(choices) if cap.nil?
 
-          choices.each do |key, value|
-            # Generate WhatsApp-safe ID from the label
-            generated_id = id_generator.generate_id(value.to_s)
-            id_choices[generated_id] = value
-            choice_mapping[generated_id] = key.to_s
-            generated_ids[key.to_s] = generated_id
+          title_choices = {}
+          choice_mapping = {}
+
+          FlowChat::ChoiceTitles.build(choices, cap).each do |key, label, title, _truncated|
+            title_choices[title] = label
+            choice_mapping[title] = key
           end
 
           store_choice_mapping(choice_mapping)
-          FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Created mapping: #{choice_mapping}" }
-
-          store_alias_mapping(FlowChat::ChoiceTitles.aliases_for(choices, generated_ids, display_title_cap(choices.length)))
 
           if number_choices?(choices)
             store_position_mapping(choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
@@ -156,7 +147,24 @@ module FlowChat
             clear_position_mapping
           end
 
-          id_choices
+          title_choices
+        end
+
+        # Above the row cap the renderer numbers the body and prints each full
+        # label beside its number, so the label itself is what is on screen and
+        # stays resolvable - nothing is truncated, so there is no shortened
+        # form to key on instead.
+        #
+        # A label shared by two choices is dropped rather than resolved to the
+        # first of them. It identifies neither on a screen that shows both, and
+        # the number printed next to each is the reply that does.
+        def passthrough_mapping(choices)
+          labels = choices.map { |key, label| [label.to_s, key.to_s] }
+          repeated = labels.map(&:first).tally
+
+          store_choice_mapping(labels.reject { |label, _| repeated[label] > 1 }.to_h)
+          store_position_mapping(choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
+          choices
         end
 
         # The title cap the renderer will use for these choices, or nil above
@@ -203,19 +211,6 @@ module FlowChat
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Cleared choice mapping" }
         end
 
-        def store_alias_mapping(mapping)
-          @session.set("whatsapp.alias_mapping", mapping)
-          FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Stored alias mapping: #{mapping}" }
-        end
-
-        def get_alias_mapping
-          @session.get("whatsapp.alias_mapping") || {}
-        end
-
-        def clear_alias_mapping
-          @session.delete("whatsapp.alias_mapping")
-        end
-
         def store_position_mapping(mapping)
           @session.set("whatsapp.position_mapping", mapping)
           FlowChat.logger.debug { "Whatsapp::ChoiceMapper: Stored position mapping: #{mapping}" }
@@ -231,7 +226,6 @@ module FlowChat
 
         def clear_choice_state
           clear_choice_mapping
-          clear_alias_mapping
           clear_position_mapping
         end
       end

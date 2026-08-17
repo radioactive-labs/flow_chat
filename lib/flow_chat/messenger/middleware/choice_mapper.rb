@@ -3,19 +3,20 @@ module FlowChat
     module Middleware
       # Maps a reply back to the choice key the flow used.
       #
-      # Three key spaces can be live at once. A tap sends the payload id the
-      # renderer put on the button; a user who instead types the title they
-      # see on that button types an alias; and, only when a number is
-      # genuinely on screen, a typed digit sends a position. They are stored
-      # separately and resolved ids first, then aliases, then positions,
-      # because the spaces overlap: IdGenerator keeps digits, so a choice
-      # labelled "1" generates the id "1", which is not necessarily the first
-      # choice, and FlowChat::ChoiceTitles.aliases_for never registers an
-      # alias equal to its own choice's generated id, so ids can never lose
-      # to one.
+      # Two key spaces can be live at once. A tap sends the payload the
+      # renderer put on the button, which is the title shown on it, and a user
+      # who types what they read sends that same string - so both resolve
+      # through one map. Only when a number is genuinely on screen does a
+      # typed digit mean a position, which is the second space.
+      #
+      # The title is the payload rather than a separately generated id
+      # because FlowChat::ChoiceTitles already guarantees the titles in a set
+      # are distinct, numbering the set when they would not be. A generated
+      # id needed its own uniqueness rule, and the one it had was lossy: it
+      # stripped punctuation, so "Yes!" produced the id "Yes", which was
+      # another choice's label exactly.
       class ChoiceMapper
         ID_KEY = "messenger.choice_mapping"
-        ALIAS_KEY = "messenger.alias_mapping"
         POSITION_KEY = "messenger.position_mapping"
 
         def initialize(app)
@@ -39,8 +40,8 @@ module FlowChat
           # An earlier version asked stale_mappings? that question after
           # handle_choice_input had already rewritten @context.input to the
           # *resolved* value, which can equal one of the map's own keys (an
-          # Array choice's key is its label, and IdGenerator can normalize a
-          # label to that same string), so the check answered "still live"
+          # Array choice's key is its label, and the wire value is the title
+          # built from that label), so the check answered "still live"
           # about a value that was never a fresh reply. That let the maps
           # survive into a free-text screen and reinterpret a typed answer
           # there as the previous menu's choice. This was fixed once for
@@ -70,10 +71,6 @@ module FlowChat
           self.class::ID_KEY
         end
 
-        def alias_key
-          self.class::ALIAS_KEY
-        end
-
         def position_key
           self.class::POSITION_KEY
         end
@@ -82,28 +79,21 @@ module FlowChat
           @session.get(id_key) || {}
         end
 
-        def get_alias_mapping
-          @session.get(alias_key) || {}
-        end
-
         def get_position_mapping
           @session.get(position_key) || {}
         end
 
-        # Ids are resolved first, then aliases, then positions. Ids can
-        # overlap with positions because IdGenerator#normalize_label keeps
-        # \w, which includes digits, so a choice labelled "1" generates the
-        # id "1". Aliases sit between them: FlowChat::ChoiceTitles.aliases_for
-        # never registers an alias equal to its own choice's generated id
-        # (see its docs), so an alias never outranks an id, but it must
-        # still beat a position: a typed alias is a match on the title the
-        # user actually saw, while a position is a fallback guess from a
-        # bare digit that is only shown at all when the screen was numbered.
+        # Titles first, then positions. A tap sends the title as its payload
+        # and a user typing what they read sends the same string, so both
+        # land on the same entry. A position must lose to a title, because a
+        # choice labelled "1" would otherwise be unreachable: its title is
+        # "1", and a bare digit is only a position when the screen was
+        # numbered at all.
         def resolved_choice
           input = @context.input.to_s
           return nil if input.empty?
 
-          get_id_mapping[input] || get_alias_mapping[input] || get_position_mapping[input]
+          get_id_mapping[input] || get_position_mapping[input]
         end
 
         def intercept?
@@ -118,25 +108,22 @@ module FlowChat
 
         def clear_mappings
           @session.delete(id_key)
-          @session.delete(alias_key)
           @session.delete(position_key)
         end
 
         def create_mappings(choices)
-          generator = FlowChat::IdGenerator.new(max_length: 1000)
-          id_choices = {}
-          id_mapping = {}
-          generated_ids = {}
+          cap = display_title_cap(choices.length)
+          return passthrough_mapping(choices) if cap.nil?
 
-          choices.each do |key, label|
-            generated_id = generator.generate_id(label.to_s)
-            id_choices[generated_id] = label
-            id_mapping[generated_id] = key.to_s
-            generated_ids[key.to_s] = generated_id
+          title_choices = {}
+          id_mapping = {}
+
+          FlowChat::ChoiceTitles.build(choices, cap).each do |key, label, title, _truncated|
+            title_choices[title] = label
+            id_mapping[title] = key
           end
 
           @session.set(id_key, id_mapping)
-          @session.set(alias_key, FlowChat::ChoiceTitles.aliases_for(choices, generated_ids, display_title_cap(choices.length)))
 
           if number_choices?(choices)
             @session.set(position_key, choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
@@ -144,7 +131,24 @@ module FlowChat
             @session.delete(position_key)
           end
 
-          id_choices
+          title_choices
+        end
+
+        # On the :numbered rung the body already prints each full label beside
+        # its number, so the label itself is what is on screen and stays
+        # resolvable - nothing is truncated, so there is no shortened form to
+        # key on instead.
+        #
+        # A label shared by two choices is dropped rather than resolved to the
+        # first of them. It identifies neither on a screen that shows both, and
+        # the number printed next to each is the reply that does.
+        def passthrough_mapping(choices)
+          labels = choices.map { |key, label| [label.to_s, key.to_s] }
+          repeated = labels.map(&:first).tally
+
+          @session.set(id_key, labels.reject { |label, _| repeated[label] > 1 }.to_h)
+          @session.set(position_key, choices.keys.map.with_index(1) { |key, i| [i.to_s, key.to_s] }.to_h)
+          choices
         end
 
         # The title cap the renderer will use for these choices, or nil on

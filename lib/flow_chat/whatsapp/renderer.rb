@@ -194,9 +194,9 @@ module FlowChat
 
       # Whether titles are numbered, and the enumeration order positions come
       # from, are both decided by FlowChat::ChoiceTitles over this same
-      # `choices` hash - the choice mapper's ChoiceTitles.aliases_for call
-      # goes through the same module over the same hash, so the two can
-      # never disagree on which titles are shown or which ones are aliased.
+      # `choices` hash - the choice mapper goes through the same module over
+      # the same hash, so the two can never disagree on which titles are
+      # shown, which is what lets the mapper use a title as the wire value.
       def build_buttons_message(choices)
         buttons = FlowChat::ChoiceTitles.build(choices, BUTTON_TITLE_LENGTH).map do |key, _label, title, _truncated|
           {id: key, title: title}

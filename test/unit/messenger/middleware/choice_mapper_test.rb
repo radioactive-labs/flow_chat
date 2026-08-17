@@ -43,7 +43,7 @@ module FlowChat
         end
 
         # A generated id and a position occupy the same key space:
-        # IdGenerator#normalize_label keeps \w, which includes digits, so a
+        # A choice labelled "5" has the title "5", so a
         # choice labelled "5" generates the id "5". Ids must win: the id map is
         # consulted before the position map.
         #
@@ -295,30 +295,18 @@ module FlowChat
           @app.verify
         end
 
-        # Precedence must be id, then alias, then position, no matter which
-        # maps happen to hold the same key.
-        def test_generated_ids_win_over_aliases
-          @session.set("messenger.choice_mapping", {"tied" => "from_id"})
-          @session.set("messenger.alias_mapping", {"tied" => "from_alias"})
+        # A title and a position can name the same string: a choice labelled
+        # "1" has the title "1", which is also the first position. The title
+        # must win, or that choice could never be picked.
+        def test_titles_win_over_positions
+          @session.set("messenger.choice_mapping", {"tied" => "from_title"})
           @session.set("messenger.position_mapping", {"tied" => "from_position"})
           @context.input = "tied"
           @app.expect :call, [:text, "response", nil, nil], [@context]
 
           @middleware.call(@context)
 
-          assert_equal "from_id", @context.input
-          @app.verify
-        end
-
-        def test_aliases_win_over_positions
-          @session.set("messenger.alias_mapping", {"tied" => "from_alias"})
-          @session.set("messenger.position_mapping", {"tied" => "from_position"})
-          @context.input = "tied"
-          @app.expect :call, [:text, "response", nil, nil], [@context]
-
-          @middleware.call(@context)
-
-          assert_equal "from_alias", @context.input
+          assert_equal "from_title", @context.input
           @app.verify
         end
 

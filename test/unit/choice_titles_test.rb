@@ -110,80 +110,54 @@ module FlowChat
       assert_nil ChoiceTitles.ambiguity_reason({"a" => "Alpha", "b" => "Beta"}, 20)
     end
 
-    # --- aliases_for ---------------------------------------------------
-    #
-    # Folded in from the former ChoiceAliasBuilder: its whole body delegated
-    # to this module, and its correctness rested entirely on the guarantee
-    # .build makes above (never two identical titles for the same set), so
-    # it was one concept split across two top-level constants.
+    # --- fold ----------------------------------------------------------
 
-    def test_aliases_for_no_display_cap_means_no_aliases
-      choices = {"a" => "Alpha"}
-      generated_ids = {"a" => "Alpha"}
+    DOWNCASE = ->(string) { string.strip.downcase }
 
-      assert_equal({}, ChoiceTitles.aliases_for(choices, generated_ids, nil))
+    # HTTP and Intercom resolve on a downcased label, so two labels that
+    # differ only by case are indistinguishable to them and the set has to
+    # be numbered - even though the raw titles are distinct.
+    def test_titles_differing_only_by_case_are_ambiguous_under_a_downcasing_fold
+      choices = {"a" => "Yes", "b" => "YES"}
+
+      assert ChoiceTitles.ambiguous?(choices, 20, fold: DOWNCASE)
+      refute ChoiceTitles.ambiguous?(choices, 20)
     end
 
-    # "Alpha" is short and unique, so .build does not prefix it; its bare
-    # title is then identical to its own generated id, which is exactly the
-    # case aliases_for skips as pointless - the id map already resolves it.
-    def test_aliases_for_short_unique_label_is_not_aliased_because_its_title_equals_its_own_id
-      choices = {"a" => "Alpha"}
-      generated_ids = {"a" => "Alpha"}
+    def test_numbering_makes_titles_distinct_under_the_fold
+      choices = {"a" => "Yes", "b" => "YES"}
 
-      assert_equal({}, ChoiceTitles.aliases_for(choices, generated_ids, 20))
+      titles = ChoiceTitles.build(choices, 20, fold: DOWNCASE).map { |_k, _l, title, _t| title }
+
+      assert_equal ["1. Yes", "2. YES"], titles
+      folded = titles.map { |title| DOWNCASE.call(title) }
+      assert_equal folded.length, folded.uniq.length
     end
 
-    def test_aliases_for_long_label_is_aliased_to_its_numbered_truncated_title
-      long_label = "A label that is definitely longer than twenty chars"
-      choices = {"a" => long_label}
-      generated_ids = {"a" => long_label}
+    # The Meta bug this whole change came from: the resolver stripped
+    # punctuation, the ambiguity check did not, so "Yes!" produced an id
+    # that was choice B's label verbatim.
+    def test_titles_differing_only_by_punctuation_are_ambiguous_under_a_stripping_fold
+      strip = ->(string) { string.gsub(/[^\w\s]/, "").strip }
+      choices = {"a" => "Yes!", "b" => "Yes"}
 
-      aliases = ChoiceTitles.aliases_for(choices, generated_ids, 20)
-
-      assert_equal({"1. A label that i..." => "a"}, aliases)
+      assert ChoiceTitles.ambiguous?(choices, 20, fold: strip)
+      refute ChoiceTitles.ambiguous?(choices, 20)
     end
 
-    def test_aliases_for_position_is_read_from_enumeration_order_not_from_the_choice_key
-      long_label = "A label that is definitely longer than twenty chars"
-      choices = {"z" => long_label, "a" => "Beta"}
-      generated_ids = {"z" => long_label, "a" => "Beta"}
+    def test_byte_measure_numbers_a_set_that_collides_only_after_byte_truncation
+      choices = {"a" => "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8 one", "b" => "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8 two"}
 
-      aliases = ChoiceTitles.aliases_for(choices, generated_ids, 20)
-
-      assert_equal({"1. A label that i..." => "z", "2. Beta" => "a"}, aliases)
+      assert ChoiceTitles.ambiguous?(choices, 24, measure: :bytes)
     end
 
-    # This is the case a1d08a4 could not alias for either choice: both
-    # labels truncate to the same "Transfer to sa..." at a 20-char cap, so
-    # the old collision-dropping builder registered neither. .build now
-    # prefixes the whole set, making the two titles distinct by
-    # construction, so both are aliased.
-    def test_aliases_for_labels_that_would_collide_without_a_prefix_both_resolve
-      choices = {
-        "savings" => "Transfer to savings account",
-        "salary" => "Transfer to salary account"
-      }
-      generated_ids = {"savings" => choices["savings"], "salary" => choices["salary"]}
+    def test_byte_measure_keeps_every_title_inside_the_byte_cap
+      choices = {"a" => "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3067\u3059", "b" => "\u3082\u3046\u3072\u3068\u3064"}
 
-      aliases = ChoiceTitles.aliases_for(choices, generated_ids, 20)
-
-      assert_equal(
-        {"1. Transfer to sa..." => "savings", "2. Transfer to sa..." => "salary"},
-        aliases
-      )
-    end
-
-    # Two choices sharing a label outright, with no truncation involved:
-    # .build prefixes the set for this too, so each alias still identifies
-    # exactly one choice.
-    def test_aliases_for_duplicate_labels_are_both_aliased_to_their_own_distinct_key
-      choices = {"yes" => "Accept", "no" => "Accept"}
-      generated_ids = {"yes" => "Accept", "no" => "Accept a1b"}
-
-      aliases = ChoiceTitles.aliases_for(choices, generated_ids, 20)
-
-      assert_equal({"1. Accept" => "yes", "2. Accept" => "no"}, aliases)
+      ChoiceTitles.build(choices, 24, measure: :bytes).each do |_k, _l, title, _t|
+        assert_operator title.bytesize, :<=, 24
+        assert title.valid_encoding?
+      end
     end
   end
 end
