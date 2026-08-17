@@ -82,5 +82,39 @@ module FlowChat
 
       refute_nil result
     end
+
+    # Telegram sizes callback_data in bytes and Meta sizes message bodies the
+    # same way. Counting characters let multibyte text through to be rejected.
+    def test_byte_measure_never_exceeds_the_cap
+      text = "日本語のテキストです"
+
+      result = TextTruncator.truncate(text, 12, measure: :bytes)
+
+      assert_operator result.bytesize, :<=, 12
+      assert result.valid_encoding?, "byte truncation must not split a character"
+    end
+
+    def test_byte_measure_leaves_text_that_already_fits_alone
+      assert_equal "日本", TextTruncator.truncate("日本", 6, measure: :bytes)
+    end
+
+    def test_byte_measure_charges_the_ellipsis_in_bytes
+      result = TextTruncator.truncate("abcdefghij", 6, measure: :bytes)
+
+      assert_equal "abc...", result
+      assert_operator result.bytesize, :<=, 6
+    end
+
+    def test_character_measure_is_the_default
+      assert_equal "abc...", TextTruncator.truncate("abcdefghij", 6)
+    end
+
+    def test_number_charges_the_prefix_in_bytes
+      result = TextTruncator.number("日本語のテキスト", 1, 12, measure: :bytes)
+
+      assert result.start_with?("1. ")
+      assert_operator result.bytesize, :<=, 12
+      assert result.valid_encoding?
+    end
   end
 end
