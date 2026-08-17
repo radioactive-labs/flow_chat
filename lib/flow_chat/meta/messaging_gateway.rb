@@ -111,26 +111,31 @@ module FlowChat
         flow_ran = false
 
         entries.each do |entry|
-          events = entry["messaging"] || entry["standby"]
+          # Published in the foreground only, and always - whether this turn
+          # goes on to run a flow inline or hand one to a background job.
+          #
+          # With async enabled the job re-enters this method on the same body,
+          # so publishing here as well as there announced every receipt, echo
+          # and standby event twice: once by the request, once by the job.
+          # Skipping them in the background leaves exactly one publisher, and
+          # leaves it the one that is already holding the delivery - so a
+          # receipt is announced when it arrives rather than whenever the queue
+          # gets to it, and survives a job that is never picked up.
+          #
+          # Nothing changes for an app that does not use async: it never runs
+          # in the background, so it takes this branch every time.
+          publish_side_events(entry) unless in_background?
+
+          events = entry["messaging"]
           next unless events.is_a?(Array)
 
-          # Receipts are handled before any flow claims the slot. A receipt
-          # arriving ahead of a message in the same batch would otherwise spend
-          # the slot and the message would be lost.
-          events.each { |event| handle_status(entry, event) if status_event?(event) }
-
           events.each do |event|
-            next if status_event?(event)
-
-            if echo?(event)
-              publish_echo(entry, event)
-              next
-            end
-
-            unless drives_flow?(event)
-              publish_unmodelled(entry, event)
-              next
-            end
+            # Only a message or a postback drives a flow, which also rules out
+            # a receipt: it carries neither. An echo is the one thing that has
+            # to be named, because it does carry a message and would otherwise
+            # run a flow against our own outbound reply.
+            next unless drives_flow?(event)
+            next if echo?(event)
 
             if flow_ran
               FlowChat.logger.warn { "#{log_tag}: A second message arrived in the same delivery and was not processed" }
@@ -147,6 +152,41 @@ module FlowChat
         end
 
         @controller.head :ok
+      end
+
+      # Everything in a delivery that is not the one event driving a flow.
+      #
+      # Standby carries the same events for a thread another app owns, which is
+      # what a secondary receiver sees under the handover protocol. It is
+      # published whole and never run: a flow answering here would be talking
+      # over whoever Meta handed the thread to, and the send would be refused in
+      # any case. Whether to record it, and what to do about it, is the
+      # application's to decide.
+      #
+      # Nothing has to be subscribed for standby to arrive. A delivery switches
+      # to it the moment a business names another app the primary receiver, on
+      # the same subscription that was already in place.
+      def publish_side_events(entry)
+        Array(entry["standby"]).each do |event|
+          publish_standby(entry, event) if event.is_a?(Hash)
+        end
+
+        events = entry["messaging"]
+        return unless events.is_a?(Array)
+
+        # Receipts first, as they always were: a receipt arriving ahead of a
+        # message in the same batch must not be read as the message.
+        events.each { |event| handle_status(entry, event) if status_event?(event) }
+
+        events.each do |event|
+          next if status_event?(event)
+
+          if echo?(event)
+            publish_echo(entry, event)
+          elsif !drives_flow?(event)
+            publish_unmodelled(entry, event)
+          end
+        end
       end
 
       def status_event?(event)
@@ -294,6 +334,21 @@ module FlowChat
           field: "message_echoes",
           account_id: entry["id"],
           echo_origin: echo_origin(event),
+          value: event
+        })
+      end
+
+      # Named for the channel rather than the event, because that is the part
+      # the application cannot work out for itself: a standby message looks
+      # exactly like an owned one, and only where it arrived says otherwise.
+      def publish_standby(entry, event)
+        FlowChat.logger.info { "#{log_tag}: Publishing standby event for account #{entry["id"]}" }
+
+        instrument(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED, {
+          platform: platform,
+          gateway: gateway_name,
+          field: "standby",
+          account_id: entry["id"],
           value: event
         })
       end

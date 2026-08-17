@@ -146,7 +146,14 @@ module FlowChat
                 # carrying `statuses` and no `messages`. Handled before the flow
                 # slot is claimed, or a status arriving ahead of a message in the
                 # same delivery would spend the slot and drop the message.
-                handle_statuses(value) if value["statuses"].present?
+                #
+                # Foreground only. With async enabled the job re-enters this
+                # method on the same body, so publishing in both announced every
+                # status twice and delivery receipts double-counted. The request
+                # publishes them: it already holds the delivery, so a receipt is
+                # announced when it arrives rather than when the queue reaches
+                # it, and survives a job that is never picked up.
+                handle_statuses(value) if value["statuses"].present? && !in_background?
 
                 next if value["messages"].blank?
 
@@ -164,13 +171,13 @@ module FlowChat
               when "statuses"
                 # Only reachable for a payload built without a field name, which
                 # our own fixtures do and Meta does not.
-                handle_statuses(value)
+                handle_statuses(value) unless in_background?
               else
                 # Anything that is not a message or its delivery. Coexistence
                 # echoes, contact syncs, imported history, account bans, template
                 # approvals: all of it is the application's domain, so it is
                 # published rather than interpreted here.
-                handle_unmodelled_field(change["field"], value, entry["id"])
+                handle_unmodelled_field(change["field"], value, entry["id"]) unless in_background?
               end
             end
           end

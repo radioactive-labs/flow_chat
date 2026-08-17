@@ -58,6 +58,25 @@ class InstagramSendApiGatewayTest < Minitest::Test
     assert_equal :forbidden, rejected.controller.last_head_status
   end
 
+  # A secondary receiver sees the same events under standby, for a thread
+  # another app owns. They are published for the application to record and
+  # never run: answering here would talk over whoever Meta handed the thread
+  # to. Nothing has to be subscribed for these to start arriving.
+  def test_standby_events_are_published_and_never_run_a_flow
+    gateway = build_gateway(login: :facebook)
+    stub_send(gateway)
+
+    events = capture_webhook_events do
+      context = post_standby(gateway, entry_id: "ig_1")
+      assert_nil context.input
+    end
+
+    standby = events.select { |event| event[:field] == "standby" }
+    assert_equal 1, standby.length
+    assert_equal "ig_1", standby.first[:account_id]
+    assert_equal "Hello", standby.first[:value].dig("message", "text")
+  end
+
   private
 
   def build_gateway(login:, page_id: "page_1", instagram_account_id: "ig_1")
@@ -74,6 +93,36 @@ class InstagramSendApiGatewayTest < Minitest::Test
 
   def stub_send(gateway)
     gateway.client.define_singleton_method(:send_message) { |*args, **kwargs| {"message_id" => "mid.sent"} }
+  end
+
+  def post_standby(gateway, entry_id:)
+    body = {
+      "object" => "instagram",
+      "entry" => [{
+        "id" => entry_id,
+        "standby" => [{
+          "sender" => {"id" => "psid_1"},
+          "recipient" => {"id" => entry_id},
+          "timestamp" => 1_700_000_000,
+          "message" => {"mid" => "mid.1", "text" => "Hello"}
+        }]
+      }]
+    }
+
+    context = build_messaging_context(body)
+    gateway.call(context)
+    context
+  end
+
+  def capture_webhook_events
+    events = []
+    subscriber = ActiveSupport::Notifications.subscribe(/webhook.received/) do |*args|
+      events << ActiveSupport::Notifications::Event.new(*args).payload
+    end
+    yield
+    events
+  ensure
+    ActiveSupport::Notifications.unsubscribe(subscriber)
   end
 
   def post(gateway, entry_id:)

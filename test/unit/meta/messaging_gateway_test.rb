@@ -112,6 +112,58 @@ class MessagingGatewayTest < Minitest::Test
     assert_equal 1, statuses.size
   end
 
+  # With async enabled the foreground pass published every receipt, echo and
+  # standby event and then enqueued, and the job re-entered handle_webhook on
+  # the same body and published them all again. A delivery carrying a receipt
+  # alongside a message therefore announced the receipt twice, so delivery and
+  # read receipts double-counted for every app using use_async.
+  #
+  # The request publishes them; the job does not. Simulated here by running
+  # the same body through both passes, which is exactly what async does.
+  def test_side_events_are_published_by_the_request_and_not_again_by_the_job
+    body = {
+      "object" => "page",
+      "entry" => [{
+        "id" => "page_1",
+        "messaging" => [
+          {"sender" => {"id" => "psid_1"}, "recipient" => {"id" => "page_1"}, "delivery" => {"mids" => ["mid.1"], "watermark" => 1}},
+          {"sender" => {"id" => "psid_1"}, "recipient" => {"id" => "page_1"}, "timestamp" => 1_700_000_000, "message" => {"mid" => "mid.6", "text" => "Still here"}}
+        ]
+      }]
+    }
+
+    background_context = nil
+    statuses = capture_events(FlowChat::Instrumentation::Events::MESSAGE_STATUS) do
+      post(body)                                        # the request
+      background_context = post_in_background(body)     # the job, on the same body
+    end
+
+    # The job really did walk this delivery - it ran the flow-driving event.
+    # Without this the test would still pass if the background pass had bailed
+    # out early for some unrelated reason, proving nothing about publishing.
+    assert_equal "Still here", background_context.input
+
+    assert_equal 1, statuses.size, "the receipt must be announced once, by whichever pass holds the delivery"
+  end
+
+  # The same guarantee for an app that never uses async: it only ever takes
+  # the foreground path, so the receipt is still announced exactly once.
+  def test_side_events_are_published_when_no_background_pass_ever_runs
+    statuses = capture_events(FlowChat::Instrumentation::Events::MESSAGE_STATUS) do
+      post({
+        "object" => "page",
+        "entry" => [{
+          "id" => "page_1",
+          "messaging" => [
+            {"sender" => {"id" => "psid_1"}, "recipient" => {"id" => "page_1"}, "delivery" => {"mids" => ["mid.1"], "watermark" => 1}}
+          ]
+        }]
+      })
+    end
+
+    assert_equal 1, statuses.size
+  end
+
   def test_second_message_in_one_delivery_does_not_run
     context = post({
       "object" => "page",
@@ -269,6 +321,22 @@ class MessagingGatewayTest < Minitest::Test
         ]
       }]
     }
+  end
+
+  # Runs a body the way the async job does: through a BackgroundController,
+  # which is what in_background? keys on.
+  def post_in_background(body)
+    context = build_messaging_context(body)
+    context["controller"] = FlowChat::BackgroundController.new(
+      params: {},
+      method: "POST",
+      headers: {},
+      host: "example.com",
+      path: "/webhook",
+      body: body.to_json
+    )
+    @gateway.call(context)
+    context
   end
 
   def post(body)
