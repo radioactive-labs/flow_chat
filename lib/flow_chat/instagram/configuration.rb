@@ -79,12 +79,26 @@ module FlowChat
       end
 
       def valid?
+        # Both ids are required, because sending and receiving key on
+        # different ones and only on the :facebook path do they differ.
+        # account_id is what a send is addressed as (the Page there);
+        # instagram_account_id is what an inbound delivery names in entry.id
+        # on both paths, which is what webhook_account_id encodes.
+        #
+        # Checking only account_id passed a :facebook configuration that had
+        # never been given an instagram_account_id, and the gateway then
+        # rejected every delivery it received: the id it compares against was
+        # blank, and a blank expectation matches nothing. A configuration that
+        # answers the handshake and then refuses all traffic is worse than one
+        # that admits up front it is incomplete.
+        #
         # Wrapped so a predicate answers true or false rather than nil, which
         # the bare && chain returns for a missing first field. Intercom and
         # Telegram already do this and pin it in their tests.
         is_valid = !!(access_token && !access_token.to_s.empty? &&
           verify_token && !verify_token.to_s.empty? &&
-          account_id && !account_id.to_s.empty?)
+          account_id && !account_id.to_s.empty? &&
+          webhook_account_id && !webhook_account_id.to_s.empty?)
 
         FlowChat.logger.debug { "Instagram::Configuration: Configuration valid: #{is_valid}" }
         is_valid

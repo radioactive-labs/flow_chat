@@ -5,7 +5,7 @@ class InstagramConfigurationTest < Minitest::Test
     FlowChat::Instagram::Configuration.clear_all!
   end
 
-  def test_valid_requires_token_page_and_verify_token
+  def test_valid_requires_token_page_verify_token_and_instagram_account_id
     config = FlowChat::Instagram::Configuration.new(nil)
     refute config.valid?
 
@@ -14,6 +14,9 @@ class InstagramConfigurationTest < Minitest::Test
     refute config.valid?, "verify_token is still missing"
 
     config.verify_token = "verify"
+    refute config.valid?, "instagram_account_id is still missing"
+
+    config.instagram_account_id = "ig_1"
     assert config.valid?
   end
 
@@ -130,7 +133,10 @@ class InstagramConfigurationTest < Minitest::Test
     assert_equal "https://graph.instagram.com/v23.0/ig_1/message_attachments", config.attachment_upload_url
   end
 
-  def test_valid_on_facebook_login_path_still_requires_page_id_not_instagram_account_id
+  # The :facebook path needs both ids, and for different reasons: page_id is
+  # what a send is addressed as, instagram_account_id is what an inbound
+  # delivery names. Neither substitutes for the other.
+  def test_valid_on_facebook_login_path_requires_both_page_id_and_instagram_account_id
     config = FlowChat::Instagram::Configuration.new(nil)
     config.access_token = "tok"
     config.verify_token = "verify"
@@ -139,6 +145,25 @@ class InstagramConfigurationTest < Minitest::Test
 
     config.page_id = "page_1"
     assert config.valid?
+
+    config.instagram_account_id = nil
+    refute config.valid?, "instagram_account_id is required on the facebook path too"
+  end
+
+  # Regression: valid? checked account_id, which is page_id on the :facebook
+  # path, while the gateway matches inbound deliveries against
+  # webhook_account_id, which is always instagram_account_id. A configuration
+  # given only page_id therefore reported itself valid, answered the webhook
+  # handshake, and then rejected every delivery with 403 - because the id it
+  # compared against was blank, and a blank expectation matches nothing.
+  def test_valid_is_false_when_webhook_account_id_would_be_blank
+    config = FlowChat::Instagram::Configuration.new(nil)
+    config.access_token = "tok"
+    config.verify_token = "verify"
+    config.page_id = "page_1"
+
+    assert config.webhook_account_id.to_s.empty?, "precondition: nothing to match a delivery against"
+    refute config.valid?, "a config that would reject every delivery must not report itself valid"
   end
 
   def test_valid_on_instagram_login_path_requires_instagram_account_id_not_page_id
@@ -190,6 +215,7 @@ class InstagramConfigurationTest < Minitest::Test
     config.access_token = "tok"
     config.page_id = "page_1"
     config.verify_token = "verify"
+    config.instagram_account_id = "ig_1"
 
     assert_equal true, config.valid?
   end

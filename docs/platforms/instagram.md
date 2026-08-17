@@ -14,7 +14,9 @@ Meta offers two ways to reach Instagram messaging, and FlowChat implements both 
 | Scopes | Page messaging scopes | `instagram_business_basic`, `instagram_business_manage_messages` |
 | Supported here | Yes | Yes |
 
-`FlowChat::Instagram::Configuration#login` picks the path: `:facebook` (the default) or `:instagram`. Everything a flow touches is identical either way: the renderer, the limits, the choice mapping, the sessions, the instrumentation. `app.platform` is always `:instagram`. Only the transport and the credentials differ: on `:facebook` the client posts to `graph.facebook.com`, authenticates with the Page access token, and matches an inbound delivery against the linked Page id; on `:instagram` it posts to `graph.instagram.com`, authenticates with the Instagram User access token, and matches against the Instagram professional account id instead, since there is no linked Page to key on.
+`FlowChat::Instagram::Configuration#login` picks the path: `:facebook` (the default) or `:instagram`. Everything a flow touches is identical either way: the renderer, the limits, the choice mapping, the sessions, the instrumentation. `app.platform` is always `:instagram`. Only the transport and the credentials differ: on `:facebook` the client posts to `graph.facebook.com` and authenticates with the Page access token; on `:instagram` it posts to `graph.instagram.com` and authenticates with the Instagram User access token.
+
+Inbound matching does not differ. A delivery arrives under the `instagram` webhook object on both paths, and names the Instagram professional account in `entry.id` — not the linked Page, even when there is one. So an inbound delivery is always matched against `instagram_account_id`, which is why that field is required whichever path you configure.
 
 The Instagram Login path cannot do everything the Facebook Login path can: it has no access to ads that click into an Instagram DM and no access to conversation tagging, both of which stay tied to the Facebook Login path in Meta's own product boundaries. Pick Instagram Login only when the professional account genuinely has no linked Facebook Page; otherwise Facebook Login keeps every capability available.
 
@@ -22,7 +24,9 @@ Instagram shares its webhook envelope and most of its rendering logic with Messe
 
 ## Credentials
 
-The gateway needs an access token, an account id, and a verify token; an app secret is needed to validate webhook signatures. Which account id matters depends on `login`: `page_id` on the default `:facebook` path, `instagram_account_id` on the `:instagram` path. The one `login` does not need is still accepted and stored, in case your own code calls the Instagram Graph API directly with it.
+The gateway needs an access token, a verify token, and `instagram_account_id`; an app secret is needed to validate webhook signatures. `instagram_account_id` is required on both paths, because that is the id every inbound delivery names.
+
+On the default `:facebook` path you also need `page_id`, since that is what an outbound send is addressed as. On `:instagram` there is no Page, and `instagram_account_id` serves both roles. A configuration missing either required id reports itself invalid rather than answering the webhook handshake and then rejecting the traffic that follows.
 
 ```yaml
 # config/credentials.yml.enc
