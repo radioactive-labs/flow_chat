@@ -102,6 +102,11 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal 1, sent.length, "one delivery must publish message.sent exactly once"
     assert_equal 0, failed.length
     assert_equal "sent_123", sent.first.payload[:platform_message_id]
+
+    # The event is published after the send rather than wrapped around it, so
+    # its own duration reads zero; the measured figure rides on the payload.
+    assert_instance_of Float, sent.first.payload[:duration_ms]
+    assert_operator sent.first.payload[:duration_ms], :>=, 0
   end
 
   # Regression: report_delivery_failure returns nil when send_message already

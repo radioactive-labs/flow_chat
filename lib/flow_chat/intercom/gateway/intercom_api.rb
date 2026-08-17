@@ -358,6 +358,7 @@ module FlowChat
               platform: :intercom,
               content_length: prompt.to_s.length,
               platform_message_id: platform_message_id_from(result),
+              duration_ms: context[FlowChat::Instrumentation::DELIVERY_DURATION_KEY],
               timestamp: context["request.timestamp"]
             })
           end

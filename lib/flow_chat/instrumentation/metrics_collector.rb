@@ -82,7 +82,12 @@ module FlowChat
           if event.payload[:message_type]
             increment_counter("#{platform}.messages.sent.by_type.#{event.payload[:message_type]}")
           end
-          track_timing("#{platform}.api.response_time", event.duration)
+          # The gateway measures the send itself and puts it on the payload.
+          # event.duration would read as zero here: MESSAGE_SENT is published
+          # after the send returns, rather than wrapped around it, because a
+          # wrapped event fires whatever the block returned - including for
+          # sends the platform refused.
+          track_timing("#{platform}.api.response_time", event.payload[:duration_ms] || event.duration)
         end
 
         ActiveSupport::Notifications.subscribe("webhook.verified.flow_chat") do |event|

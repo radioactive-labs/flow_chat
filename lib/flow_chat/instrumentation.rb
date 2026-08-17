@@ -8,6 +8,16 @@ module FlowChat
     # same way for every gateway. nil when the platform does not name one.
     DELIVERED_MESSAGE_ID_KEY = "delivery.platform_message_id"
 
+    # How long the send itself took, in milliseconds, left here by
+    # report_delivery_failure for the gateway to put on MESSAGE_SENT.
+    #
+    # Measured rather than taken from ActiveSupport::Notifications' own event
+    # duration: a block event is published whatever the block returns, so
+    # timing the send that way meant publishing MESSAGE_SENT for sends that
+    # failed. The event is emitted after the fact instead, which leaves its
+    # own duration at zero, so the real figure is carried in the payload.
+    DELIVERY_DURATION_KEY = "delivery.duration_ms"
+
     # Instrument a block of code with the given event name and payload
     def instrument(event_name, payload = {}, &block)
       enriched_payload = payload&.dup || {}
@@ -56,7 +66,9 @@ module FlowChat
     # turning a swallowed API error into an exception here would fail the webhook
     # for a reply the platform merely declined.
     def report_delivery_failure(context, **payload)
+      started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       result = yield
+      context[DELIVERY_DURATION_KEY] = elapsed_ms_since(started_at)
 
       if result.nil?
         error = FlowChat::DeliveryError.new("#{payload[:platform] || "the platform"} did not accept the message")
@@ -68,9 +80,14 @@ module FlowChat
       report_delivery_success(context, result)
       result
     rescue => error
+      context[DELIVERY_DURATION_KEY] ||= elapsed_ms_since(started_at) if started_at
       report_to_subscribers(error, payload)
       report_to_app(context, error)
       raise error
+    end
+
+    def elapsed_ms_since(started_at)
+      ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round(2)
     end
 
     # The success half. Runs where the send happened, which is the only place that

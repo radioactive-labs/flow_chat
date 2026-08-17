@@ -290,7 +290,8 @@ module FlowChat
             message: prompt,
             gateway: :telegram_bot_api,
             platform: :telegram,
-            platform_message_id: platform_message_id_from(result)
+            platform_message_id: platform_message_id_from(result),
+            duration_ms: context[FlowChat::Instrumentation::DELIVERY_DURATION_KEY]
           })
         end
 
