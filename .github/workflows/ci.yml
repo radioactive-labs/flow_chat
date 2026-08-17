@@ -44,10 +44,14 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Newest stable, deliberately ahead of the matrix above. Rails main already
+    # requires Ruby >= 3.3 (via ractor-dispatch) and that floor keeps rising, so
+    # pinning this job to the minimum would fail it for a Ruby version rather
+    # than for the API change it exists to catch.
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
-        ruby-version: '3.3'
+        ruby-version: '3.4'
         bundler-cache: true
 
     - name: Run tests against rails main
