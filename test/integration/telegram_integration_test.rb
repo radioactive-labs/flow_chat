@@ -266,9 +266,10 @@ class TelegramIntegrationTest < Minitest::Test
 
     run_processor(controller, ChoiceFlow, session_data: session_data)
 
-    # Choice mapper should store choices with key "telegram_choices"
-    assert session_data.key?("telegram_choices")
-    assert_equal({"red" => "Red", "green" => "Green", "blue" => "Blue"}, session_data["telegram_choices"])
+    # The mapper stores displayed title => choice key, which is what a tap
+    # sends back as callback_data and what a reader would type.
+    assert session_data.key?("telegram.choice_mapping")
+    assert_equal({"Red" => "red", "Green" => "green", "Blue" => "blue"}, session_data["telegram.choice_mapping"])
   end
 
   def test_choice_mapper_passes_through_valid_callback_data

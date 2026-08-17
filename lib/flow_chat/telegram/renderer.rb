@@ -71,11 +71,19 @@ module FlowChat
         }]
       end
 
+      # callback_data arrives already sized to 64 bytes by
+      # FlowChat::Telegram::Middleware::ChoiceMapper, which is also what made
+      # it distinct from its neighbours - so this cut is a no-op on that path
+      # and exists only for a renderer driven without the mapper.
+      #
+      # It measures bytes, because that is the unit Telegram sizes the field
+      # in. Slicing 64 *characters* both overflowed the field on multibyte
+      # labels and could merge two keys into one callback_data.
       def build_inline_keyboard(choice_hash)
         buttons = choice_hash.map do |key, value|
           {
-            text: truncate_text(value.to_s, 64),
-            callback_data: key.to_s[0, 64]
+            text: FlowChat::TextTruncator.truncate(value.to_s, 64, measure: :bytes),
+            callback_data: FlowChat::TextTruncator.truncate(key.to_s, 64, measure: :bytes)
           }
         end
 
