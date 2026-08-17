@@ -344,6 +344,11 @@ module FlowChat
             end
             context["intercom.message_result"] = result
 
+            # report_delivery_failure already reported this; a nil result
+            # means the platform did not accept the message, and instrumenting
+            # MESSAGE_SENT anyway counted a delivery that never happened.
+            return unless result
+
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
               to: context["request.user_id"],

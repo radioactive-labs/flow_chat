@@ -25,14 +25,16 @@ module FlowChat
 
         # Use renderer to convert to structured response
         response = FlowChat::Whatsapp::Renderer.new(prompt, choices: choices, media: media).render
-        type, content, options = response
+        _, _, options = response
 
-        result = instrument(Events::MESSAGE_SENT, {
-          to: to,
-          message_type: type.to_s,
-          content_length: content.to_s.length,
-          platform: :whatsapp
-        }) do
+        # MESSAGE_SENT is instrumented by the gateway, not here. This wrapped
+        # the send in its own instrument block, and ActiveSupport::Notifications
+        # publishes a block event once the block returns whatever it returned -
+        # so the event fired even when the send had failed and this method was
+        # about to answer nil, and fired a second time when the gateway
+        # instrumented the same send. Every subscriber counted a successful
+        # send twice and a failed one once.
+        result = begin
           # Above the button cap there is no interactive surface that can
           # carry media (see the renderer), so it rides in options[:media]
           # and goes out as its own message ahead of the choice message.

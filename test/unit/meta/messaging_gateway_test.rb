@@ -195,6 +195,34 @@ class MessagingGatewayTest < Minitest::Test
     assert_nil context["request.media"], "a location is not media"
   end
 
+  # The other half of the same defect: the client wrapped its send in its own
+  # MESSAGE_SENT instrument block while the gateway instrumented the same send,
+  # so every successful delivery published the event twice.
+  def test_message_sent_is_instrumented_exactly_once_on_a_successful_send
+    sent, failed = capture_delivery_events do
+      post(messaging_payload({"message" => {"mid" => "mid.1", "text" => "Hello"}}))
+    end
+
+    assert_equal 1, sent.length, "one delivery must publish message.sent exactly once"
+    assert_equal 0, failed.length
+  end
+
+  # Regression: report_delivery_failure returns nil when send_message already
+  # swallowed an API error, and handle_message_inline instrumented MESSAGE_SENT
+  # regardless - so a delivery that never happened was counted as one that
+  # did, alongside the MESSAGE_DELIVERY_FAILED event correctly fired for the
+  # same send.
+  def test_message_sent_is_not_instrumented_when_delivery_failed
+    @gateway.client.define_singleton_method(:send_message) { |*args, **kwargs| nil }
+
+    sent, failed = capture_delivery_events do
+      post(messaging_payload({"message" => {"mid" => "mid.1", "text" => "Hello"}}))
+    end
+
+    assert_equal 1, failed.length, "the refused send must be reported once"
+    assert_equal 0, sent.length, "message.sent must not fire for a delivery the platform refused"
+  end
+
   def test_a_non_location_attachment_still_lands_on_request_media
     context = post(messaging_payload({
       "message" => {

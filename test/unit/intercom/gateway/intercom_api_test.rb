@@ -53,10 +53,13 @@
 # - Test uses SimpleMock for lightweight mocking without external dependencies
 
 require "test_helper"
+require_relative "../../../support/test_helpers"
 require "webmock/minitest"
 require_relative "../../../support/mocks"
 
 class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
+  include FlowChat::TestSupport::TestHelpers
+
   # Helper method for type matching in expectations
   def instance_of(klass)
     klass
@@ -329,6 +332,25 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
     assert message_sent_event, "MESSAGE_SENT event should be instrumented"
     assert_equal "user_456", message_sent_event[:data][:to]
     assert_equal "conv_123", message_sent_event[:data][:conversation_id]
+  end
+
+  # Regression: report_delivery_failure returns nil when the client already
+  # swallowed an API error, and the caller instrumented MESSAGE_SENT anyway -
+  # so a delivery that never happened was counted as one that did, alongside
+  # the MESSAGE_DELIVERY_FAILED event that correctly fired for the same send.
+  def test_message_sent_is_not_instrumented_when_delivery_failed
+    webhook_body = build_conversation_created_webhook
+    setup_post_request_with_webhook_and_app_call(webhook_body)
+
+    @app.expect(:call, [:text, "Hello!", nil, nil], [@context])
+    # The client already logged the API error and answers with nil, the same
+    # contract every client here follows on a swallowed failure.
+    @mock_client.expect(:send_message, nil, ["conv_123", "Hello!"], choices: nil, media: nil)
+
+    sent, failed = capture_delivery_events { @gateway.call(@context) }
+
+    assert_equal 1, failed.length, "the refused send must be reported once"
+    assert_equal 0, sent.length, "message.sent must not fire for a delivery the platform refused"
   end
 
   def test_instrumentation_for_user_event_with_message

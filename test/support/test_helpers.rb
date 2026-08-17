@@ -83,6 +83,32 @@ module FlowChat
       # test/unit/whatsapp/gateway/cloud_api_test.rb: an OpenStruct request
       # with post?/get?, a rewindable body, headers and cookies, and a
       # controller that records render/head calls.
+      # Subscribes to the real ActiveSupport::Notifications channels rather
+      # than stubbing a gateway's #instrument method.
+      #
+      # That distinction matters and is the reason this helper exists: the
+      # clients used to publish message.sent from inside their own send, so a
+      # stub on the gateway saw nothing and a test could pass while every
+      # subscriber - FlowChat's own MetricsCollector included - counted a
+      # successful send twice and a refused one once.
+      #
+      # @return [Array<Array, Array>] the message.sent and
+      #   message.delivery_failed events published while the block ran
+      def capture_delivery_events
+        sent = []
+        failed = []
+        subscriptions = [
+          ActiveSupport::Notifications.subscribe("message.sent.flow_chat") { |*args| sent << ActiveSupport::Notifications::Event.new(*args) },
+          ActiveSupport::Notifications.subscribe("message.delivery_failed.flow_chat") { |*args| failed << ActiveSupport::Notifications::Event.new(*args) }
+        ]
+
+        yield
+
+        [sent, failed]
+      ensure
+        subscriptions&.each { |subscription| ActiveSupport::Notifications.unsubscribe(subscription) }
+      end
+
       def build_messaging_context(body, headers: {}, cookies: {}, params: {})
         context = FlowChat::Context.new
 

@@ -23,14 +23,13 @@ module FlowChat
         response = renderer_class.new(prompt, choices: choices, media: media).render
         type, content, options = response
 
-        instrument(Events::MESSAGE_SENT, {
-          to: recipient_id,
-          message_type: type.to_s,
-          content_length: content.to_s.length,
-          platform: platform
-        }) do
-          deliver(recipient_id, type, content, options, tag)
-        end
+        # MESSAGE_SENT is instrumented by the gateway, not here. This wrapped
+        # the send in its own instrument block, and ActiveSupport::Notifications
+        # publishes a block event once the block returns whatever it returned -
+        # so the event fired even when the send had failed and this method was
+        # about to answer nil, and fired a second time when the gateway
+        # instrumented the same send.
+        deliver(recipient_id, type, content, options, tag)
       end
 
       def send_text(recipient_id, text, tag: nil)

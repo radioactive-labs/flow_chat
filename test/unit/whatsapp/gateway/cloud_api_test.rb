@@ -1,7 +1,10 @@
 require "test_helper"
+require_relative "../../../support/test_helpers"
 require "webmock/minitest"
 
 class WhatsappCloudApiGatewayTest < Minitest::Test
+  include FlowChat::TestSupport::TestHelpers
+
   def setup
     # Create a mock configuration for testing
     @mock_config = FlowChat::Whatsapp::Configuration.new("test_config")
@@ -81,6 +84,46 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "John Doe", context["request.user_name"]
     assert_equal :whatsapp_cloud_api, context["request.gateway"]
     refute_equal "1702891800", context["request.timestamp"] # Now uses Time.current instead of webhook timestamp
+  end
+
+  # The other half of the same defect: the client wrapped its send in its own
+  # MESSAGE_SENT instrument block while the gateway instrumented the same send,
+  # so every successful delivery published the event twice and MetricsCollector
+  # counted #{platform}.messages.sent at double the real rate.
+  def test_message_sent_is_instrumented_exactly_once_on_a_successful_send
+    sent, failed = capture_delivery_events do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.test123")
+      )
+      @gateway.call(context)
+    end
+
+    assert_equal 1, sent.length, "one delivery must publish message.sent exactly once"
+    assert_equal 0, failed.length
+    assert_equal "sent_123", sent.first.payload[:platform_message_id]
+  end
+
+  # Regression: report_delivery_failure returns nil when send_message already
+  # swallowed an API error (logged, not raised), and handle_message_inline
+  # instrumented MESSAGE_SENT regardless - so a delivery that never happened
+  # was counted as one that did, alongside the MESSAGE_DELIVERY_FAILED event
+  # correctly fired for the same send.
+  def test_message_sent_is_not_instrumented_when_delivery_failed
+    WebMock.reset!
+    stub_request(:post, @mock_config.messages_url)
+      .to_return(status: 400, body: {"error" => {"message" => "rejected"}}.to_json)
+
+    sent, failed = capture_delivery_events do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.test123")
+      )
+      @gateway.call(context)
+    end
+
+    assert_equal 1, failed.length, "the refused send must be reported once"
+    assert_equal 0, sent.length, "message.sent must not fire for a delivery the platform refused"
   end
 
   def test_post_request_button_response_processing

@@ -49,12 +49,13 @@ module FlowChat
         type, content, options = response
         attachment_urls = options[:attachment_urls]
 
-        result = instrument(Events::MESSAGE_SENT, {
-          to: conversation_id,
-          message_type: type.to_s,
-          content_length: content.to_s.length,
-          platform: :intercom
-        }) do
+        # MESSAGE_SENT is instrumented by the gateway, not here. This wrapped
+        # the send in its own instrument block, and ActiveSupport::Notifications
+        # publishes a block event once the block returns whatever it returned -
+        # so the event fired even when the send had failed and this method was
+        # about to answer nil, and fired a second time when the gateway
+        # instrumented the same send.
+        result = begin
           # Determine message type based on response type
           message_type = case type
           when :note

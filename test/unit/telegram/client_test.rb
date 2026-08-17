@@ -415,9 +415,10 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     result = @client.send_text(999999999, "Hello")
 
-    refute result["ok"]
-    assert_equal 400, result["error_code"]
-    assert_includes result["description"], "chat not found"
+    # nil on a refused send, the contract every other client here keeps.
+    # Returning the error envelope made a refusal indistinguishable from a
+    # delivery to report_delivery_failure, which tests the result for nil.
+    assert_nil result
   end
 
   def test_rate_limit_response
@@ -434,9 +435,7 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     result = @client.send_text(12345, "Hello")
 
-    refute result["ok"]
-    assert_equal 429, result["error_code"]
-    assert_equal 5, result["parameters"]["retry_after"]
+    assert_nil result, "a rate-limited send is a refused send"
   end
 
   def test_network_timeout
@@ -466,7 +465,7 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     result = @client.send_text(12345, "Hello")
 
-    refute result["ok"]
+    assert_nil result
     assert_equal 1, events.size
 
     event = events.first
@@ -491,7 +490,7 @@ class FlowChat::Telegram::ClientTest < Minitest::Test
 
     result = @client.send_text(12345, "Hello")
 
-    refute result["ok"]
+    assert_nil result
     assert_equal 1, events.size
 
     event = events.first

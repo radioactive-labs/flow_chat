@@ -280,6 +280,11 @@ module FlowChat
             @client.send_message(context["request.id"], prompt, choices: choices, media: media)
           end
 
+          # report_delivery_failure already reported this; a nil result means
+          # the platform did not accept the message, and instrumenting
+          # MESSAGE_SENT anyway counted a delivery that never happened.
+          return unless result
+
           instrument(Events::MESSAGE_SENT, {
             to: context["request.id"],
             message: prompt,

@@ -186,7 +186,9 @@ module FlowChat
 
       # Build the download URL for an inbound file_id
       def file_url(file_id)
-        file_path = get_file(file_id).dig("result", "file_path")
+        # get_file answers nil when the API refused, so this cannot assume a
+        # hash back the way it did while every request returned its envelope.
+        file_path = get_file(file_id)&.dig("result", "file_path")
         return nil unless file_path
 
         "https://api.telegram.org/file/bot#{@config.bot_token}/#{file_path}"
@@ -226,9 +228,7 @@ module FlowChat
         response = http.request(request)
         result = JSON.parse(response.body)
 
-        if result["ok"]
-          FlowChat.logger.debug { "Telegram::Client: API request successful" }
-        else
+        unless result["ok"]
           FlowChat.logger.error { "Telegram::Client: API error - #{result["description"]}" }
           report_api_error(
             "Telegram API error: #{result["description"]}",
@@ -237,8 +237,17 @@ module FlowChat
             error_description: result["description"],
             chat_id: params[:chat_id]
           )
+
+          # nil on a refused send, the contract every other client here keeps.
+          # Answering with the parsed error envelope instead made the failure
+          # indistinguishable from a success to anything upstream:
+          # report_delivery_failure tests the result for nil, so a Telegram
+          # send that Meta refused was reported as delivered and could never
+          # reach on_delivery_failure.
+          return nil
         end
 
+        FlowChat.logger.debug { "Telegram::Client: API request successful" }
         result
       rescue Net::OpenTimeout, Net::ReadTimeout => network_error
         FlowChat.logger.error { "Telegram::Client: Network timeout: #{network_error.class.name}: #{network_error.message}" }
@@ -251,7 +260,10 @@ module FlowChat
           error: error,
           chat_id: params[:chat_id]
         )
-        {"ok" => false, "description" => error.message}
+
+        # nil for the same reason a refused send answers nil above: an
+        # envelope here reads as a delivery to everything upstream.
+        nil
       end
 
       def report_api_error(message, api_method: nil, error_code: nil, error_description: nil, error: nil, chat_id: nil)
