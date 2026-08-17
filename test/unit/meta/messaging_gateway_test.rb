@@ -134,8 +134,10 @@ class MessagingGatewayTest < Minitest::Test
 
     background_context = nil
     statuses = capture_events(FlowChat::Instrumentation::Events::MESSAGE_STATUS) do
-      post(body)                                        # the request
-      background_context = post_in_background(body)     # the job, on the same body
+      post(body) # the request
+      # The job the gem enqueued, on the same body, carrying word that the
+      # request already published.
+      background_context = post_in_background(body, side_events_published: true)
     end
 
     # The job really did walk this delivery - it ran the flow-driving event.
@@ -161,6 +163,34 @@ class MessagingGatewayTest < Minitest::Test
       })
     end
 
+    assert_equal 1, statuses.size
+  end
+
+  # An application is free to build a request context itself and enqueue a job
+  # directly, which is what fanning one shared webhook out to several accounts
+  # takes. No foreground pass runs for those, so skipping in the background
+  # meant the delivery's echoes, standby events and receipts were never
+  # published at all: a human answering from the page inbox produced an echo
+  # the application never saw, and its flow kept talking over them.
+  def test_a_background_pass_with_no_foreground_pass_behind_it_publishes
+    body = {
+      "object" => "page",
+      "entry" => [{
+        "id" => "page_1",
+        "messaging" => [
+          {"sender" => {"id" => "psid_1"}, "recipient" => {"id" => "page_1"}, "delivery" => {"mids" => ["mid.1"], "watermark" => 1}},
+          {"sender" => {"id" => "page_1"}, "recipient" => {"id" => "psid_1"}, "message" => {"mid" => "mid.9", "text" => "From a human", "is_echo" => true}}
+        ]
+      }]
+    }
+
+    echoes = nil
+    statuses = capture_events(FlowChat::Instrumentation::Events::MESSAGE_STATUS) do
+      echoes = capture_webhook_received { post_in_background(body) }
+    end
+
+    assert_equal 1, echoes.size, "the job holding the delivery must announce the echo"
+    assert_equal :human_agent, echoes.first[:echo_origin]
     assert_equal 1, statuses.size
   end
 
@@ -324,8 +354,10 @@ class MessagingGatewayTest < Minitest::Test
   end
 
   # Runs a body the way the async job does: through a BackgroundController,
-  # which is what in_background? keys on.
-  def post_in_background(body)
+  # which is what in_background? keys on. side_events_published is what the
+  # gem writes into the context of a job it enqueues itself, and what an
+  # application enqueuing its own job leaves out.
+  def post_in_background(body, side_events_published: false)
     context = build_messaging_context(body)
     context["controller"] = FlowChat::BackgroundController.new(
       params: {},
@@ -333,7 +365,8 @@ class MessagingGatewayTest < Minitest::Test
       headers: {},
       host: "example.com",
       path: "/webhook",
-      body: body.to_json
+      body: body.to_json,
+      side_events_published: side_events_published
     )
     @gateway.call(context)
     context

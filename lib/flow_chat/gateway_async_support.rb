@@ -17,6 +17,18 @@ module FlowChat
       @controller.is_a?(::FlowChat::BackgroundController)
     end
 
+    # Whether an earlier pass already announced this delivery's side events,
+    # which is the case only for a job the gem enqueued after publishing them
+    # itself. Being in the background is not enough on its own: an application
+    # may build a request context and enqueue a job with no foreground pass
+    # ahead of it, and then this pass is the first to see the delivery.
+    #
+    # in_background? short-circuits because a foreground controller is a Rails
+    # controller, which knows nothing about side events.
+    def side_events_already_published?
+      in_background? && @controller.side_events_published?
+    end
+
     # Check if async processing should be used
     # Returns true if:
     # - Not already in background mode
@@ -40,6 +52,11 @@ module FlowChat
       FlowChat.logger.info { "#{self.class.name}: Async enabled - enqueuing background job" }
 
       # Serialize request data for BackgroundController
+      #
+      # side_events_published records that this pass has already announced the
+      # delivery's side events, so the job it is about to enqueue does not
+      # announce them a second time. It rides in the request context rather
+      # than in params, where a platform's own webhook fields live.
       request_data = {
         params: @controller.request.params.to_h,
         method: @controller.request.method,
@@ -47,7 +64,8 @@ module FlowChat
         host: extract_host(@controller.request),
         path: extract_path(@controller.request),
         body: extract_body_for_background(@controller.request),
-        remote_ip: extract_remote_ip(@controller.request)
+        remote_ip: extract_remote_ip(@controller.request),
+        side_events_published: true
       }
 
       # Enqueue user's job with request context and job params

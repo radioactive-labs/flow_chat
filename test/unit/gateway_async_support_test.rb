@@ -48,6 +48,24 @@ class GatewayAsyncSupportTest < Minitest::Test
     assert @gateway.in_background?
   end
 
+  def test_side_events_already_published_is_false_in_the_foreground
+    @gateway.instance_variable_set(:@controller, @controller)
+    refute @gateway.side_events_already_published?
+  end
+
+  # A background pass an application enqueued itself has no foreground pass
+  # behind it, so nothing has announced the delivery yet.
+  def test_side_events_already_published_is_false_without_the_marker
+    @gateway.instance_variable_set(:@controller, FlowChat::BackgroundController.new({}))
+    refute @gateway.side_events_already_published?
+  end
+
+  def test_side_events_already_published_is_true_for_a_job_the_gem_enqueued
+    controller = FlowChat::BackgroundController.new(side_events_published: true)
+    @gateway.instance_variable_set(:@controller, controller)
+    assert @gateway.side_events_already_published?
+  end
+
   def test_should_enqueue_async_returns_false_when_no_processor
     @gateway.instance_variable_set(:@context, @context)
     @gateway.instance_variable_set(:@controller, @controller)
@@ -104,7 +122,10 @@ class GatewayAsyncSupportTest < Minitest::Test
     job_class = Minitest::Mock.new
     job_class.expect(:perform_later, true) do |args|
       args[:request_context][:params].is_a?(Hash) &&
-        args[:request_context][:method] == "POST"
+        args[:request_context][:method] == "POST" &&
+        # The pass doing the enqueuing has already published this delivery's
+        # side events, and says so, so the job does not publish them again.
+        args[:request_context][:side_events_published] == true
     end
 
     # Create controller with proper params hash that supports to_unsafe_h

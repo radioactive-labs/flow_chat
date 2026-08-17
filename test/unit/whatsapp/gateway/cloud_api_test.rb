@@ -813,6 +813,43 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "service", seen[:value].dig("pricing", "category")
   end
 
+  # With async enabled the gem publishes in the foreground, enqueues, and the
+  # job re-enters on the same body, so a receipt announced by both passes was
+  # counted twice.
+  def test_a_status_is_announced_by_the_request_and_not_again_by_the_job_the_gem_enqueued
+    seen = []
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| seen << p }
+
+    body = change_payload("statuses", {"statuses" => [status_hash]})
+
+    @gateway.call(create_context_with_request(method: :post, body: body))
+
+    job_gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |_| }, @mock_config)
+    job_gateway.call(create_background_context(body, side_events_published: true))
+
+    assert_equal 1, seen.size, "the receipt must be announced once, by whichever pass holds the delivery"
+  end
+
+  # An application is free to build a request context itself and enqueue a job
+  # directly, which is what fanning one shared webhook out to several accounts
+  # takes. No foreground pass runs for those, so skipping in the background
+  # meant the delivery's receipts and echoes were never announced at all.
+  def test_a_background_pass_with_no_foreground_pass_behind_it_publishes
+    statuses = []
+    subscribe(FlowChat::Instrumentation::Events::MESSAGE_STATUS) { |p| statuses << p }
+    fields = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| fields << p }
+
+    @gateway.call(create_background_context(change_payload("statuses", {"statuses" => [status_hash]})))
+
+    echo_gateway = FlowChat::Whatsapp::Gateway::CloudApi.new(proc { |_| }, @mock_config)
+    echo_gateway.call(create_background_context(echo_payload(app_id: nil)))
+
+    assert_equal 1, statuses.size, "the job holding the delivery must announce the receipt"
+    assert_equal 1, fields.size, "the job holding the delivery must announce the echo"
+    assert_equal "smb_message_echoes", fields.first[:field]
+  end
+
   # --- Everything that is not messaging --------------------------------------
 
   # Messaging is the gateway's job. Coexistence echoes, contact syncs, imported
@@ -1059,6 +1096,24 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     echo["app_id"] = app_id if app_id
 
     change_payload("smb_message_echoes", {"message_echoes" => [echo]})
+  end
+
+  # Runs a body the way an async job does: through a BackgroundController,
+  # which is what in_background? keys on. side_events_published is what the gem
+  # writes into the context of a job it enqueues itself, and what an
+  # application enqueuing its own job leaves out.
+  def create_background_context(body, side_events_published: false)
+    context = FlowChat::Context.new
+    context["controller"] = FlowChat::BackgroundController.new(
+      params: {},
+      method: "POST",
+      headers: {},
+      host: "example.com",
+      path: "/webhook",
+      body: body.to_json,
+      side_events_published: side_events_published
+    )
+    context
   end
 
   def create_context_with_request(method:, params: {}, body: nil, headers: {}, cookies: {})

@@ -70,7 +70,17 @@ module FlowChat
     def initialize(request_data)
       FlowChat.logger.debug { "BackgroundController: Initializing with request data" }
       @request = BackgroundRequest.new(request_data)
+      @side_events_published = request_data[:side_events_published] || false
       @response = nil
+    end
+
+    # Whether the pass that enqueued this job already announced the delivery's
+    # side events. Only the gem sets it, when it enqueues a job of its own.
+    # An application that builds a request context by hand and enqueues
+    # directly has no earlier pass behind it, so the answer is false and the
+    # job is the one that announces them.
+    def side_events_published?
+      @side_events_published
     end
 
     # Delegate params to request (mimics Rails controller behavior)

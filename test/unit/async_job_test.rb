@@ -112,6 +112,19 @@ class BackgroundControllerTest < Minitest::Test
     assert @controller.is_a?(FlowChat::BackgroundController)
   end
 
+  # Only the gem sets it, on a job it enqueues after publishing the delivery's
+  # side events itself. A context an application built by hand has no earlier
+  # pass behind it, so the job is the first to see the delivery.
+  def test_side_events_published_defaults_to_false
+    refute @controller.side_events_published?
+  end
+
+  def test_side_events_published_reads_the_request_context
+    controller = FlowChat::BackgroundController.new(@request_data.merge(side_events_published: true))
+
+    assert controller.side_events_published?
+  end
+
   def test_params_delegates_to_request_params
     # controller.params should delegate to request.params (Rails controller pattern)
     assert_equal @controller.params, @controller.request.params

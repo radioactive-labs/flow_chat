@@ -111,20 +111,23 @@ module FlowChat
         flow_ran = false
 
         entries.each do |entry|
-          # Published in the foreground only, and always - whether this turn
-          # goes on to run a flow inline or hand one to a background job.
+          # Published by whichever pass is first to see this delivery, and
+          # only once.
           #
-          # With async enabled the job re-enters this method on the same body,
-          # so publishing here as well as there announced every receipt, echo
-          # and standby event twice: once by the request, once by the job.
-          # Skipping them in the background leaves exactly one publisher, and
-          # leaves it the one that is already holding the delivery - so a
-          # receipt is announced when it arrives rather than whenever the queue
-          # gets to it, and survives a job that is never picked up.
+          # With async enabled the gem publishes here, enqueues, and the job
+          # re-enters this method on the same body, so publishing in both
+          # announced every receipt, echo and standby event twice. The job the
+          # gem enqueues therefore carries word that they are already out, and
+          # skips them. The request is the better publisher of the two: it
+          # already holds the delivery, so a receipt is announced when it
+          # arrives rather than whenever the queue gets to it, and survives a
+          # job that is never picked up.
           #
-          # Nothing changes for an app that does not use async: it never runs
-          # in the background, so it takes this branch every time.
-          publish_side_events(entry) unless in_background?
+          # A background pass with nothing behind it publishes. An application
+          # is free to build its own request context and enqueue a job itself,
+          # which is what fanning one shared webhook out to several accounts
+          # takes, and no foreground pass ever runs for those.
+          publish_side_events(entry) unless side_events_already_published?
 
           events = entry["messaging"]
           next unless events.is_a?(Array)

@@ -147,13 +147,18 @@ module FlowChat
                 # slot is claimed, or a status arriving ahead of a message in the
                 # same delivery would spend the slot and drop the message.
                 #
-                # Foreground only. With async enabled the job re-enters this
-                # method on the same body, so publishing in both announced every
-                # status twice and delivery receipts double-counted. The request
-                # publishes them: it already holds the delivery, so a receipt is
-                # announced when it arrives rather than when the queue reaches
-                # it, and survives a job that is never picked up.
-                handle_statuses(value) if value["statuses"].present? && !in_background?
+                # Announced by whichever pass is first to see the delivery, and
+                # only once. With async enabled the gem publishes here, enqueues,
+                # and the job re-enters this method on the same body, so
+                # publishing in both double-counted every receipt. The job the
+                # gem enqueues carries word that they are already out and skips
+                # them, which leaves the request publishing: it already holds
+                # the delivery, so a receipt is announced when it arrives rather
+                # than when the queue reaches it, and survives a job that is
+                # never picked up. A background pass with no foreground pass
+                # behind it, as an application enqueuing its own jobs has,
+                # publishes them itself.
+                handle_statuses(value) if value["statuses"].present? && !side_events_already_published?
 
                 next if value["messages"].blank?
 
@@ -171,13 +176,13 @@ module FlowChat
               when "statuses"
                 # Only reachable for a payload built without a field name, which
                 # our own fixtures do and Meta does not.
-                handle_statuses(value) unless in_background?
+                handle_statuses(value) unless side_events_already_published?
               else
                 # Anything that is not a message or its delivery. Coexistence
                 # echoes, contact syncs, imported history, account bans, template
                 # approvals: all of it is the application's domain, so it is
                 # published rather than interpreted here.
-                handle_unmodelled_field(change["field"], value, entry["id"]) unless in_background?
+                handle_unmodelled_field(change["field"], value, entry["id"]) unless side_events_already_published?
               end
             end
           end
