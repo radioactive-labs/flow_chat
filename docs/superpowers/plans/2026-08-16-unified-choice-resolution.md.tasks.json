@@ -1,0 +1,88 @@
+{
+  "planPath": "docs/superpowers/plans/2026-08-16-unified-choice-resolution.md",
+  "tasks": [
+    {
+      "id": 0,
+      "subject": "Task 1: Give TextTruncator a pluggable measure",
+      "status": "completed",
+      "description": "**Goal:** TextTruncator can cut to a byte budget on character boundaries, so Telegram's 64-byte field is expressible without a Telegram-specific branch.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/text_truncator.rb\", \"test/unit/text_truncator_test.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/text_truncator_test.rb\", \"acceptanceCriteria\": [\"byte truncation never exceeds cap\", \"never splits a multi-byte character\", \"ellipsis charged in active measure\", \"character measure remains the default\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 1,
+      "subject": "Task 2: Make ChoiceTitles decide ambiguity under the resolver's fold",
+      "status": "completed",
+      "blockedBy": [
+        0
+      ],
+      "description": "**Goal:** ambiguity_reason treats two titles as duplicates when they collapse under the fold the resolver matches on, and numbers the set when they do.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/choice_titles.rb\", \"test/unit/choice_titles_test.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/choice_titles_test.rb\", \"acceptanceCriteria\": [\"build/ambiguous?/ambiguity_reason accept fold: and measure:\", \"titles equal after fold are duplicates\", \"aliases_for deleted\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 2,
+      "subject": "Task 3: Meta mappers send the displayed title, not a generated id",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** WhatsApp, Messenger and Instagram put the displayed title on the wire, collapsing the id map and alias map into one.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/whatsapp/middleware/choice_mapper.rb\", \"lib/flow_chat/messenger/middleware/choice_mapper.rb\", \"lib/flow_chat/instagram/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/whatsapp/middleware/choice_mapper_test.rb\", \"acceptanceCriteria\": [\"typing Yes resolves to the choice showing Yes\", \"alias_mapping removed everywhere\", \"ids never exceed platform caps\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 3,
+      "subject": "Task 4: Delete IdGenerator",
+      "status": "completed",
+      "blockedBy": [
+        2
+      ],
+      "description": "**Goal:** Remove the class whose lossy normalization caused the bug.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/id_generator.rb\", \"test/unit/id_generator_test.rb\"], \"verifyCommand\": \"grep -rn IdGenerator lib/ test/ ; bundle exec rake test\", \"acceptanceCriteria\": [\"no IdGenerator references remain\", \"full suite passes\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 4,
+      "subject": "Task 5: HTTP mapper adopts the fold",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** HTTP stops silently dropping the second of two labels that match case-insensitively.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/http/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/http/middleware/choice_mapper_test.rb\", \"acceptanceCriteria\": [\"duplicate labels both resolve\", \"no ||= remains\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 5,
+      "subject": "Task 6: Intercom mapper adopts the fold",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** Same first-wins fix for Intercom.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/intercom/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/intercom/middleware/choice_mapper_test.rb\", \"acceptanceCriteria\": [\"duplicate labels both resolve\", \"no ||= remains\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 6,
+      "subject": "Task 7: Telegram resolves against a real map, sized in bytes",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** Telegram stops overflowing its 64-byte field and stops making a choice unselectable on prefix collision.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/telegram/middleware/choice_mapper.rb\", \"lib/flow_chat/telegram/renderer.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/telegram/middleware/choice_mapper_test.rb\", \"acceptanceCriteria\": [\"callback_data never exceeds 64 bytes\", \"always valid UTF-8\", \"prefix-sharing labels both resolve\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 7,
+      "subject": "Task 8: Pin USSD's exemption",
+      "status": "completed",
+      "blockedBy": [
+        1
+      ],
+      "description": "**Goal:** Record why USSD needs no fold, so a later change does not unify it into a bug.\n\n```json:metadata\n{\"files\": [\"lib/flow_chat/ussd/middleware/choice_mapper.rb\"], \"verifyCommand\": \"bundle exec ruby -Itest test/unit/ussd/middleware/choice_mapper_test.rb\", \"acceptanceCriteria\": [\"duplicate labels resolve distinctly\", \"invariant comment present\"], \"requiresUserVerification\": false}\n```"
+    },
+    {
+      "id": 8,
+      "subject": "Task 9: Update the choice documentation",
+      "status": "completed",
+      "blockedBy": [
+        2,
+        4,
+        5,
+        6,
+        7
+      ],
+      "description": "**Goal:** Bring docs in line; document the fold/measure contract for new gateways.\n\n```json:metadata\n{\"files\": [\"docs/gateway-development.md\", \"docs/platforms/whatsapp.md\", \"docs/platforms/telegram.md\"], \"verifyCommand\": \"grep -rn 'IdGenerator\\\\|alias_mapping' docs/ --include=*.md | grep -v superpowers/\", \"acceptanceCriteria\": [\"no stale references\", \"fold/measure contract documented\"], \"requiresUserVerification\": false}\n```"
+    }
+  ],
+  "lastUpdated": "2026-08-17"
+}
