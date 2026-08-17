@@ -2,8 +2,6 @@ require "json"
 
 module FlowChat
   module Telegram
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class BotApi
         include FlowChat::Instrumentation
@@ -282,12 +280,18 @@ module FlowChat
             @client.send_message(context["request.id"], prompt, choices: choices, media: media)
           end
 
+          # report_delivery_failure already reported this; a nil result means
+          # the platform did not accept the message, and instrumenting
+          # MESSAGE_SENT anyway counted a delivery that never happened.
+          return unless result
+
           instrument(Events::MESSAGE_SENT, {
             to: context["request.id"],
             message: prompt,
             gateway: :telegram_bot_api,
             platform: :telegram,
-            platform_message_id: platform_message_id_from(result)
+            platform_message_id: platform_message_id_from(result),
+            duration_ms: context[FlowChat::Instrumentation::DELIVERY_DURATION_KEY]
           })
         end
 

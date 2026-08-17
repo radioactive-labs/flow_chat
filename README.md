@@ -23,7 +23,7 @@ class RegistrationFlow < FlowChat::Flow
 end
 ```
 
-Each `screen` returns its stored answer when one exists and re-prompts when it does not. The method runs top to bottom on every turn and blocks on the first screen that has no answer yet. The same flow runs unchanged on USSD, WhatsApp, Telegram, and HTTP, with per-platform rendering.
+Each `screen` returns its stored answer when one exists and re-prompts when it does not. The method runs top to bottom on every turn and blocks on the first screen that has no answer yet. The same flow runs unchanged on USSD, WhatsApp, Messenger, Instagram, Telegram, and HTTP, with per-platform rendering.
 
 ## How the replay engine works
 
@@ -75,6 +75,8 @@ Point your controller's webhook action at this code (`self` is the controller). 
 |---|---|---|---|
 | USSD | `FlowChat::Ussd::Gateway::Nalo` | `:ussd` | Numbered text menus, pagination, media as URL text |
 | WhatsApp | `FlowChat::Whatsapp::Gateway::CloudApi` | `:whatsapp` | Reply buttons (<=3 choices), lists (>3), rich media |
+| Messenger | `FlowChat::Messenger::Gateway::SendApi` | `:messenger` | Quick replies, carousel, numbered text |
+| Instagram | `FlowChat::Instagram::Gateway::SendApi` | `:instagram` | Quick replies, carousel, always numbered |
 | Telegram | `FlowChat::Telegram::Gateway::BotApi` | `:telegram` | Inline keyboards, rich media, HTML |
 | HTTP | `FlowChat::Http::Gateway::Simple` | `:http` | JSON responses (testing, custom clients) |
 | Intercom | `FlowChat::Intercom::Gateway::IntercomApi` | `:intercom` | Live-chat replies |
@@ -187,10 +189,12 @@ The flow code is the same everywhere, but each platform imposes limits that the 
 |---|---|
 | USSD | Pages are split at 140 characters by default; media is rendered as a text line containing a URL, not an inline attachment; async processing is not available. |
 | WhatsApp | Reply-button titles are truncated near 20 characters and list titles near 24; a list section holds at most 10 rows. WhatsApp's 24-hour customer-service window and its template requirement are not abstracted away: you manage message templates yourself. |
+| Messenger | Up to 13 choices render as quick replies, up to 30 as a carousel (10 elements, 3 buttons each), and above that as numbered text. Neither platform abstracts the 24-hour messaging window; a send outside it is attempted and Meta's rejection surfaces as an API error. |
+| Instagram | Same quick-reply and carousel caps as Messenger (13, then 30), but both surfaces render on the mobile app only, not desktop or web, so Instagram always lists the options as numbered text as well. Text is capped at 1000 bytes UTF-8, not characters. |
 | Telegram | Choice taps arrive as callback queries; choices render as inline keyboards; message text supports HTML formatting. |
 | HTTP | Requests and responses are JSON; each request must supply `session_id` and `user_id`. |
 
-Platform guides: [docs/platforms/ussd.md](docs/platforms/ussd.md), [docs/platforms/whatsapp.md](docs/platforms/whatsapp.md), [docs/platforms/telegram.md](docs/platforms/telegram.md).
+Platform guides: [docs/platforms/ussd.md](docs/platforms/ussd.md), [docs/platforms/whatsapp.md](docs/platforms/whatsapp.md), [docs/platforms/messenger.md](docs/platforms/messenger.md), [docs/platforms/instagram.md](docs/platforms/instagram.md), [docs/platforms/telegram.md](docs/platforms/telegram.md).
 
 ## Background processing
 
@@ -235,6 +239,8 @@ Platforms:
 
 - [USSD](docs/platforms/ussd.md)
 - [WhatsApp](docs/platforms/whatsapp.md)
+- [Messenger](docs/platforms/messenger.md)
+- [Instagram](docs/platforms/instagram.md)
 - [Telegram](docs/platforms/telegram.md)
 
 Internals and advanced:

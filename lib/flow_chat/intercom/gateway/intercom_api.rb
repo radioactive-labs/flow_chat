@@ -3,9 +3,6 @@ require "openssl"
 
 module FlowChat
   module Intercom
-    # Configuration-related errors
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class IntercomApi
         include FlowChat::Instrumentation
@@ -347,6 +344,11 @@ module FlowChat
             end
             context["intercom.message_result"] = result
 
+            # report_delivery_failure already reported this; a nil result
+            # means the platform did not accept the message, and instrumenting
+            # MESSAGE_SENT anyway counted a delivery that never happened.
+            return unless result
+
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
               to: context["request.user_id"],
@@ -356,6 +358,7 @@ module FlowChat
               platform: :intercom,
               content_length: prompt.to_s.length,
               platform_message_id: platform_message_id_from(result),
+              duration_ms: context[FlowChat::Instrumentation::DELIVERY_DURATION_KEY],
               timestamp: context["request.timestamp"]
             })
           end

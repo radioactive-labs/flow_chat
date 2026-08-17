@@ -98,6 +98,40 @@ end
 
 `custom_middleware` is the app's own custom-middleware builder. Include it, or the middleware a user added with `use_middleware` will not run.
 
+## Writing a choice mapper
+
+A choice mapper turns what the platform sends back into the key the flow branches on. Get one rule right and the rest follows:
+
+> **Decide ambiguity under the same equivalence your resolver matches on.**
+
+Every choice bug FlowChat has had came from breaking it — the resolver normalised input one way, and nothing checked whether two choices became indistinguishable under that normalisation, so one of them silently became unreachable.
+
+`FlowChat::ChoiceTitles` enforces the rule for you. Pass it the `fold` your resolver applies and the `measure` your platform sizes fields in, and it hands back titles that are guaranteed distinct — numbering the whole set when they otherwise would not be:
+
+```ruby
+FlowChat::ChoiceTitles.build(choices, title_cap, measure: :characters)
+# => [[key, original_label, displayed_title, was_truncated], ...]
+```
+
+Then make the displayed title the value you put on the wire. It is already unique within the set, so it needs no separate id space to be unique in — a tap sends it back as the payload, and a user who types what they read sends the same string, so one map resolves both.
+
+**The best fold is no fold, and today no mapper uses one:**
+
+| Mapper | Resolves on | Measure |
+|---|---|---|
+| WhatsApp, Messenger, Instagram | the displayed title, matched exactly | characters |
+| Telegram | the displayed title, cut to `callback_data`'s limit | **bytes** |
+| HTTP | the displayed title, matched exactly | characters |
+| USSD, Intercom | the position printed beside each option | — |
+
+USSD and Intercom are the strongest form of the rule: positions are unique whatever the labels say, so their equivalence relation is already injective and there is nothing to check. If your platform prints a number and asks for one, do that and you need none of this. Intercom used to match labels case-insensitively as well, and that is exactly what made two options reading the same collapse onto one entry — the number beside them was already doing that job unambiguously.
+
+The rest match exactly, because a tapped payload and a client-echoed string are both produced by machines rather than typed. Every transform that could absorb a drift in those strings can also merge two choices, so none is worth adding on speculation. If you do add one — a platform where a person types freely might justify case folding — pass it as `fold:` so the ambiguity check uses it too, and expect more sets to be numbered as a result.
+
+Where the number is already on screen — Intercom's numbered list, or the Meta `:numbered` rung — the mapper does not prefix anything, because the renderer is doing it. Prefixing in both places reads as `1. 1. Savings`.
+
+Number the set rather than disambiguating with a suffix. A position prefix sits at the front and survives truncation from the right, which is what makes it work even on a platform as tight as Telegram's 64 bytes; a suffix is the first thing a cut removes.
+
 ## Supporting async
 
 Include `FlowChat::GatewayAsyncSupport` to let the gateway run flows in a background job. The concern provides `should_enqueue_async?` (true when async is enabled, the gateway supports it, and the request is not already running in the background) and `enqueue_async_job` (serializes the request and enqueues the job). Override `async_supported?` to return `false` on a synchronous protocol:

@@ -1,7 +1,10 @@
 require "test_helper"
+require_relative "../../../support/test_helpers"
 require "webmock/minitest"
 
 class WhatsappCloudApiGatewayTest < Minitest::Test
+  include FlowChat::TestSupport::TestHelpers
+
   def setup
     # Create a mock configuration for testing
     @mock_config = FlowChat::Whatsapp::Configuration.new("test_config")
@@ -25,6 +28,13 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     WebMock.disable!
     WebMock.reset!
     @subscribers&.each { |s| ActiveSupport::Notifications.unsubscribe(s) }
+  end
+
+  # WhatsApp's configuration has no test file of its own, so its predicate is
+  # pinned here alongside the gateway that consumes it.
+  def test_configuration_valid_returns_a_boolean_not_nil
+    assert_equal true, @mock_config.valid?
+    assert_equal false, FlowChat::Whatsapp::Configuration.new(nil).valid?
   end
 
   def test_get_request_webhook_verification
@@ -74,6 +84,51 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "John Doe", context["request.user_name"]
     assert_equal :whatsapp_cloud_api, context["request.gateway"]
     refute_equal "1702891800", context["request.timestamp"] # Now uses Time.current instead of webhook timestamp
+  end
+
+  # The other half of the same defect: the client wrapped its send in its own
+  # MESSAGE_SENT instrument block while the gateway instrumented the same send,
+  # so every successful delivery published the event twice and MetricsCollector
+  # counted #{platform}.messages.sent at double the real rate.
+  def test_message_sent_is_instrumented_exactly_once_on_a_successful_send
+    sent, failed = capture_delivery_events do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.test123")
+      )
+      @gateway.call(context)
+    end
+
+    assert_equal 1, sent.length, "one delivery must publish message.sent exactly once"
+    assert_equal 0, failed.length
+    assert_equal "sent_123", sent.first.payload[:platform_message_id]
+
+    # The event is published after the send rather than wrapped around it, so
+    # its own duration reads zero; the measured figure rides on the payload.
+    assert_instance_of Float, sent.first.payload[:duration_ms]
+    assert_operator sent.first.payload[:duration_ms], :>=, 0
+  end
+
+  # Regression: report_delivery_failure returns nil when send_message already
+  # swallowed an API error (logged, not raised), and handle_message_inline
+  # instrumented MESSAGE_SENT regardless - so a delivery that never happened
+  # was counted as one that did, alongside the MESSAGE_DELIVERY_FAILED event
+  # correctly fired for the same send.
+  def test_message_sent_is_not_instrumented_when_delivery_failed
+    WebMock.reset!
+    stub_request(:post, @mock_config.messages_url)
+      .to_return(status: 400, body: {"error" => {"message" => "rejected"}}.to_json)
+
+    sent, failed = capture_delivery_events do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.test123")
+      )
+      @gateway.call(context)
+    end
+
+    assert_equal 1, failed.length, "the refused send must be reported once"
+    assert_equal 0, sent.length, "message.sent must not fire for a delivery the platform refused"
   end
 
   def test_post_request_button_response_processing
@@ -269,6 +324,64 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "+256700000000", context["request.msisdn"]
     assert_equal "wamid.unsupported123", context["request.message_id"]
     assert_nil context.input
+  end
+
+  # --- Simulator mode ----------------------------------------------------
+  #
+  # The simulator's whole point is completing a turn with no live
+  # credentials at hand, so it cannot be expected to send a phone_number_id
+  # that matches a real configuration.
+
+  def test_a_mismatched_phone_number_id_is_rejected_outside_simulator_mode
+    context = create_context_with_request(
+      method: :post,
+      body: create_text_message_payload("Hello", "wamid.mismatch").tap { |p|
+        p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+      }
+    )
+
+    @gateway.call(context)
+
+    assert_equal :forbidden, context.controller.last_head_status
+  end
+
+  def test_simulator_mode_completes_a_turn_despite_a_mismatched_phone_number_id
+    with_simulator_secret do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.sim").tap { |p|
+          p["simulator_mode"] = true
+          p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+        },
+        cookies: {FlowChat::Security::SIMULATOR_COOKIE_NAME => FlowChat::Security.simulator_cookie}
+      )
+      context["enable_simulator"] = true
+
+      @gateway.call(context)
+
+      assert_equal "Hello", context.input
+      assert_equal "simulator", context.controller.last_render[:json][:mode]
+    end
+  end
+
+  # The account check is skipped only once simulate? has already checked the
+  # signed cookie - without one, simulator_mode param alone changes nothing.
+  def test_simulator_mode_param_without_a_valid_cookie_is_still_rejected
+    with_simulator_secret do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello", "wamid.nocookie").tap { |p|
+          p["simulator_mode"] = true
+          p["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"] = "not_the_configured_id"
+        }
+        # No simulator cookie set.
+      )
+      context["enable_simulator"] = true
+
+      @gateway.call(context)
+
+      assert_equal :forbidden, context.controller.last_head_status
+    end
   end
 
   def test_bad_request_handling
@@ -734,6 +847,89 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal :ok, context.controller.last_head_status
   end
 
+  # --- Echo origin -------------------------------------------------------
+  #
+  # An echo reports a message sent on the thread by someone other than the
+  # user. Which someone decides what the application does with it, and only
+  # this gateway knows our own app_id, so it derives the origin here rather
+  # than leaving every subscriber to compare ids itself.
+
+  def test_echo_from_a_human_in_the_business_inbox_has_no_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: nil))
+    @gateway.call(context)
+
+    assert_equal 1, events.size
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
+  def test_echo_from_our_own_app_carries_our_configured_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: "our_app"))
+    @gateway.call(context)
+
+    assert_equal :self, events.first[:echo_origin]
+  end
+
+  def test_echo_from_another_app_carries_a_different_app_id
+    @mock_config.app_id = "our_app"
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(method: :post, body: echo_payload(app_id: "someone_else"))
+    @gateway.call(context)
+
+    assert_equal :other_app, events.first[:echo_origin]
+  end
+
+  def test_a_non_echo_field_carries_no_echo_origin_key_at_all
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("account_update", {"event" => "PARTNER_ADDED"})
+    )
+    @gateway.call(context)
+
+    refute events.first.key?(:echo_origin)
+  end
+
+  # handle_unmodelled_field is the catch-all for every field Meta might send,
+  # so a payload naming the echo field but shaped unexpectedly (no echoes
+  # array, or an empty one) must not raise.
+  def test_an_echo_field_with_no_echoes_array_is_treated_as_a_human_agent
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {})
+    )
+    @gateway.call(context)
+
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
+  def test_an_echo_field_with_an_empty_echoes_array_is_treated_as_a_human_agent
+    events = []
+    subscribe(FlowChat::Instrumentation::Events::WEBHOOK_RECEIVED) { |p| events << p }
+
+    context = create_context_with_request(
+      method: :post,
+      body: change_payload("smb_message_echoes", {"message_echoes" => []})
+    )
+    @gateway.call(context)
+
+    assert_equal :human_agent, events.first[:echo_origin]
+  end
+
   def test_every_unmodelled_field_uses_the_same_event
     fields = {
       "smb_app_state_sync" => {"state_sync" => [{"type" => "contact"}]},
@@ -801,6 +997,14 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
 
   private
 
+  def with_simulator_secret
+    original = FlowChat::Config.simulator_secret
+    FlowChat::Config.simulator_secret = "test_simulator_secret"
+    yield
+  ensure
+    FlowChat::Config.simulator_secret = original
+  end
+
   # Captures at info level on purpose: a message logged at debug would not appear,
   # which is the regression this guards.
   def capture_logs
@@ -846,6 +1050,15 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         }]
       }]
     }
+  end
+
+  # A coexistence echo for the same message, with a caller-chosen sender app_id
+  # (or none, for a human replying from the business inbox).
+  def echo_payload(app_id:)
+    echo = {"id" => "wamid.echo1", "from" => "15551234567", "type" => "text", "text" => {"body" => "Hi"}}
+    echo["app_id"] = app_id if app_id
+
+    change_payload("smb_message_echoes", {"message_echoes" => [echo]})
   end
 
   def create_context_with_request(method:, params: {}, body: nil, headers: {}, cookies: {})

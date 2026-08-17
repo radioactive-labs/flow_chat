@@ -1,7 +1,5 @@
 module FlowChat
   module Http
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class Simple
         include FlowChat::Instrumentation

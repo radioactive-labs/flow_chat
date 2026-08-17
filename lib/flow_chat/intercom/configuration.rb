@@ -1,10 +1,9 @@
 module FlowChat
   module Intercom
     class Configuration
-      attr_accessor :access_token, :client_secret, :admin_id, :name, :skip_signature_validation
+      include FlowChat::NamedConfiguration
 
-      # Class-level storage for named configurations
-      @@configurations = {}
+      attr_accessor :access_token, :client_secret, :admin_id, :name, :skip_signature_validation
 
       def initialize(name)
         @name = name
@@ -47,52 +46,6 @@ module FlowChat
         end
 
         config
-      end
-
-      # Register a named configuration
-      def self.register(name, config)
-        FlowChat.logger.debug { "Intercom::Configuration: Registering configuration '#{name}'" }
-        @@configurations[name.to_sym] = config
-      end
-
-      # Get a named configuration
-      def self.get(name)
-        config = @@configurations[name.to_sym]
-        if config
-          FlowChat.logger.debug { "Intercom::Configuration: Retrieved configuration '#{name}'" }
-          config
-        else
-          FlowChat.logger.error { "Intercom::Configuration: Configuration '#{name}' not found" }
-          raise ArgumentError, "Intercom configuration '#{name}' not found"
-        end
-      end
-
-      # Check if a named configuration exists
-      def self.exists?(name)
-        exists = @@configurations.key?(name.to_sym)
-        FlowChat.logger.debug { "Intercom::Configuration: Configuration '#{name}' exists: #{exists}" }
-        exists
-      end
-
-      # Get all configuration names
-      def self.configuration_names
-        names = @@configurations.keys
-        FlowChat.logger.debug { "Intercom::Configuration: Available configurations: #{names}" }
-        names
-      end
-
-      # Clear all registered configurations (useful for testing)
-      def self.clear_all!
-        FlowChat.logger.debug { "Intercom::Configuration: Clearing all registered configurations" }
-        @@configurations.clear
-      end
-
-      # Register this configuration with a name
-      def register_as(name)
-        FlowChat.logger.debug { "Intercom::Configuration: Registering configuration as '#{name}'" }
-        @name = name.to_sym
-        self.class.register(@name, self)
-        self
       end
 
       def valid?

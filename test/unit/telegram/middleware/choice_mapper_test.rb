@@ -42,20 +42,67 @@ class FlowChat::Telegram::Middleware::ChoiceMapperTest < Minitest::Test
     assert_equal [:text, "Response", nil, nil], result
   end
 
-  def test_validates_callback_data_against_stored_choices
-    # Store choices in session
-    @context.session.set("telegram_choices", {"opt1" => "Option 1", "opt2" => "Option 2"})
-    @context.input = "opt1"
-
-    @app.expect(:call, [:text, "Response", nil, nil], [@context])
-
+  # A tap sends the title as its callback_data, so the map turns it back
+  # into the key the flow branches on. The old mapper never rewrote input at
+  # all - it only logged - and relied on callback_data being the raw key.
+  def test_resolves_a_tapped_title_back_to_its_key
+    choices = {"opt1" => "Option 1", "opt2" => "Option 2"}
+    @app.expect(:call, [:text, "Pick:", choices, nil], [@context])
     @middleware.call(@context)
 
-    # Input should pass through since it's a valid choice key
-    assert_equal "opt1", @context.input
+    @context.input = "Option 2"
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @middleware.call(@context)
+
+    assert_equal "opt2", @context.input
   end
 
-  def test_stores_choices_in_session_after_response
+  def test_resolves_a_typed_position
+    choices = {"opt1" => "Option 1", "opt2" => "Option 2"}
+    @app.expect(:call, [:text, "Pick:", choices, nil], [@context])
+    @middleware.call(@context)
+
+    @context.input = "2"
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @middleware.call(@context)
+
+    assert_equal "opt2", @context.input
+  end
+
+  # callback_data is 1-64 *bytes*. Sizing it in characters let a multibyte
+  # label through to be rejected by the API.
+  def test_wire_values_fit_the_byte_limit_for_multibyte_labels
+    long = "\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3067\u3059 " * 6
+    @app.expect(:call, [:text, "Pick:", {"a" => long, "b" => "#{long}!"}, nil], [@context])
+
+    rendered = @middleware.call(@context)[2]
+
+    rendered.keys.each do |wire_value|
+      assert_operator wire_value.bytesize, :<=, FlowChat::Telegram::Middleware::ChoiceMapper::CALLBACK_DATA_LIMIT
+      assert wire_value.valid_encoding?, "byte truncation must not split a character"
+    end
+  end
+
+  # Two labels sharing a long prefix used to be cut to the same
+  # callback_data, which then matched neither key - the choice could not be
+  # picked at all. Numbering keeps them apart because the prefix survives a
+  # cut from the right.
+  def test_labels_sharing_a_long_prefix_stay_distinct_and_both_resolve
+    shared = "Transfer to the account ending in " * 3
+    choices = {"a" => "#{shared} one", "b" => "#{shared} two"}
+    @app.expect(:call, [:text, "Pick:", choices, nil], [@context])
+    wire_values = @middleware.call(@context)[2].keys
+
+    assert_equal wire_values.length, wire_values.uniq.length, "callback_data must stay distinct"
+
+    @context.input = wire_values[1]
+    @app.expect(:call, [:text, "Response", nil, nil], [@context])
+    @middleware.call(@context)
+
+    assert_equal "b", @context.input
+  end
+
+  def test_stores_a_mapping_after_a_response_with_choices
     @context.input = "some text"
     choices = {"a" => "Choice A", "b" => "Choice B"}
 
@@ -63,9 +110,8 @@ class FlowChat::Telegram::Middleware::ChoiceMapperTest < Minitest::Test
 
     @middleware.call(@context)
 
-    # Verify choices were stored in session
-    stored = @context.session.get("telegram_choices")
-    assert_equal choices, stored
+    assert_equal({"Choice A" => "a", "Choice B" => "b"},
+      @context.session.get(FlowChat::Telegram::Middleware::ChoiceMapper::SESSION_KEY))
   end
 
   def test_does_not_store_nil_choices
@@ -75,62 +121,56 @@ class FlowChat::Telegram::Middleware::ChoiceMapperTest < Minitest::Test
 
     @middleware.call(@context)
 
-    stored = @context.session.get("telegram_choices")
-    assert_nil stored
+    assert_nil @context.session.get(FlowChat::Telegram::Middleware::ChoiceMapper::SESSION_KEY)
   end
 
   def test_does_not_store_non_hash_choices
     @context.input = "text"
 
-    # This shouldn't happen in practice, but test defensive behavior
     @app.expect(:call, [:text, "Response", "not_a_hash", nil], [@context])
 
     @middleware.call(@context)
 
-    stored = @context.session.get("telegram_choices")
-    assert_nil stored
+    assert_nil @context.session.get(FlowChat::Telegram::Middleware::ChoiceMapper::SESSION_KEY)
   end
 
-  def test_updates_stored_choices_on_each_response
-    # First response stores initial choices
+  def test_updates_the_mapping_on_each_response
     @context.input = "first"
-    first_choices = {"x" => "X", "y" => "Y"}
-    @app.expect(:call, [:text, "Pick:", first_choices, nil], [@context])
+    @app.expect(:call, [:text, "Pick:", {"x" => "X", "y" => "Y"}, nil], [@context])
     @middleware.call(@context)
 
-    assert_equal first_choices, @context.session.get("telegram_choices")
+    assert_equal({"X" => "x", "Y" => "y"},
+      @context.session.get(FlowChat::Telegram::Middleware::ChoiceMapper::SESSION_KEY))
 
-    # Second response updates choices
     @context.input = "second"
-    second_choices = {"a" => "A", "b" => "B", "c" => "C"}
-    @app.expect(:call, [:text, "Pick again:", second_choices, nil], [@context])
+    @app.expect(:call, [:text, "Pick again:", {"a" => "A", "b" => "B"}, nil], [@context])
     @middleware.call(@context)
 
-    assert_equal second_choices, @context.session.get("telegram_choices")
+    assert_equal({"A" => "a", "B" => "b"},
+      @context.session.get(FlowChat::Telegram::Middleware::ChoiceMapper::SESSION_KEY))
   end
 
   def test_handles_response_with_media_and_choices
     @context.input = "text"
-    choices = {"like" => "Like", "share" => "Share"}
     media = {type: :photo, url: "https://example.com/photo.jpg"}
 
-    @app.expect(:call, [:photo, "Caption", choices, media], [@context])
+    @app.expect(:call, [:photo, "Caption", {"like" => "Like", "share" => "Share"}, media], [@context])
 
-    @middleware.call(@context)
+    result = @middleware.call(@context)
 
-    stored = @context.session.get("telegram_choices")
-    assert_equal choices, stored
+    assert_equal({"Like" => "Like", "Share" => "Share"}, result[2])
+    assert_equal media, result[3]
   end
 
   def test_preserves_response_from_app
     @context.input = "hello"
-    expected_response = [:text, "World", {"a" => "A"}, nil]
-
-    @app.expect(:call, expected_response, [@context])
+    @app.expect(:call, [:text, "World", {"a" => "A"}, nil], [@context])
 
     result = @middleware.call(@context)
 
-    assert_equal expected_response, result
+    assert_equal :text, result[0]
+    assert_equal "World", result[1]
+    assert_equal({"A" => "A"}, result[2])
   end
 
   def test_handles_nil_response_from_app

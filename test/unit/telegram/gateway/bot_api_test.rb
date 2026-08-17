@@ -1,7 +1,10 @@
 require "test_helper"
+require_relative "../../../support/test_helpers"
 require "webmock/minitest"
 
 class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
+  include FlowChat::TestSupport::TestHelpers
+
   def setup
     @mock_config = FlowChat::Telegram::Configuration.new("test_config")
     @mock_config.bot_token = "123456:ABC-DEF1234ghIkl"
@@ -84,6 +87,28 @@ class FlowChat::Telegram::Gateway::BotApiTest < Minitest::Test
 
     # The stubbed sendMessage answers with message_id 123.
     assert_equal 123, context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
+  # Regression: report_delivery_failure returns nil when send_message already
+  # swallowed an API error, and handle_message_inline instrumented MESSAGE_SENT
+  # regardless - so a delivery that never happened was counted as one that
+  # did, alongside the MESSAGE_DELIVERY_FAILED event correctly fired for the
+  # same send.
+  def test_message_sent_is_not_instrumented_when_delivery_failed
+    WebMock.reset!
+    stub_request(:post, "https://api.telegram.org/bot123456:ABC-DEF1234ghIkl/sendMessage")
+      .to_return(status: 400, body: {"ok" => false, "description" => "rejected"}.to_json)
+
+    sent, failed = capture_delivery_events do
+      context = create_context_with_request(
+        method: :post,
+        body: create_text_message_payload("Hello bot!", 12345)
+      )
+      @gateway.call(context)
+    end
+
+    assert_equal 1, failed.length, "the refused send must be reported once"
+    assert_equal 0, sent.length, "message.sent must not fire for a delivery the platform refused"
   end
 
   def test_post_request_text_message_with_bot_command

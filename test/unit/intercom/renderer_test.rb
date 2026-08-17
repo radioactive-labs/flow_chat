@@ -48,7 +48,100 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
 
     result = renderer.render
 
-    assert_equal [:text, "<p>Check out this image:</p>", {}], result
+    assert_equal [:text, "<p>Check out this image:</p>", {attachment_urls: ["https://example.com/image.jpg"]}], result
+  end
+
+  def test_render_image_media_produces_attachment_urls_prompt_stays_in_body
+    message = "Here is a photo"
+    media = {type: "image", url: "https://example.com/photo.jpg"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_equal "<p>Here is a photo</p>", result[1]
+    assert_equal({attachment_urls: ["https://example.com/photo.jpg"]}, result[2])
+  end
+
+  def test_render_document_media_renders_as_link_no_attachment_urls
+    message = "Here is the contract"
+    media = {type: "document", url: "https://example.com/contract.pdf", filename: "Contract.pdf"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Here is the contract"
+    assert_includes result[1], '<a href="https://example.com/contract.pdf">Contract.pdf</a>'
+    refute_includes result[2], :attachment_urls
+  end
+
+  def test_render_video_media_renders_as_link_no_attachment_urls
+    message = "Here is a video"
+    media = {type: "video", url: "https://example.com/clip.mp4"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], '<a href="https://example.com/clip.mp4">Video</a>'
+    refute_includes result[2], :attachment_urls
+  end
+
+  def test_render_audio_media_renders_as_link_no_attachment_urls
+    message = "Here is a voice note"
+    media = {type: "audio", url: "https://example.com/note.mp3"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], '<a href="https://example.com/note.mp3">Audio</a>'
+    refute_includes result[2], :attachment_urls
+  end
+
+  def test_render_sticker_media_renders_as_link_no_attachment_urls
+    message = "Enjoy this sticker"
+    media = {type: "sticker", url: "https://example.com/sticker.webp"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], '<a href="https://example.com/sticker.webp">Sticker</a>'
+    refute_includes result[2], :attachment_urls
+  end
+
+  def test_render_media_with_id_only_sends_text_alone_and_warns
+    message = "Here is the file"
+    media = {type: "document", id: "wamid.some-whatsapp-media-id"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    test_logger = Object.new
+    messages = []
+    test_logger.define_singleton_method(:warn) { |&blk| messages << blk.call }
+
+    original_logger = FlowChat::Config.logger
+    FlowChat::Config.logger = test_logger
+    begin
+      result = renderer.render
+    ensure
+      FlowChat::Config.logger = original_logger
+    end
+
+    assert_equal [:text, "<p>Here is the file</p>", {}], result
+    assert_equal 1, messages.size
+    assert_includes messages.first, "wamid.some-whatsapp-media-id"
+  end
+
+  def test_render_media_with_neither_url_nor_id_sends_text_alone
+    message = "Here is the file"
+    media = {type: "document"}
+    renderer = FlowChat::Intercom::Renderer.new(message, media: media)
+
+    result = renderer.render
+
+    assert_equal [:text, "<p>Here is the file</p>", {}], result
   end
 
   def test_render_selection_message_with_choices
@@ -140,7 +233,24 @@ class FlowChat::Intercom::RendererTest < Minitest::Test
     assert_includes result[1], "Based on the image above"
     assert_includes result[1], "1. Buy Now"
     assert_includes result[1], "2. Get More Info"
-    assert_equal({choices: choices}, result[2])
+    assert_equal({choices: choices, attachment_urls: ["https://example.com/product.jpg"]}, result[2])
+  end
+
+  def test_render_media_composes_with_choices_attachment_and_numbered_body_both_present
+    message = "Pick a size"
+    choices = {"s" => "Small", "m" => "Medium", "l" => "Large"}
+    media = {type: "image", url: "https://example.com/sizing-chart.jpg"}
+    renderer = FlowChat::Intercom::Renderer.new(message, choices: choices, media: media)
+
+    result = renderer.render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "Pick a size"
+    assert_includes result[1], "1. Small"
+    assert_includes result[1], "2. Medium"
+    assert_includes result[1], "3. Large"
+    assert_equal({attachment_urls: ["https://example.com/sizing-chart.jpg"]}, result[2].slice(:attachment_urls))
+    assert_equal choices, result[2][:choices]
   end
 
   def test_render_selection_message_preserves_choice_order

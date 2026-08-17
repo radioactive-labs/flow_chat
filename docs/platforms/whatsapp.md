@@ -85,9 +85,12 @@ end
 FlowChat picks the WhatsApp interactive type from the number of choices:
 
 - 3 choices or fewer render as reply buttons.
-- More than 3 render as a list.
+- 4 to 10 render as a list.
+- Above 10 there is no interactive surface left: the options go straight into the message body, one per line, numbered.
 
-The user's tap comes back as the choice key, so your flow reads `select` results the same way it does on every platform.
+Button and list row titles are only numbered when they need to be. FlowChat truncates each title to fit (20 characters for a button, 24 for a list row) and checks the whole set: if any title had to be truncated, or if two choices land on the same title, the titles as displayed can no longer identify a choice on their own. When that happens, every title in the set gets prefixed with its 1-based position ("1. ", "2. ", and so on), not just the ones that collided, so a stray "2." never appears next to a title with no "1." beside it. A short menu of distinct options (`Yes` / `No`) stays unprefixed; a menu with a long label, or with two choices sharing a label (two accounts both named "Savings"), gets every title numbered (`1. Yes` / `2. No`, `1. Transfer to savin...` / `2. Transfer to salar...`).
+
+A user can reply by tapping, by typing the title exactly as shown, or - only when the screen was numbered - by typing the number. All of these resolve to the same choice key, so your flow reads `select` results the same way regardless of which one the user did. Above 10 choices, where nothing is tappable, the options go straight into the message body, one per line, always numbered, and a typed number is the only way to reply.
 
 ## Media
 
@@ -110,14 +113,27 @@ app.say "Your receipt", media: { type: :document, url: "https://example.com/rece
 
 The WhatsApp client also exposes direct senders (`send_image`, `send_document`, `send_audio`, `send_video`, `send_sticker`, `send_template`) and `upload_media`, which uploads a file and returns a media id you can reuse.
 
+Media and choices combine, but media never changes which choice surface renders. 3 choices or fewer is the one case WhatsApp can carry both in a single message: the media becomes the header on the reply buttons.
+
+```ruby
+app.screen(:plan) do |prompt|
+  prompt.select "Choose a plan", { "basic" => "Basic", "pro" => "Pro" },
+    media: { type: :image, url: "https://example.com/plans.png" }
+end
+```
+
+From 4 to 10 choices there is no interactive surface left that can carry media: Meta's interactive message reference documents a `text`-only header for list messages, image and video and document headers are only defined for button messages. So the image goes out as its own message first, with no caption (the question is about to appear in the list body right behind it), followed by the list exactly as it would render with no media at all.
+
+Above 10 choices the options are already nothing but text, and a WhatsApp media message can carry a caption up to 1024 characters (documented for image, video, and document messages; audio and sticker messages have no caption field at all). When the media type supports a caption and the prompt plus the numbered options fit under that cap, FlowChat sends one message: the media with the whole numbered list as its caption. When either does not hold - a long option list, or an audio or sticker attachment - it falls back to the same two-message shape as the list rung: the media on its own, with no caption, followed by the numbered text.
+
 ## Limits to keep in mind
 
 | Area | Behavior on WhatsApp |
 |---|---|
 | Button titles | Reply-button titles are truncated to 20 characters. |
 | List titles | List row titles are truncated to 24 characters; the full text is moved into the row description (up to 72 characters). |
-| List size | A list section holds at most 10 rows; longer lists are split into multiple sections. |
-| Media with choices | Passing `media:` together with more than 3 choices raises `ArgumentError`. |
+| List size | A list holds at most 10 rows in a single section; above that there is no interactive surface left, and the options go into the numbered message body instead. |
+| Media with choices | 3 or fewer: one message, buttons with a media header. 4 to 10: media sent separately, then the list. Above 10: one captioned media message when the caption fits under 1024 characters and the media type supports a caption (image, video, document), otherwise media sent separately, then the numbered text. Never more than 3 reply buttons, with or without media. |
 | 24-hour window | WhatsApp only allows free-form messages within 24 hours of the user's last message. Outside that window you must send an approved template. FlowChat does not abstract this: `send_template` exists, but you manage templates and the window yourself. |
 
 ## Async

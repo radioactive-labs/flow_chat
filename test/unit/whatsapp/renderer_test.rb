@@ -20,7 +20,10 @@ class WhatsappRendererTest < Minitest::Test
     renderer = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices)
     result = renderer.render
 
-    # Renderer uses the keys (which are already WhatsApp-safe IDs) as button IDs
+    # Renderer uses the keys (which are already WhatsApp-safe IDs) as button
+    # IDs. These titles are short and distinct, so FlowChat::ChoiceTitles
+    # does not prefix them - see test_button_titles_are_numbered_when_ambiguous
+    # for the case where it does.
     expected_buttons = [
       {id: "Option 1", title: "Option 1"},
       {id: "Option 2", title: "Option 2"},
@@ -33,6 +36,19 @@ class WhatsappRendererTest < Minitest::Test
 
     # No mapping in renderer anymore - middleware handles mapping
     assert_nil result[2][:mapping]
+  end
+
+  # Contrast with test_render_with_choices_as_buttons: an ambiguous set (here,
+  # one title needs truncation) gets every title in the set prefixed, not
+  # just the one that needed it - see FlowChat::ChoiceTitles for why.
+  def test_button_titles_are_numbered_when_ambiguous
+    long_label = "A label that is definitely longer than twenty chars"
+    choices = {"a" => long_label, "b" => "Beta"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Choose:", choices: choices).render
+
+    assert_equal "1. A label that i...", result[2][:buttons][0][:title]
+    assert_equal "2. Beta", result[2][:buttons][1][:title]
   end
 
   def test_render_with_choices_as_list
@@ -86,7 +102,8 @@ class WhatsappRendererTest < Minitest::Test
     )
     result = renderer.render
 
-    # Renderer uses keys as IDs
+    # Renderer uses keys as IDs; these titles are short and distinct, so
+    # they are not prefixed
     expected_buttons = [
       {id: "Like", title: "Like"},
       {id: "Dislike", title: "Dislike"},
@@ -163,7 +180,8 @@ class WhatsappRendererTest < Minitest::Test
     renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices, media: media)
     result = renderer.render
 
-    # Renderer uses keys as IDs
+    # Renderer uses keys as IDs; these titles are short and distinct, so
+    # they are not prefixed
     expected_buttons = [
       {id: "First Option", title: "First Option"},
       {id: "Second Option", title: "Second Option"}
@@ -185,7 +203,7 @@ class WhatsappRendererTest < Minitest::Test
     result = renderer.render
 
     button = result[2][:buttons][0]
-    assert_equal "This is a very lo...", button[:title]
+    assert_equal "1. This is a very...", button[:title]
     assert button[:title].length <= 20
   end
 
@@ -200,16 +218,36 @@ class WhatsappRendererTest < Minitest::Test
     refute result[2].key?(:caption) # Stickers don't support captions
   end
 
-  def test_large_list_pagination
-    choices = (1..25).map { |i| [i, "Option #{i}"] }.to_h
-    renderer = FlowChat::Whatsapp::Renderer.new("Choose", choices: choices)
-    result = renderer.render
+  # Meta allows "up to 10 sections, with up to 10 rows for all sections combined",
+  # so the old three-sections-of-ten payload was rejected on send.
+  def test_list_is_capped_at_ten_rows
+    choices = (1..10).to_h { |i| ["key#{i}", "Option #{i}"] }
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
 
     assert_equal :interactive_list, result[0]
-    assert_equal 3, result[2][:sections].length # Should be split into 3 sections (10+10+5)
-    assert_equal "1-10", result[2][:sections][0][:title]
-    assert_equal "11-20", result[2][:sections][1][:title]
-    assert_equal "21-25", result[2][:sections][2][:title]
+    assert_equal 1, result[2][:sections].length
+    assert_equal 10, result[2][:sections][0][:rows].length
+  end
+
+  def test_more_than_ten_choices_fall_back_to_a_numbered_body
+    choices = (1..25).to_h { |i| ["key#{i}", "Option #{i}"] }
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
+
+    assert_equal :text, result[0]
+    assert_nil result[2][:sections]
+    assert_includes result[1], "1. Option 1"
+    assert_includes result[1], "25. Option 25"
+    assert_includes result[1], "Pick one"
+  end
+
+  def test_three_or_fewer_choices_still_use_buttons
+    choices = {"a" => "Alpha", "b" => "Beta"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices).render
+
+    assert_equal :interactive_buttons, result[0]
   end
 
   def test_list_item_description_for_long_titles
@@ -227,7 +265,7 @@ class WhatsappRendererTest < Minitest::Test
     item = result[2][:sections][0][:rows][0] # First item with long title
     assert item.present?, "Item should be present"
 
-    assert_equal "This is a very long o...", item[:title] # Truncated at 24 chars
+    assert_equal "1. This is a very lon...", item[:title] # Numbered, then truncated to 24 chars
     if item[:description]
       # Description is truncated at 72 chars, so check for beginning portion
       assert_includes item[:description], "This is a very long option title that should be truncated"
@@ -250,6 +288,131 @@ class WhatsappRendererTest < Minitest::Test
     result = renderer.render
 
     assert_nil result[2][:url]
+  end
+
+  # Media is additive: it does not change which choice surface is used.
+  # 3 or fewer choices is the one case WhatsApp can carry both in a single
+  # message, and that single-message behaviour (asserted above in
+  # test_render_media_with_buttons and test_hash_choices_with_media) must
+  # survive untouched.
+
+  # Meta's interactive list header schema documents type: text only; image,
+  # video and document headers are only defined for button messages. Above
+  # the button cap there is no interactive surface that can carry the media,
+  # so it has to go as its own message ahead of the list.
+  def test_media_above_the_button_cap_sends_media_separately_and_keeps_a_list
+    choices = (1..5).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :interactive_list, result[0]
+    assert_equal 5, result[2][:sections][0][:rows].length
+    refute result[2].key?(:header) # list headers cannot carry media
+    assert_equal :media_image, result[2][:media][0]
+    assert_equal "https://example.com/photo.jpg", result[2][:media][2][:url]
+    # No caption on the companion media message: the prompt text is about
+    # to appear in the list body right after it.
+    assert_nil result[2][:media][2][:caption]
+  end
+
+  # Above the list cap the choices are already just text, and a WhatsApp
+  # media message takes a caption up to 1024 characters (Meta: "Media asset
+  # caption text. Maximum 1024 characters."), so splitting into a media
+  # message and a text message would be an avoidable second post: the
+  # numbered body becomes the caption instead, in one message.
+  def test_media_above_ten_choices_merges_into_one_captioned_media_message
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :media_image, result[0]
+    refute result[2].key?(:media) # this IS the whole message, not a companion
+    assert_includes result[2][:caption], "Pick one"
+    assert_includes result[2][:caption], "1. Option 1"
+    assert_includes result[2][:caption], "12. Option 12"
+    assert_equal "https://example.com/photo.jpg", result[2][:url]
+  end
+
+  # A long enough option list pushes the combined caption over Meta's 1024
+  # character cap; falling back to two messages must lose nothing.
+  def test_media_above_ten_choices_falls_back_to_two_messages_when_caption_too_long
+    choices = (1..40).to_h { |i| ["key#{i}", "A rather verbose option label number #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_includes result[1], "1. A rather verbose option label number 1"
+    assert_includes result[1], "40. A rather verbose option label number 40"
+    assert_equal :media_image, result[2][:media][0]
+    assert_nil result[2][:media][2][:caption]
+  end
+
+  def test_audio_carries_no_caption
+    result = FlowChat::Whatsapp::Renderer.new(
+      "Listen to this",
+      media: {type: :audio, url: "https://example.com/clip.mp3"}
+    ).render
+
+    assert_equal :media_audio, result[0]
+    refute result[2].key?(:caption), "Meta's audio schema has no caption field"
+    assert_equal "https://example.com/clip.mp3", result[2][:url]
+  end
+
+  def test_sticker_carries_no_caption
+    result = FlowChat::Whatsapp::Renderer.new(
+      "A sticker",
+      media: {type: :sticker, url: "https://example.com/s.webp"}
+    ).render
+
+    assert_equal :media_sticker, result[0]
+    refute result[2].key?(:caption), "Meta's sticker schema has no caption field"
+  end
+
+  # Meta's schema gives audio messages only id/link/voice and sticker
+  # messages only id/link - neither takes a caption - so above the list cap
+  # they can never merge into one message, however short the option list.
+  def test_media_above_ten_choices_with_audio_falls_back_to_two_messages
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :audio, url: "https://example.com/clip.mp3"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_equal :media_audio, result[2][:media][0]
+  end
+
+  def test_media_above_ten_choices_with_sticker_falls_back_to_two_messages
+    choices = (1..12).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :sticker, url: "https://example.com/sticker.webp"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :text, result[0]
+    assert_equal :media_sticker, result[2][:media][0]
+  end
+
+  # However many choices, WhatsApp never gets more than 3 reply buttons -
+  # with or without media riding along.
+  def test_media_above_the_button_cap_never_uses_buttons
+    choices = (1..4).to_h { |i| ["key#{i}", "Option #{i}"] }
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    refute_equal :interactive_buttons, result[0]
+  end
+
+  def test_media_with_array_choices_above_the_button_cap
+    choices = ["A", "B", "C", "D"]
+    media = {type: :image, url: "https://example.com/photo.jpg"}
+
+    result = FlowChat::Whatsapp::Renderer.new("Pick one", choices: choices, media: media).render
+
+    assert_equal :interactive_list, result[0]
+    assert_equal 4, result[2][:sections][0][:rows].length
   end
 
   def test_unsupported_media_type_raises_error

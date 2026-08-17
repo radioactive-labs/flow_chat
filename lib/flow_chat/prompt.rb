@@ -57,14 +57,6 @@ module FlowChat
 
     private
 
-    def validate_media_choices_compatibility(media, choices)
-      return unless media && choices
-
-      if choices.length > 3
-        raise ArgumentError, "Media with more than 3 choices is not supported. Please use either media OR choices for more than 3 options."
-      end
-    end
-
     def normalize_choices(choices)
       case choices
       when nil
@@ -79,8 +71,12 @@ module FlowChat
     end
 
     def prompt!(msg, choices: nil, media: nil)
-      validate_media_choices_compatibility(media, choices)
-
+      # Media plus any number of choices is a supported combination: every
+      # renderer either carries the media as its own message ahead of the
+      # choice surface, or (WhatsApp, <=3 choices) as a header on the same
+      # message. There is no platform-level reason to cap the choice count
+      # here - that decision, if one is ever needed, belongs to a specific
+      # renderer, not to this shared entry point.
       choices = normalize_choices(choices)
       raise FlowChat::Interrupt::Prompt.new(msg, choices: choices, media: media)
     end

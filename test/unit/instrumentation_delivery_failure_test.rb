@@ -195,6 +195,43 @@ class InstrumentationDeliveryFailureTest < Minitest::Test
     refute called
   end
 
+  # A send fails two ways and only one of them raises. Every client here answers
+  # with the platform's parsed response when the message was accepted, and nil
+  # once it has already logged an API error, so a nil result is a failure that
+  # arrived quietly. It used to be reported as a success.
+  def test_a_send_that_answers_nil_is_a_failure_not_a_success
+    succeeded = false
+    FlowChat::Config.on_delivery_success = ->(_c, _r) { succeeded = true }
+    failed_with = nil
+    FlowChat::Config.on_delivery_failure = ->(_c, error) { failed_with = error }
+
+    seen = nil
+    on_failure { |payload| seen = payload }
+
+    result = @sender.deliver(@context, platform: :messenger) { nil }
+
+    assert_nil result, "the caller still sees what the client returned"
+    refute succeeded, "on_delivery_success must not fire for a message that was never delivered"
+    assert_instance_of FlowChat::DeliveryError, failed_with
+    assert_match(/messenger did not accept the message/, failed_with.message)
+    assert_equal "FlowChat::DeliveryError", seen[:error_class]
+  end
+
+  def test_a_send_that_answers_nil_leaves_no_message_id_on_the_context
+    FlowChat::Config.on_delivery_success = ->(_c, _r) {}
+
+    @sender.deliver(@context, platform: :messenger) { nil }
+
+    assert_nil @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+  end
+
+  # Reporting, not raising: the client already decided to swallow the API error,
+  # and turning it into an exception here would fail the webhook for a reply the
+  # platform merely declined.
+  def test_a_send_that_answers_nil_does_not_raise
+    @sender.deliver(@context, platform: :messenger) { nil }
+  end
+
   # A sender that names nothing still has to answer the question, so an app can
   # read one key rather than knowing which platforms bother.
   def test_the_id_is_nil_when_the_sender_names_none

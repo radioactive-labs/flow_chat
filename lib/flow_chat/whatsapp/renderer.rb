@@ -5,6 +5,20 @@ module FlowChat
     class Renderer
       include FlowChat::Renderers::MarkdownSupport
 
+      # WhatsApp button and list row title limits. The choice mapper reads
+      # these too, to alias the truncated title it knows this renderer will
+      # display for a given choice count.
+      BUTTON_TITLE_LENGTH = 20
+      LIST_ROW_TITLE_LENGTH = 24
+
+      # Meta: "Media asset caption text. Maximum 1024 characters." Documented
+      # for image, video, and document messages. Audio and sticker messages'
+      # own schemas list only id/link (audio also has voice) - no caption
+      # field at all - so they can never carry the numbered body this way,
+      # however short it is.
+      MAX_CAPTION_LENGTH = 1024
+      CAPTIONABLE_MEDIA_TYPES = [:image, :video, :document].freeze
+
       attr_reader :message, :choices, :media
 
       def initialize(message, choices: nil, media: nil)
@@ -39,7 +53,11 @@ module FlowChat
         message.present? ? to_whatsapp(message) : nil
       end
 
-      def build_media_message
+      # @param caption [String, nil] defaults to the prompt text. Pass nil when
+      #   this media is a companion sent ahead of a choice message: the prompt
+      #   is about to appear in that message's body, and a caption here would
+      #   just duplicate it.
+      def build_media_message(caption: formatted_caption)
         media_type = media[:type] || :image
         url = media[:url]
         id = media[:id]
@@ -50,26 +68,28 @@ module FlowChat
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           [:media_image, "", options]
         when :document
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           options[:filename] = filename if filename
           [:media_document, "", options]
         when :audio
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          # Meta's audio message schema carries id, link and voice, with no
+          # caption, so a caption here would claim a field the API does not
+          # accept. Same as stickers below.
           [:media_audio, "", options]
         when :video
           options = {}
           options[:url] = url if url
           options[:id] = id if id
-          options[:caption] = formatted_caption if formatted_caption
+          options[:caption] = caption if caption
           [:media_video, "", options]
         when :sticker
           options = {}
@@ -95,45 +115,99 @@ module FlowChat
         end
       end
 
+      # Media is additive: it does not change which choice surface is used.
+      # 3 or fewer choices is the one case WhatsApp can carry both in a
+      # single message (buttons with a media header), so that stays as is.
+      # Above that, there is no interactive surface left that can carry
+      # media - Meta's interactive message reference documents header.type:
+      # text for list messages; image, video and document headers are only
+      # defined for button messages - so the media goes out as its own
+      # message and the list or numbered rendering follows unchanged.
+      #
+      # The one exception is the numbered rung above the list cap: there the
+      # choices are already nothing but text, and a captionable media
+      # message can carry that text itself, so a captioned single message
+      # replaces the media-then-text split whenever it fits.
       def build_selection_message_with_media
-        # Convert array to hash with index-based keys if needed, same as build_selection_message
+        choice_hash = normalized_choices
+
+        return build_buttons_message_with_media(choice_hash) if buttons_rung?(choice_hash.length)
+
+        type, content, options = build_interactive_message(choice_hash)
+
+        if type == :text
+          merged = media_caption_message(content)
+          return merged if merged
+        end
+
+        [type, content, options.merge(media: build_media_message(caption: nil))]
+      end
+
+      # Returns the single-message [type, content, options] triple when the
+      # media type can carry a caption and the combined text fits under
+      # Meta's cap, or nil when it does not - the caller falls back to the
+      # existing media-then-text split, which loses nothing.
+      def media_caption_message(content)
+        return nil unless CAPTIONABLE_MEDIA_TYPES.include?((media[:type] || :image).to_sym)
+        return nil if content.length > MAX_CAPTION_LENGTH
+
+        build_media_message(caption: content)
+      end
+
+      def normalized_choices
         if choices.is_a?(Array)
-          choice_hash = choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
-          build_buttons_message_with_media(choice_hash)
+          choices.each_with_index.to_h { |choice, index| [index.to_s, choice] }
         elsif choices.is_a?(Hash)
-          build_buttons_message_with_media(choices)
+          choices
         else
           raise ArgumentError, "choices must be an Array or Hash"
         end
       end
 
+      # Goes through FlowChat::Meta::ChoiceLadder, shared with Messenger and
+      # Instagram, rather than its own count comparisons - see
+      # FlowChat::Config::WhatsappConfig#ladder_limits for how WhatsApp's two
+      # flat thresholds are bridged to the shape that helper expects. The
+      # choice mapper asks the same question the same way, so the two cannot
+      # drift on which rung a given count lands on.
       def build_interactive_message(choice_hash)
-        if choice_hash.length <= 3
-          # Use buttons for 3 or fewer choices
-          build_buttons_message(choice_hash)
-        else
-          # Use list for more than 3 choices
-          build_list_message(choice_hash)
+        case FlowChat::Meta::ChoiceLadder.rung_for(choice_hash.length, limits.ladder_limits)
+        when :none, :quick_replies then build_buttons_message(choice_hash)
+        when :carousel then build_list_message(choice_hash)
+        when :numbered then build_numbered_message(choice_hash)
         end
       end
 
+      # :none (zero choices) counts as a buttons-rung count here, matching
+      # what the plain `count <= max_buttons` comparison this replaced did
+      # for zero: there is no real-world case with zero choices, but this
+      # keeps the two call sites in build_selection_message_with_media and
+      # build_interactive_message agreeing with each other regardless.
+      def buttons_rung?(count)
+        rung = FlowChat::Meta::ChoiceLadder.rung_for(count, limits.ladder_limits)
+        rung == :none || rung == :quick_replies
+      end
+
+      def limits
+        FlowChat::Config.whatsapp
+      end
+
+      # Whether titles are numbered, and the enumeration order positions come
+      # from, are both decided by FlowChat::ChoiceTitles over this same
+      # `choices` hash - the choice mapper goes through the same module over
+      # the same hash, so the two can never disagree on which titles are
+      # shown, which is what lets the mapper use a title as the wire value.
       def build_buttons_message(choices)
-        buttons = choices.map do |key, value|
-          {
-            id: key.to_s,
-            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
-          }
+        buttons = FlowChat::ChoiceTitles.build(choices, BUTTON_TITLE_LENGTH).map do |key, _label, title, _truncated|
+          {id: key, title: title}
         end
 
         [:interactive_buttons, formatted_message, {buttons: buttons}]
       end
 
       def build_buttons_message_with_media(choices)
-        buttons = choices.map do |key, value|
-          {
-            id: key.to_s,
-            title: truncate_text(value.to_s, 20) # WhatsApp button titles have a 20 character limit
-          }
+        buttons = FlowChat::ChoiceTitles.build(choices, BUTTON_TITLE_LENGTH).map do |key, _label, title, _truncated|
+          {id: key, title: title}
         end
 
         # Build media header
@@ -175,50 +249,37 @@ module FlowChat
         end
       end
 
+      # See the comment on build_buttons_message: numbering and position both
+      # come from FlowChat::ChoiceTitles over this same `choices` hash.
+      #
+      # The description (a longer, secondary line WhatsApp renders below the
+      # title, up to 72 chars) is not numbered: nothing resolves a typed
+      # description back to a choice, only the title and the position are
+      # aliased, so a prefix there would just be noise. It is populated
+      # whenever the title's own label portion didn't fit - whether that's
+      # because the label alone exceeds the cap, or because a position
+      # prefix ate into the room left for it.
       def build_list_message(choices)
-        items = choices.map do |key, value|
-          original_text = value.to_s
-          truncated_title = truncate_text(original_text, 24)
-
-          # If title was truncated, put full text in description (up to 72 chars)
-          description = if original_text.length > 24
-            truncate_text(original_text, 72)
-          end
+        items = FlowChat::ChoiceTitles.build(choices, LIST_ROW_TITLE_LENGTH).map do |key, label, title, truncated|
+          description = FlowChat::TextTruncator.truncate(label, 72) if truncated
 
           {
-            id: key.to_s,
-            title: truncated_title,
+            id: key,
+            title: title,
             description: description
           }.compact
         end
 
-        # If 10 or fewer items, use single section
-        sections = if items.length <= 10
-          [
-            {
-              title: "Options",
-              rows: items
-            }
-          ]
-        else
-          # Paginate into multiple sections (max 10 items per section)
-          items.each_slice(10).with_index.map do |section_items, index|
-            start_num = (index * 10) + 1
-            end_num = start_num + section_items.length - 1
-
-            {
-              title: "#{start_num}-#{end_num}",
-              rows: section_items
-            }
-          end
-        end
-
-        [:interactive_list, formatted_message, {sections: sections}]
+        [:interactive_list, formatted_message, {sections: [{title: "Options", rows: items}]}]
       end
 
-      def truncate_text(text, length)
-        return text if text.length <= length
-        text[0, length - 3] + "..."
+      # Above the row cap there is no interactive surface left, so the options go
+      # in the body and the user types a number. The choice mapper stores the
+      # positions for this rung so the digit resolves to the original key.
+      def build_numbered_message(choices)
+        numbered = choices.values.map.with_index(1) { |label, i| "#{i}. #{label}" }.join("\n")
+
+        [:text, "#{formatted_message}\n\n#{numbered}", {}]
       end
 
       # Convert text to WhatsApp format

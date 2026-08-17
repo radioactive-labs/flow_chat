@@ -54,6 +54,32 @@ module FlowChat
               contact_name: default_contact_name
             }
           },
+          messenger: {
+            name: "Messenger (Send API)",
+            description: "Facebook Messenger integration using the Send API",
+            processor_type: "messenger",
+            gateway: "send_api",
+            endpoint: "/messenger/webhook",
+            icon: "💬",
+            color: "#0084FF",
+            settings: {
+              user_id: default_phone_number,
+              contact_name: default_contact_name
+            }
+          },
+          instagram: {
+            name: "Instagram (Send API)",
+            description: "Instagram DM integration using the Send API",
+            processor_type: "instagram",
+            gateway: "send_api",
+            endpoint: "/instagram/webhook",
+            icon: "📷",
+            color: "#E1306C",
+            settings: {
+              user_id: default_phone_number,
+              contact_name: default_contact_name
+            }
+          },
           http: {
             name: "HTTP API",
             description: "HTTP integration with JSON request/response",

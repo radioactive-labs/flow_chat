@@ -1,16 +1,14 @@
 require "net/http"
 require "json"
-require "openssl"
 
 module FlowChat
   module Whatsapp
-    # Configuration-related errors
-    class ConfigurationError < StandardError; end
-
     module Gateway
       class CloudApi
         include FlowChat::Instrumentation
         include FlowChat::GatewayAsyncSupport
+        include FlowChat::Meta::SignatureValidation
+        include FlowChat::Meta::WebhookVerification
 
         attr_reader :context
 
@@ -63,6 +61,23 @@ module FlowChat
           FlowChat.logger.debug { "CloudApi: Added Whatsapp::Middleware::ChoiceMapper" }
         end
 
+        # What this gateway is, for the shared Meta:: modules. Public because
+        # FlowChat::Meta::GatewayIdentity declares them public: a gateway saying
+        # which platform it speaks for is not a secret, unlike how it validates a
+        # signature. Keeping them here rather than below `private` means every
+        # Meta gateway answers these the same way.
+        def platform
+          :whatsapp
+        end
+
+        def platform_label
+          "WhatsApp"
+        end
+
+        def configuration_error_class
+          FlowChat::Whatsapp::ConfigurationError
+        end
+
         private
 
         def determine_message_handler(context)
@@ -73,39 +88,6 @@ module FlowChat
           else
             FlowChat.logger.debug { "CloudApi: Using inline message handler" }
             :inline
-          end
-        end
-
-        def handle_verification(context)
-          params = @controller.request.params
-
-          verify_token = @config.verify_token
-          provided_token = params["hub.verify_token"]
-          challenge = params["hub.challenge"]
-
-          # A configuration with no verify token must not verify anything. Without
-          # the presence check a missing token on both sides compares equal, and
-          # anyone could claim the endpoint by asking for the challenge.
-          verified = verify_token.present? && FlowChat::Security.secure_compare(provided_token.to_s, verify_token)
-
-          FlowChat.logger.debug { "CloudApi: Webhook verification - provided token matches: #{verified}" }
-
-          if verified
-            # Use instrumentation for webhook verification success
-            instrument(Events::WEBHOOK_VERIFIED, {
-              challenge: challenge,
-              platform: :whatsapp
-            })
-
-            @controller.render plain: challenge
-          else
-            # Use instrumentation for webhook verification failure
-            instrument(Events::WEBHOOK_FAILED, {
-              reason: "Invalid verify token",
-              platform: :whatsapp
-            })
-
-            @controller.head :forbidden
           end
         end
 
@@ -164,7 +146,14 @@ module FlowChat
                 # carrying `statuses` and no `messages`. Handled before the flow
                 # slot is claimed, or a status arriving ahead of a message in the
                 # same delivery would spend the slot and drop the message.
-                handle_statuses(value) if value["statuses"].present?
+                #
+                # Foreground only. With async enabled the job re-enters this
+                # method on the same body, so publishing in both announced every
+                # status twice and delivery receipts double-counted. The request
+                # publishes them: it already holds the delivery, so a receipt is
+                # announced when it arrives rather than when the queue reaches
+                # it, and survives a job that is never picked up.
+                handle_statuses(value) if value["statuses"].present? && !in_background?
 
                 next if value["messages"].blank?
 
@@ -182,13 +171,13 @@ module FlowChat
               when "statuses"
                 # Only reachable for a payload built without a field name, which
                 # our own fixtures do and Meta does not.
-                handle_statuses(value)
+                handle_statuses(value) unless in_background?
               else
                 # Anything that is not a message or its delivery. Coexistence
                 # echoes, contact syncs, imported history, account bans, template
                 # approvals: all of it is the application's domain, so it is
                 # published rather than interpreted here.
-                handle_unmodelled_field(change["field"], value, entry["id"])
+                handle_unmodelled_field(change["field"], value, entry["id"]) unless in_background?
               end
             end
           end
@@ -220,8 +209,15 @@ module FlowChat
           business_phone_number = value.dig("metadata", "display_phone_number")
           business_phone_number_id = value.dig("metadata", "phone_number_id")
 
-          # Validate that webhook is for our configured phone number
-          if business_phone_number_id != @config.phone_number_id
+          # Validate that webhook is for our configured phone number. Skipped
+          # in simulator mode rather than requiring the simulator to send an
+          # id that matches a real configuration: the simulator's whole
+          # point is running a turn with no live credentials at hand. Safe
+          # to skip, not a hole for real traffic, because
+          # context["simulator_mode"] is only ever true once simulate? has
+          # already checked the signed simulator cookie, above in
+          # handle_webhook.
+          if !context["simulator_mode"] && business_phone_number_id != @config.phone_number_id
             FlowChat.logger.warn { "CloudApi: Webhook received for phone_number_id '#{business_phone_number_id}' but configured for '#{@config.phone_number_id}' - rejecting" }
             return :rejected
           end
@@ -311,7 +307,7 @@ module FlowChat
             "CloudApi: Publishing webhook field '#{field}' (value keys: #{value.keys.join(", ")})"
           }
 
-          instrument(Events::WEBHOOK_RECEIVED, {
+          payload = {
             platform: :whatsapp,
             gateway: :whatsapp_cloud_api,
             field: field,
@@ -319,61 +315,35 @@ module FlowChat
             business_phone_number: value.dig("metadata", "display_phone_number"),
             business_phone_number_id: value.dig("metadata", "phone_number_id"),
             value: value
-          })
+          }
+
+          origin = echo_origin(field, value)
+          payload[:echo_origin] = origin if origin
+
+          instrument(Events::WEBHOOK_RECEIVED, payload)
         end
 
-        # Validate webhook signature to ensure request comes from WhatsApp
-        def valid_webhook_signature?(request)
-          # Check if signature validation is explicitly disabled
-          if @config.skip_signature_validation
-            FlowChat.logger.debug { "CloudApi: Webhook signature validation is disabled" }
-            return true
-          end
+        # An echo reports a message sent on the thread by someone other than the
+        # user we are talking to. Which someone matters: a human replying from the
+        # business inbox usually means the application should stand the flow
+        # down, while our own send coming back means nothing at all. Only the
+        # app_id separates them, and only this gateway knows our own, so it is
+        # derived here rather than left for every subscriber to work out.
+        #
+        # Meta names the coexistence echo field "smb_message_echoes" and nests the
+        # echoes themselves under "message_echoes"; both are matched precisely
+        # rather than by a loose "echo" substring or "first array in the value",
+        # since a field this gateway does not otherwise interpret could carry
+        # other arrays under other names.
+        def echo_origin(field, value)
+          return nil unless field == "smb_message_echoes"
 
-          # Require app_secret for signature validation
-          unless @config.app_secret && !@config.app_secret.empty?
-            error_msg = "WhatsApp app_secret is required for webhook signature validation. " \
-                       "Either configure app_secret or set skip_signature_validation=true to explicitly disable validation."
-            FlowChat.logger.error { "CloudApi: #{error_msg}" }
-            raise FlowChat::Whatsapp::ConfigurationError, error_msg
-          end
+          app_id = value["message_echoes"]&.first&.dig("app_id")
 
-          signature_header = request.headers["X-Hub-Signature-256"]
-          unless signature_header
-            FlowChat.logger.warn { "CloudApi: No X-Hub-Signature-256 header found in request" }
-            return false
-          end
+          return :human_agent if app_id.blank?
+          return :self if app_id.to_s == @config.app_id.to_s
 
-          # Extract signature from header (format: "sha256=<signature>")
-          expected_signature = signature_header.sub("sha256=", "")
-
-          # Get raw request body
-          request.body.rewind
-          body = request.body.read
-          request.body.rewind
-
-          # Calculate HMAC signature
-          calculated_signature = OpenSSL::HMAC.hexdigest(
-            OpenSSL::Digest.new("sha256"),
-            @config.app_secret,
-            body
-          )
-
-          # Compare signatures using secure comparison to prevent timing attacks
-          signature_valid = FlowChat::Security.secure_compare(expected_signature, calculated_signature)
-
-          if signature_valid
-            FlowChat.logger.debug { "CloudApi: Webhook signature validation successful" }
-          else
-            FlowChat.logger.warn { "CloudApi: Webhook signature validation failed - signatures do not match" }
-          end
-
-          signature_valid
-        rescue FlowChat::Whatsapp::ConfigurationError
-          raise
-        rescue => e
-          FlowChat.logger.error { "CloudApi: Error validating webhook signature: #{e.class.name}: #{e.message}" }
-          false
+          :other_app
         end
 
         def extract_message_content!(message, context)
@@ -455,6 +425,11 @@ module FlowChat
             end
             context["whatsapp.message_result"] = result
 
+            # report_delivery_failure already reported this; a nil result
+            # means the platform did not accept the message, and instrumenting
+            # MESSAGE_SENT anyway counted a delivery that never happened.
+            return unless result
+
             # Instrument message sent
             instrument(Events::MESSAGE_SENT, {
               to: context["request.msisdn"],
@@ -466,6 +441,7 @@ module FlowChat
               content_length: prompt.to_s.length,
               # What Meta called it, so this and message.status can be joined.
               platform_message_id: platform_message_id_from(result),
+              duration_ms: context[FlowChat::Instrumentation::DELIVERY_DURATION_KEY],
               timestamp: context["request.timestamp"]
             })
           end

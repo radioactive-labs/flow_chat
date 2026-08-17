@@ -57,6 +57,16 @@ module FlowChat
           @context.input = original_choice
         end
 
+        # USSD is deliberately exempt from the fold every other choice mapper
+        # now takes. A numeric keypad can only ever send a position, and
+        # positions are unique by construction, so the relation this resolves
+        # on is already injective - there is no equivalence under which two
+        # choices could collapse into one another.
+        #
+        # Every other mapper has to be *given* that guarantee, by asking
+        # FlowChat::ChoiceTitles to number a set whose titles collide under
+        # its own resolver's fold. Nothing here needs to, and adding aliasing
+        # to this mapper would introduce the very ambiguity it does not have.
         def create_numbered_mapping(choices)
           # Choices are always a hash after normalize_choices
           numbered_choices = {}

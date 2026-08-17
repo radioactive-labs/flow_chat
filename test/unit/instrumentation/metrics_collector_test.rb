@@ -1,4 +1,5 @@
 require "test_helper"
+require "securerandom"
 
 class MetricsCollectorTest < Minitest::Test
   def setup
@@ -21,17 +22,15 @@ class MetricsCollectorTest < Minitest::Test
       action: "welcome"
     }, duration: 150.0)
 
-    # Give time for event processing
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["flows.executed"]
     assert_equal 1, metrics["flows.by_name.TestFlow"]
 
-    # Check timing metrics (allow some tolerance for timing precision)
-    assert_in_delta 150.0, metrics["flows.execution_time.min"], 10.0
-    assert_in_delta 150.0, metrics["flows.execution_time.max"], 10.0
-    assert_in_delta 150.0, metrics["flows.execution_time.avg"], 10.0
+    # The delta absorbs float noise in the monotonic clock arithmetic (~1e-8),
+    # not scheduler jitter: the duration is stated, not slept.
+    assert_in_delta 150.0, metrics["flows.execution_time.min"], 0.001
+    assert_in_delta 150.0, metrics["flows.execution_time.max"], 0.001
+    assert_in_delta 150.0, metrics["flows.execution_time.avg"], 0.001
   end
 
   def test_flow_execution_error_increments_error_counters
@@ -39,8 +38,6 @@ class MetricsCollectorTest < Minitest::Test
       flow_name: "TestFlow",
       error_class: "StandardError"
     })
-
-    sleep 0.01
 
     metrics = @collector.snapshot
     assert_equal 1, metrics["flows.errors"]
@@ -54,8 +51,6 @@ class MetricsCollectorTest < Minitest::Test
       gateway: :whatsapp_cloud_api
     })
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["sessions.created"]
     assert_equal 1, metrics["sessions.created.by_gateway.whatsapp_cloud_api"]
@@ -66,8 +61,6 @@ class MetricsCollectorTest < Minitest::Test
       session_id: "session_123"
     })
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["sessions.destroyed"]
   end
@@ -75,8 +68,6 @@ class MetricsCollectorTest < Minitest::Test
   def test_session_cache_hit_and_miss_counters
     publish_event("session.cache.hit.flow_chat", {})
     publish_event("session.cache.miss.flow_chat", {})
-
-    sleep 0.01
 
     metrics = @collector.snapshot
     assert_equal 1, metrics["sessions.cache.hits"]
@@ -96,16 +87,13 @@ class MetricsCollectorTest < Minitest::Test
       platform: :whatsapp
     }, duration: 100.0)
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["whatsapp.messages.received"]
     assert_equal 1, metrics["whatsapp.messages.received.by_type.text"]
     assert_equal 1, metrics["whatsapp.messages.sent"]
     assert_equal 1, metrics["whatsapp.messages.sent.by_type.text"]
 
-    # Check timing for sent messages (allow some tolerance for timing precision)
-    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 15.0
+    assert_in_delta 100.0, metrics["whatsapp.api.response_time.avg"], 0.001
   end
 
   def test_whatsapp_api_request_success_and_failure
@@ -122,17 +110,14 @@ class MetricsCollectorTest < Minitest::Test
       platform: :whatsapp
     }, duration: 50.0)
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["whatsapp.api.requests.success"]
     assert_equal 1, metrics["whatsapp.api.requests.failure"]
     assert_equal 1, metrics["whatsapp.api.requests.failure.by_status.400"]
 
-    # Check timing for API requests (allow some tolerance for timing precision)
-    assert_in_delta 50.0, metrics["whatsapp.api.request_time.min"], 10.0
-    assert_in_delta 250.0, metrics["whatsapp.api.request_time.max"], 10.0
-    assert_in_delta 150.0, metrics["whatsapp.api.request_time.avg"], 10.0
+    assert_in_delta 50.0, metrics["whatsapp.api.request_time.min"], 0.001
+    assert_in_delta 250.0, metrics["whatsapp.api.request_time.max"], 0.001
+    assert_in_delta 150.0, metrics["whatsapp.api.request_time.avg"], 0.001
   end
 
   def test_whatsapp_media_upload_success_and_failure
@@ -150,15 +135,12 @@ class MetricsCollectorTest < Minitest::Test
       platform: :whatsapp
     }, duration: 100.0)
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["whatsapp.media.uploads.success"]
     assert_equal 1, metrics["whatsapp.media.uploads.failure"]
 
-    # Check timing and size metrics (allow some tolerance for timing precision)
-    assert_in_delta 100.0, metrics["whatsapp.media.upload_time.min"], 5.0
-    assert_in_delta 2000.0, metrics["whatsapp.media.upload_time.max"], 10.0
+    assert_in_delta 100.0, metrics["whatsapp.media.upload_time.min"], 0.001
+    assert_in_delta 2000.0, metrics["whatsapp.media.upload_time.max"], 0.001
     assert_equal 1024000, metrics["whatsapp.media.upload_size.avg"]  # Only successful uploads count for size
   end
 
@@ -175,8 +157,6 @@ class MetricsCollectorTest < Minitest::Test
       platform: :ussd
     }, duration: 50.0)
 
-    sleep 0.01
-
     metrics = @collector.snapshot
     assert_equal 1, metrics["ussd.messages.received"]
     assert_equal 1, metrics["ussd.messages.sent"]
@@ -190,8 +170,6 @@ class MetricsCollectorTest < Minitest::Test
       content_length: 250,
       platform: :ussd
     })
-
-    sleep 0.01
 
     metrics = @collector.snapshot
     assert_equal 1, metrics["ussd.pagination.triggered"]
@@ -209,19 +187,23 @@ class MetricsCollectorTest < Minitest::Test
       }, duration: duration)
     end
 
-    sleep 0.01
-
     metrics = @collector.snapshot
 
     assert_equal 5, metrics["flows.executed"]
-    assert_in_delta 100.0, metrics["flows.execution_time.min"], 10.0
-    assert_in_delta 300.0, metrics["flows.execution_time.max"], 10.0
-    assert_in_delta 200.0, metrics["flows.execution_time.avg"], 10.0  # (100+200+300+150+250)/5
+    assert_in_delta 100.0, metrics["flows.execution_time.min"], 0.001
+    assert_in_delta 300.0, metrics["flows.execution_time.max"], 0.001
+    assert_in_delta 200.0, metrics["flows.execution_time.avg"], 0.001  # (100+200+300+150+250)/5
 
-    # Check percentiles (sorted: 100, 150, 200, 250, 300) - allow tolerance for timing
-    assert_in_delta 200.0, metrics["flows.execution_time.p50"], 10.0  # median
-    assert_in_delta 280.0, metrics["flows.execution_time.p95"], 15.0  # 95th percentile - more tolerance
-    assert_in_delta 290.0, metrics["flows.execution_time.p99"], 15.0  # 99th percentile - more tolerance
+    # Percentiles over sorted [100, 150, 200, 250, 300], linearly interpolated
+    # between neighbours as percentile/ does it: k = pct/100 * (n - 1), then
+    # blend sorted[k.floor] and sorted[k.ceil] by the fractional part.
+    #
+    # The old expectations here were 280 and 290, which only passed because the
+    # tolerance was 15. The implementation returns 290 and 298: for p95,
+    # k = 3.8 gives 250*0.2 + 300*0.8 = 290.
+    assert_in_delta 200.0, metrics["flows.execution_time.p50"], 0.001  # median, k = 2 exactly
+    assert_in_delta 290.0, metrics["flows.execution_time.p95"], 0.001
+    assert_in_delta 298.0, metrics["flows.execution_time.p99"], 0.001
   end
 
   def test_reset_clears_all_metrics
@@ -229,8 +211,6 @@ class MetricsCollectorTest < Minitest::Test
       flow_name: "TestFlow",
       action: "test"
     })
-
-    sleep 0.01
 
     # Verify metrics exist
     metrics = @collector.snapshot
@@ -252,8 +232,6 @@ class MetricsCollectorTest < Minitest::Test
       session_id: "session_123",
       gateway: :whatsapp_cloud_api
     })
-
-    sleep 0.01
 
     # Get only flow metrics
     flow_metrics = @collector.get_category("flows")
@@ -297,9 +275,22 @@ class MetricsCollectorTest < Minitest::Test
 
   private
 
+  # Publishes an event whose duration is exactly what the caller asked for.
+  #
+  # This used to instrument a block that really slept for the duration, so a
+  # "250ms" event took 250ms of wall clock and recorded 250ms plus whatever
+  # jitter the scheduler added. That made the file the slowest in the suite and
+  # made every timing assertion flaky, which in turn forced tolerances so wide
+  # (5 to 15ms) that they no longer pinned the arithmetic they exist to check.
+  #
+  # Note publish(name, start, finish, id, payload) does NOT work here: an
+  # Event-object subscriber receives no duration from it. publish_event with a
+  # constructed Event is the supported way to state one.
   def publish_event(name, payload, duration: 0.0)
-    ActiveSupport::Notifications.instrument(name, payload) do
-      sleep(duration / 1000.0) if duration > 0
-    end
+    started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    event = ActiveSupport::Notifications::Event.new(
+      name, started, started + (duration / 1000.0), SecureRandom.hex(10), payload
+    )
+    ActiveSupport::Notifications.publish_event(event)
   end
 end

@@ -1019,6 +1019,14 @@
       // Configuration Data
       const configurations = <%= configurations.to_json.html_safe %>;
 
+      // Platforms that render as chat bubbles, sharing the WhatsApp screen
+      // chrome rather than each growing its own copy of it.
+      const CHAT_PLATFORMS = ['whatsapp', 'messenger', 'instagram']
+
+      function isChatPlatform(processorType) {
+        return CHAT_PLATFORMS.includes(processorType)
+      }
+
       // DOM Elements
       const elements = {
         configSelect: document.getElementById('config-select'),
@@ -1106,7 +1114,7 @@
       }
 
       function updateUserSettings() {
-        if (state.currentConfig && state.currentConfig.processor_type === 'whatsapp') {
+        if (state.currentConfig && isChatPlatform(state.currentConfig.processor_type)) {
           updateContactInfo()
         }
       }
@@ -1127,19 +1135,20 @@
         if (!state.currentConfig) return
         
         const processorType = state.currentConfig.processor_type
-        const isWhatsApp = processorType === 'whatsapp'
+        const isChat = isChatPlatform(processorType)
         const isHttp = processorType === 'http'
-        
-        // Show/hide platform-specific elements
-        elements.contactNameGroup.style.display = isWhatsApp ? 'block' : 'none'
-        elements.ussdScreen.classList.toggle('hidden', isWhatsApp || isHttp)
-        elements.whatsappScreen.classList.toggle('hidden', !isWhatsApp)
+
+        // Show/hide platform-specific elements. The chat screen is shared by
+        // every chat platform rather than each growing its own copy of it.
+        elements.contactNameGroup.style.display = isChat ? 'block' : 'none'
+        elements.ussdScreen.classList.toggle('hidden', isChat || isHttp)
+        elements.whatsappScreen.classList.toggle('hidden', !isChat)
         elements.httpScreen.classList.toggle('hidden', !isHttp)
-        
+
         // Update input placeholder
         let placeholder = 'Enter USSD input...'
-        if (isWhatsApp) {
-          placeholder = 'Type your WhatsApp message...'
+        if (isChat) {
+          placeholder = `Type your ${state.currentConfig.name} message...`
         } else if (isHttp) {
           placeholder = 'Type your HTTP message...'
         }
@@ -1186,12 +1195,12 @@
           
           if (state.currentConfig.processor_type === 'ussd') {
             await makeUSSDRequest()
-          } else if (state.currentConfig.processor_type === 'whatsapp') {
-            await makeWhatsAppRequest()
+          } else if (isChatPlatform(state.currentConfig.processor_type)) {
+            await makeChatPlatformRequest()
           } else if (state.currentConfig.processor_type === 'http') {
             await makeHTTPRequest()
           }
-          
+
           updateStatus('Connected', 'connected')
           
         } catch (error) {
@@ -1209,19 +1218,19 @@
           updateStatus('Sending...', 'connecting')
           
           // Add outgoing message to appropriate chat
-          if (state.currentConfig.processor_type === 'whatsapp') {
+          if (isChatPlatform(state.currentConfig.processor_type)) {
             addMessage(message, true)
           } else if (state.currentConfig.processor_type === 'http') {
             addHttpMessage(message, true)
           }
-          
+
           elements.messageInput.value = ''
           updateCharCount()
-          
+
           if (state.currentConfig.processor_type === 'ussd') {
             await makeUSSDRequest(message)
-          } else if (state.currentConfig.processor_type === 'whatsapp') {
-            await makeWhatsAppRequest(message)
+          } else if (isChatPlatform(state.currentConfig.processor_type)) {
+            await makeChatPlatformRequest(message)
           } else if (state.currentConfig.processor_type === 'http') {
             await makeHTTPRequest(message)
           }
@@ -1565,6 +1574,131 @@
         }
       }
 
+      // Dispatches to the request builder for whichever chat platform is
+      // selected. WhatsApp keeps its own Cloud API envelope; Messenger and
+      // Instagram share the Messenger Platform envelope instead.
+      async function makeChatPlatformRequest(userInput = null) {
+        if (state.currentConfig.processor_type === 'whatsapp') {
+          await makeWhatsAppRequest(userInput)
+        } else {
+          await makeMessagingRequest(userInput)
+        }
+      }
+
+      // Messenger and Instagram request handler: builds the entry[].messaging[]
+      // envelope both gateways parse, with simulator_mode enabled.
+      async function makeMessagingRequest(userInput = null) {
+        const config = state.currentConfig
+        const userId = elements.phoneNumber.value
+
+        let isInitialMessage = false
+        if (userInput === null) {
+          userInput = 'hi'
+          isInitialMessage = true
+        }
+
+        if (isInitialMessage) {
+          addMessage(userInput, true)
+        }
+
+        const webhookData = {
+          object: config.processor_type === 'instagram' ? 'instagram' : 'page',
+          entry: [{
+            id: config.settings.page_id || 'page_1',
+            messaging: [{
+              sender: {id: userId},
+              recipient: {id: config.settings.page_id || 'page_1'},
+              timestamp: Date.now(),
+              message: {mid: 'mid.' + Date.now(), text: userInput}
+            }]
+          }],
+          simulator_mode: true
+        }
+
+        try {
+          const response = await fetch(config.endpoint, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(webhookData),
+            credentials: 'include'
+          })
+
+          const responseText = await response.text()
+          let responseData = null
+
+          if (response.headers.get('content-type')?.includes('application/json')) {
+            try {
+              responseData = JSON.parse(responseText)
+
+              if (responseData.mode === 'simulator') {
+                displaySimulatorResponse(responseData)
+                addRequestLog('POST', config.endpoint, webhookData, responseData, response.status)
+                return
+              }
+            } catch (jsonError) {
+              console.warn('Failed to parse JSON response:', jsonError)
+              console.warn('Response text:', responseText)
+              responseData = responseText
+            }
+          } else {
+            responseData = responseText
+          }
+
+          addRequestLog('POST', config.endpoint, webhookData, responseData, response.status)
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          setTimeout(() => {
+            addInfoMessage(
+              `✅ Webhook delivered successfully (${response.status})\n\n` +
+              `📱 In a real ${config.name} integration:\n` +
+              `• Your endpoint processes this webhook\n` +
+              `• Response messages are sent via the Send API\n` +
+              `• Messages appear in the actual ${config.name} chat\n\n` +
+              `💡 This simulator shows the webhook delivery only.\n` +
+              `To enable full simulator mode, configure your endpoint\n` +
+              `to handle simulator_mode parameter and return JSON responses.`
+            )
+          }, 500)
+        } catch (error) {
+          addRequestLog('POST', config.endpoint, webhookData, null, 0, error.message)
+
+          let errorMessage = error.message
+          if (error.message.includes('Failed to fetch')) {
+            errorMessage = 'Cannot connect to endpoint. Please check:\n' +
+                          '• Endpoint URL is correct\n' +
+                          '• Server is running\n' +
+                          '• CORS is configured if cross-origin\n' +
+                          '• SSL certificate is valid (for HTTPS)'
+          } else if (error.message.includes('404')) {
+            errorMessage = 'Endpoint not found (404). Please verify:\n' +
+                          '• The webhook URL is correct\n' +
+                          '• The route is properly configured\n' +
+                          '• The controller/handler exists'
+          } else if (error.message.includes('500')) {
+            errorMessage = 'Server error (500). Check server logs for:\n' +
+                          '• Application errors\n' +
+                          '• Missing dependencies\n' +
+                          '• Configuration issues'
+          }
+
+          setTimeout(() => {
+            addInfoMessage(
+              `❌ Request Failed\n\n` +
+              `Error: ${errorMessage}\n\n` +
+              `💡 For simulator mode support, ensure your endpoint:\n` +
+              `• Accepts POST requests with simulator_mode parameter\n` +
+              `• Returns JSON with mode: "simulator" for simulator requests\n` +
+              `• Handles webhook verification (if required by your setup)`
+            )
+          }, 500)
+
+          throw error
+        }
+      }
+
       // HTTP API request handler
       async function makeHTTPRequest(userInput = null) {
         const config = state.currentConfig
@@ -1640,15 +1774,45 @@
         updateCharCount()
       }
 
+      // Renders a Messenger/Instagram [type, content, options] tuple as a chat
+      // bubble, with quick replies and carousel buttons tappable the same way
+      // a WhatsApp interactive button is.
+      function displayMessagingPlatformResponse(messagePayload) {
+        const [type, content, options] = messagePayload
+        let interactive = null
+
+        if (type === 'quick_replies' && options && options.quick_replies) {
+          interactive = {
+            buttons: options.quick_replies.map(reply => ({id: reply.payload, title: reply.title}))
+          }
+        } else if (type === 'carousel' && options && options.elements) {
+          interactive = {
+            buttons: options.elements.flatMap(element =>
+              (element.buttons || []).map(button => ({id: button.payload, title: button.title}))
+            )
+          }
+        }
+
+        addMessage(content, false, type, interactive, null)
+      }
+
       function displaySimulatorResponse(simulatorData) {
         const messagePayload = simulatorData.would_send
+
+        // Messenger and Instagram render [type, content, options], not the
+        // WhatsApp Cloud API envelope this function otherwise expects.
+        if (Array.isArray(messagePayload)) {
+          displayMessagingPlatformResponse(messagePayload)
+          return
+        }
+
         const messageInfo = simulatorData.message_info
-        
+
         // Extract message content based on type
         let messageText = ''
         let interactive = null
         let mediaContent = null
-        
+
         switch (messagePayload.type) {
           case 'text':
             messageText = messagePayload.text.body

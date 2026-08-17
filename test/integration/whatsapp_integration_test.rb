@@ -44,6 +44,44 @@ class WhatsappIntegrationTest < Minitest::Test
     end
   end
 
+  # Media plus more than 3 choices used to be unreachable: Prompt raised
+  # ArgumentError before this ever reached a renderer (Blocker 1). 4 choices
+  # is above WhatsApp's MAX_BUTTONS (3), so this lands on the interactive
+  # list rung, with media forced out as its own message ahead of it (see
+  # WhatsApp::Renderer#build_selection_message_with_media) - exactly the
+  # combination the old guard made impossible to exercise end to end.
+  class MediaChoiceFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:plan) do |prompt|
+        prompt.select "Choose a plan", {
+          "basic" => "Basic Plan",
+          "pro" => "Pro Plan",
+          "team" => "Team Plan",
+          "enterprise" => "Enterprise Plan"
+        }, media: {type: :image, url: "https://example.com/plans.png"}
+      end
+      app.say "You picked #{choice}."
+    end
+  end
+
+  # Array choices make key == label (see Prompt#normalize_choices), which is
+  # what let a resolved choice collide with its own mapping key and defeat
+  # should_clear_for_new_flow? (Blocker 3). Long, similar-prefixed labels
+  # force FlowChat::ChoiceTitles to number them, so a plain "1" resolves via
+  # the position map exactly as in the reported repro.
+  class ArrayMenuThenPinFlow < FlowChat::Flow
+    def main_page
+      choice = app.screen(:choice) do |prompt|
+        prompt.select "Choose one", [
+          "A very long label that gets truncated for sure",
+          "Another very long label here for sure too"
+        ]
+      end
+      pin = app.screen(:pin) { |prompt| prompt.ask "Enter your PIN:" }
+      app.say "You picked #{choice} and entered PIN #{pin}."
+    end
+  end
+
   def setup
     @config = FlowChat::Whatsapp::Configuration.new("test")
     @config.access_token = "test_access_token"
@@ -216,6 +254,68 @@ class WhatsappIntegrationTest < Minitest::Test
         body["document"]["link"] == "https://example.com/doc.pdf" &&
         body["document"]["filename"] == "report.pdf" &&
         body["document"]["caption"] == "Here's a document"
+    end
+  end
+
+  # Blocker 1: media plus more than 3 choices used to raise ArgumentError
+  # before this ever reached a renderer. 4 choices is above MAX_BUTTONS, so
+  # the media goes out as its own image message, ahead of the interactive
+  # list carrying all 4 rows - the shape build_selection_message_with_media
+  # already builds, just previously unreachable from a flow.
+  def test_media_with_more_than_three_choices_sends_media_then_list
+    controller = create_whatsapp_controller(
+      message: build_text_message(text: "start")
+    )
+
+    posts = []
+    stub_request(:post, "#{@api_base_url}/123456789/messages").to_return do |req|
+      posts << JSON.parse(req.body)
+      {status: 200, body: {"messages" => [{"id" => "wamid.test123"}]}.to_json}
+    end
+
+    run_processor(controller, MediaChoiceFlow)
+
+    media_post, list_post = posts
+
+    assert_equal "image", media_post["type"]
+    assert_equal "https://example.com/plans.png", media_post.dig("image", "link")
+
+    assert_equal "interactive", list_post["type"]
+    assert_equal "list", list_post.dig("interactive", "type")
+    rows = list_post.dig("interactive", "action", "sections").flat_map { |s| s["rows"] }
+    assert_equal 4, rows.length
+
+    # Meta: "Body text. Maximum 1024 characters" for an interactive message body.
+    assert_operator list_post.dig("interactive", "body", "text").to_s.bytesize, :<=, 1024
+  end
+
+  # Blocker 3: a typed "1" resolves against the menu's position map (the
+  # labels are long enough that FlowChat::ChoiceTitles numbers them), then
+  # the very next screen is free text. A stale map would rewrite a typed PIN
+  # digit into the menu's first choice; clearing the maps unconditionally
+  # before the app is called is what stops that.
+  def test_typed_digit_on_free_text_screen_after_array_menu_stays_a_digit
+    session_data = {}
+
+    controller = create_whatsapp_controller(message: build_text_message(text: "start"))
+    run_processor(controller, ArrayMenuThenPinFlow, session_data: session_data)
+    assert_requested :post, "#{@api_base_url}/123456789/messages" do |req|
+      body = JSON.parse(req.body)
+      body["interactive"]["action"]["buttons"].length == 2
+    end
+
+    controller = create_whatsapp_controller(message: build_text_message(text: "1"))
+    run_processor(controller, ArrayMenuThenPinFlow, session_data: session_data)
+    assert_requested :post, "#{@api_base_url}/123456789/messages" do |req|
+      JSON.parse(req.body).dig("text", "body") == "Enter your PIN:"
+    end
+
+    controller = create_whatsapp_controller(message: build_text_message(text: "1"))
+    run_processor(controller, ArrayMenuThenPinFlow, session_data: session_data)
+    # Bug present: "...and entered PIN A very long label...". Fixed: the
+    # typed digit reaches the flow untouched.
+    assert_requested :post, "#{@api_base_url}/123456789/messages" do |req|
+      JSON.parse(req.body).dig("text", "body").to_s.end_with?("PIN 1.")
     end
   end
 

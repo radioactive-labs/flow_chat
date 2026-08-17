@@ -1,11 +1,15 @@
 module FlowChat
   module Whatsapp
     class Configuration
+      include FlowChat::NamedConfiguration
+
+      # "Whatsapp" is the constant, "WhatsApp" is the product.
+      def self.configuration_label
+        "WhatsApp"
+      end
+
       attr_accessor :access_token, :phone_number_id, :verify_token, :app_id, :app_secret,
         :webhook_verify_token, :business_account_id, :name, :skip_signature_validation
-
-      # Class-level storage for named configurations
-      @@configurations = {}
 
       def initialize(name)
         @name = name
@@ -60,56 +64,13 @@ module FlowChat
         config
       end
 
-      # Register a named configuration
-      def self.register(name, config)
-        FlowChat.logger.debug { "WhatsApp::Configuration: Registering configuration '#{name}'" }
-        @@configurations[name.to_sym] = config
-      end
-
-      # Get a named configuration
-      def self.get(name)
-        config = @@configurations[name.to_sym]
-        if config
-          FlowChat.logger.debug { "WhatsApp::Configuration: Retrieved configuration '#{name}'" }
-          config
-        else
-          FlowChat.logger.error { "WhatsApp::Configuration: Configuration '#{name}' not found" }
-          raise ArgumentError, "WhatsApp configuration '#{name}' not found"
-        end
-      end
-
-      # Check if a named configuration exists
-      def self.exists?(name)
-        exists = @@configurations.key?(name.to_sym)
-        FlowChat.logger.debug { "WhatsApp::Configuration: Configuration '#{name}' exists: #{exists}" }
-        exists
-      end
-
-      # Get all configuration names
-      def self.configuration_names
-        names = @@configurations.keys
-        FlowChat.logger.debug { "WhatsApp::Configuration: Available configurations: #{names}" }
-        names
-      end
-
-      # Clear all registered configurations (useful for testing)
-      def self.clear_all!
-        FlowChat.logger.debug { "WhatsApp::Configuration: Clearing all registered configurations" }
-        @@configurations.clear
-      end
-
-      # Register this configuration with a name
-      def register_as(name)
-        FlowChat.logger.debug { "WhatsApp::Configuration: Registering configuration as '#{name}'" }
-        @name = name.to_sym
-        self.class.register(@name, self)
-        self
-      end
-
       def valid?
-        is_valid = access_token && !access_token.to_s.empty? &&
+        # Wrapped so a predicate answers true or false rather than nil, which
+        # the bare && chain returns for a missing first field. Intercom and
+        # Telegram already do this and pin it in their tests.
+        is_valid = !!(access_token && !access_token.to_s.empty? &&
           phone_number_id && !phone_number_id.to_s.empty? &&
-          verify_token && !verify_token.to_s.empty?
+          verify_token && !verify_token.to_s.empty?)
 
         FlowChat.logger.debug { "WhatsApp::Configuration: Configuration valid: #{is_valid}" }
         is_valid

@@ -1,0 +1,264 @@
+require "net/http"
+require "json"
+require "uri"
+
+module FlowChat
+  module Messenger
+    class Client
+      include FlowChat::Instrumentation
+
+      def initialize(config)
+        @config = config
+        FlowChat.logger.info { "Messenger::Client: Initialized for account #{@config.account_id}" }
+      end
+
+      # @param tag [String, nil] a Meta message tag (e.g. "HUMAN_AGENT") that
+      #   extends the free-form send window beyond 24 hours. The application
+      #   decides when a send qualifies; this only carries the value through
+      #   to every part of the send. Passed through unvalidated: Meta accepts
+      #   only HUMAN_AGENT as of 27 April 2026 and rejects anything else with
+      #   error 100, clearly enough that an allowlist here would only be one
+      #   more thing to keep in sync with Meta's own set.
+      def send_message(recipient_id, prompt, choices: nil, media: nil, tag: nil)
+        response = renderer_class.new(prompt, choices: choices, media: media).render
+        type, content, options = response
+
+        # MESSAGE_SENT is instrumented by the gateway, not here. This wrapped
+        # the send in its own instrument block, and ActiveSupport::Notifications
+        # publishes a block event once the block returns whatever it returned -
+        # so the event fired even when the send had failed and this method was
+        # about to answer nil, and fired a second time when the gateway
+        # instrumented the same send.
+        deliver(recipient_id, type, content, options, tag)
+      end
+
+      def send_text(recipient_id, text, tag: nil)
+        send_message(recipient_id, text, tag: tag)
+      end
+
+      # Shows the person a typing bubble while a turn is being worked out.
+      #
+      # Meta clears it when the next message arrives or after about twenty
+      # seconds, whichever comes first, so a caller holding one open for longer
+      # has to repeat it.
+      #
+      # Inherited by Instagram rather than overridden there. Meta documents
+      # sender actions under the Messenger Platform and lists only react and
+      # unreact for Instagram, but an Instagram send of typing_on is accepted
+      # and answered with the recipient id, same as Messenger. Confirmed
+      # against a live account, since the reference does not settle it.
+      def indicate_typing(recipient_id)
+        post_json(@config.messages_url, {recipient: {id: recipient_id}, sender_action: "typing_on"})
+      end
+
+      # Uploads a file for reuse and returns the id Meta assigned it.
+      def upload_media(url, type: :image)
+        payload = {
+          message: {
+            attachment: {
+              type: type.to_s,
+              payload: {url: url, is_reusable: true}
+            }
+          }
+        }
+
+        result = post_json(@config.attachment_upload_url, payload)
+        result && result["attachment_id"]
+      end
+
+      private
+
+      def renderer_class
+        FlowChat::Messenger::Renderer
+      end
+
+      def platform
+        :messenger
+      end
+
+      def limits
+        FlowChat::Config.messenger
+      end
+
+      # Anything over the platform's cap is rejected whole rather than trimmed by
+      # Meta, so long text goes as several messages. Only the last result is
+      # returned: it carries the id of the message the user ends up looking at.
+      #
+      # Media rides in options[:media] on every rung except :attachment, where
+      # it already is the message: it goes out as its own send, ahead of the
+      # choice message, because the choice surface is rendered exactly as it
+      # would be with no media at all. Every part - the media and every chunk
+      # of the choice message - carries the same tag.
+      def deliver(recipient_id, type, content, options, tag)
+        post_media(recipient_id, options[:media], tag) if options[:media]
+
+        case type
+        when :text
+          split_text(content).map { |chunk| post_message(recipient_id, {text: chunk}, tag) }.last
+        when :quick_replies
+          chunks = split_text(content)
+          # Quick replies belong on the final chunk, next to the question.
+          chunks[0..-2].each { |chunk| post_message(recipient_id, {text: chunk}, tag) }
+          post_message(recipient_id, {text: chunks.last, quick_replies: options[:quick_replies]}, tag)
+        when :carousel
+          post_body_text(recipient_id, content, tag)
+          post_message(recipient_id, {
+            attachment: {
+              type: "template",
+              payload: {template_type: "generic", elements: options[:elements]}
+            }
+          }, tag)
+        when :attachment
+          post_body_text(recipient_id, content, tag)
+          post_media(recipient_id, options, tag)
+        end
+      end
+
+      # content on these two branches is the numbered body Instagram's
+      # always_number? forces (or, on :attachment, just the flow's own
+      # message) - either can run over the platform's text cap on its own,
+      # with no relation to the template or attachment that follows, so it
+      # is split exactly like a plain text send rather than posted whole.
+      def post_body_text(recipient_id, content, tag)
+        return unless content.present?
+
+        split_text(content).each { |chunk| post_message(recipient_id, {text: chunk}, tag) }
+      end
+
+      def post_media(recipient_id, media_options, tag)
+        attachment_payload = media_options[:url] ? {url: media_options[:url], is_reusable: true} : {attachment_id: media_options[:attachment_id]}
+        post_message(recipient_id, {
+          attachment: {type: media_options[:type].to_s, payload: attachment_payload}
+        }, tag)
+      end
+
+      def post_message(recipient_id, message, tag)
+        payload = {recipient: {id: recipient_id}, message: message}
+
+        # The tag branch is not gated on messaging_type?: Instagram never
+        # documents RESPONSE, but it does document MESSAGE_TAG with
+        # HUMAN_AGENT, so a tagged send needs the field there too even
+        # though an untagged Instagram send omits it entirely.
+        if tag
+          payload[:messaging_type] = "MESSAGE_TAG"
+          payload[:tag] = tag
+        elsif messaging_type?
+          payload[:messaging_type] = "RESPONSE"
+        end
+
+        post_json(@config.messages_url, payload)
+      end
+
+      # Messenger documents messaging_type as required on a send. Instagram's
+      # reference does not mention it at all, so Instagram omits it rather than
+      # sending a parameter Meta never documented for that surface.
+      def messaging_type?
+        true
+      end
+
+      # Splits on whitespace so a word is never cut in half. Measured with the
+      # platform's own unit, which is bytes on Instagram and characters here.
+      #
+      # A single piece that is itself too large to fit in one chunk (a long
+      # URL, most often) cannot be handled by that whitespace splitting
+      # alone: with no smaller boundary inside it to break on, it would
+      # otherwise ride through untouched as one chunk over the cap, exactly
+      # the case this method exists to prevent. #hard_split below breaks it
+      # up directly.
+      def split_text(text)
+        limit = limits.max_text_length
+        return [text.to_s] if measure(text.to_s) <= limit
+
+        chunks = []
+        current = ""
+
+        text.to_s.split(/(\s+)/).each do |piece|
+          if measure(piece) > limit
+            chunks << current.strip if current.present?
+            oversized_chunks = hard_split(piece.strip, limit)
+            chunks.concat(oversized_chunks[0..-2])
+            current = oversized_chunks.last.to_s
+          elsif measure(current + piece) > limit && current.present?
+            chunks << current.strip
+            current = piece.lstrip
+          else
+            current += piece
+          end
+        end
+
+        chunks << current.strip if current.strip.present?
+        chunks
+      end
+
+      # Breaks a single oversized piece into cap-sized chunks one character
+      # at a time, so the cut always lands on a character boundary. Never a
+      # byte offset: on Instagram, where the cap is measured in bytes, a
+      # multibyte character sliced by byte position would leave one half a
+      # valid UTF-8 sequence and the other invalid, and #measure has no way
+      # to tell that apart from a character that legitimately does not fit.
+      def hard_split(piece, limit)
+        chunks = []
+        current = ""
+
+        piece.each_char do |char|
+          if current.present? && measure(current + char) > limit
+            chunks << current
+            current = char
+          else
+            current += char
+          end
+        end
+
+        chunks << current if current.present?
+        chunks
+      end
+
+      def measure(string)
+        string.length
+      end
+
+      def post_json(url, payload)
+        uri = URI(url)
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.use_ssl = true
+
+        request = Net::HTTP::Post.new(uri)
+        @config.api_headers.each { |key, value| request[key] = value }
+        request.body = payload.to_json
+
+        response = http.request(request)
+
+        if response.is_a?(Net::HTTPSuccess)
+          JSON.parse(response.body)
+        else
+          FlowChat.logger.error { "#{self.class.name}: API request failed - #{response.code}: #{response.body}" }
+          report_api_error(
+            "#{platform} API request failed",
+            response_code: response.code,
+            response_body: response.body
+          )
+          nil
+        end
+      rescue Net::OpenTimeout, Net::ReadTimeout => network_error
+        FlowChat.logger.error { "#{self.class.name}: Network timeout: #{network_error.class.name}" }
+        raise network_error
+      end
+
+      # FlowChat::Instrumentation only defines report_api_error at the module
+      # level (FlowChat::Instrumentation.report_api_error), not as an instance
+      # method, so it is not inherited through `include`. Every client that
+      # wants the shorthand defines its own wrapper; this mirrors the one in
+      # whatsapp/client.rb.
+      def report_api_error(message, response_code: nil, response_body: nil, error: nil)
+        FlowChat::Instrumentation.report_api_error(
+          message,
+          error: error,
+          platform: platform,
+          account_id: @config.account_id,
+          response_code: response_code,
+          response_body: response_body
+        )
+      end
+    end
+  end
+end
