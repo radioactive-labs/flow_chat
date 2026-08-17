@@ -94,8 +94,18 @@ namespace :release do
     end
 
     # Changelog — same config CI uses for release notes, so they agree.
+    #
+    # Prepends the new section rather than regenerating the file. `-o` rewrote
+    # CHANGELOG.md from the commit history every time, so anything hand-written
+    # was silently discarded at the next release. That is not hypothetical: #9
+    # was squash-merged with a non-conventional title, git-cliff could not
+    # categorise it, and the largest change in v0.10.0 had to be written in by
+    # hand — which `-o` would have erased.
+    #
+    # --unreleased limits the run to commits since the last tag, so only the
+    # section being cut is generated and everything below it is left alone.
     abort "git-cliff not found. Install with: brew install git-cliff" unless git_cliff?
-    system("git-cliff", "--config", RELEASE_CLIFF_CONFIG, "--tag", "v#{version}", "-o", "CHANGELOG.md") ||
+    system("git-cliff", "--config", RELEASE_CLIFF_CONFIG, "--tag", "v#{version}", "--unreleased", "--prepend", "CHANGELOG.md") ||
       abort("Changelog generation failed")
     puts "✓ CHANGELOG.md"
 
