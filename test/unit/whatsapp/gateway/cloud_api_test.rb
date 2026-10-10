@@ -144,6 +144,33 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
     assert_equal "wamid.test456", context["request.message_id"]
   end
 
+  # A tap on a template's quick-reply button is its own message type, distinct
+  # from an interactive button_reply.
+  def test_post_request_template_button_reply_processing
+    context = create_context_with_request(
+      method: :post,
+      body: create_template_button_payload("talk_to_agent", "Talk to an agent", "wamid.tap")
+    )
+
+    @gateway.call(context)
+
+    assert_equal "talk_to_agent", context.input
+    assert_equal "Talk to an agent", context["request.button"][:text]
+    assert_equal "talk_to_agent", context["request.button"][:payload]
+    assert_equal "wamid.tap", context["request.message_id"]
+  end
+
+  def test_post_request_template_button_reply_without_payload_uses_the_label
+    context = create_context_with_request(
+      method: :post,
+      body: create_template_button_payload(nil, "Talk to an agent", "wamid.tap2")
+    )
+
+    @gateway.call(context)
+
+    assert_equal "Talk to an agent", context.input
+  end
+
   def test_post_request_list_response_processing
     context = create_context_with_request(
       method: :post,
@@ -1224,6 +1251,19 @@ class WhatsappCloudApiGatewayTest < Minitest::Test
         }]
       }]
     }
+  end
+
+  def create_template_button_payload(payload, text, message_id)
+    payload_hash = create_button_response_payload("unused", "unused", message_id)
+    payload_hash["entry"][0]["changes"][0]["value"]["messages"][0] = {
+      "id" => message_id,
+      "from" => "256700000000",
+      "timestamp" => "1702891800",
+      "context" => {"from" => "15551234567", "id" => "wamid.template"},
+      "type" => "button",
+      "button" => {"payload" => payload, "text" => text}.compact
+    }
+    payload_hash
   end
 
   def create_list_response_payload(list_id, list_title, message_id)

@@ -371,6 +371,14 @@ module FlowChat
               context.input = content
               FlowChat.logger.debug { "CloudApi: List reply ID: '#{content}'" }
             end
+          when "button"
+            # A tap on a template's quick-reply button. The payload is the input,
+            # as a button_reply's id is; Meta sends the button text as the payload
+            # when the template set none. Both are kept for apps that want the label.
+            button = message["button"] || {}
+            context["request.button"] = {text: button["text"], payload: button["payload"]}
+            context.input = button["payload"].presence || button["text"].to_s
+            FlowChat.logger.debug { "CloudApi: Template button reply: '#{context.input}'" }
           when "location"
             location = {
               latitude: message.dig("location", "latitude"),
