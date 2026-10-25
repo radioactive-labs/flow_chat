@@ -137,16 +137,32 @@ class FlowChat::Intercom::Gateway::IntercomApiTest < Minitest::Test
 
   # Every gateway that delivers out of band names the id the same way, so an app
   # stamping it onto its own record reads one key rather than five shapes.
+  #
+  # Intercom answers a reply with the whole conversation, so its id is the
+  # conversation's and the same for every reply in the thread. The reply is the
+  # last of its parts.
   def test_a_delivered_reply_names_its_platform_message_id
     webhook_body = build_conversation_created_webhook
     setup_post_request_with_webhook_and_app_call(webhook_body)
 
+    reply = ::Intercom::Conversation.new.from_response(
+      "type" => "conversation",
+      "id" => "conv_123",
+      "conversation_parts" => {
+        "type" => "conversation_part.list",
+        "conversation_parts" => [
+          {"type" => "conversation_part", "id" => "part_earlier"},
+          {"type" => "conversation_part", "id" => "part_sent"}
+        ]
+      }
+    ).to_hash
+
     @app.expect(:call, [:text, "Thank you for your message!", nil, nil], [@context])
-    @mock_client.expect(:send_message, {"id" => "sent_msg_123"}, ["conv_123", "Thank you for your message!"], choices: nil, media: nil)
+    @mock_client.expect(:send_message, reply, ["conv_123", "Thank you for your message!"], choices: nil, media: nil)
 
     @gateway.call(@context)
 
-    assert_equal "sent_msg_123", @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
+    assert_equal "part_sent", @context[FlowChat::Instrumentation::DELIVERED_MESSAGE_ID_KEY]
   end
 
   def test_webhook_notification_conversation_user_created

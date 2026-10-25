@@ -80,7 +80,7 @@ module FlowChat
         end
 
         if result
-          message_id = result["id"]
+          message_id = result["conversation_parts"]&.last&.id
           FlowChat.logger.debug { "Intercom::Client: Message sent successfully to conversation #{conversation_id}, message_id: #{message_id}" }
         else
           FlowChat.logger.error { "Intercom::Client: Failed to send message to conversation #{conversation_id}" }

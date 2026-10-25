@@ -364,11 +364,13 @@ module FlowChat
           end
         end
 
-        # A reply comes back as the conversation part it created.
+        # A reply comes back as the whole conversation, its parts flattened to
+        # an array with the new reply last. The conversation's own id is shared
+        # by every reply in the thread, so it never names one.
         def platform_message_id_from(result)
           return nil unless result.is_a?(Hash)
 
-          result["id"]
+          result["conversation_parts"]&.last&.id
         end
 
         def handle_message_simulator(context, controller)
